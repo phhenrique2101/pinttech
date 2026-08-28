@@ -171,6 +171,15 @@ export async function POST(req: NextRequest) {
         const notes = cleanStr(row.notes);
         const currentBeerName = cleanStr(row.currentBeerName || row.beerName);
 
+        let currentVolumeLiters: number | null = null;
+        if (row.currentVolumeLiters !== undefined && row.currentVolumeLiters !== null && row.currentVolumeLiters !== '') {
+          currentVolumeLiters = cleanNumber(row.currentVolumeLiters, 0);
+        } else if (status === 'EM_ESTOQUE' || status === 'ENVASADO' || currentBeerName) {
+          currentVolumeLiters = capacity;
+        } else {
+          currentVolumeLiters = 0;
+        }
+
         try {
           const existing = await prisma.keg.findUnique({
             where: { breweryId_code: { breweryId, code } },
@@ -181,6 +190,7 @@ export async function POST(req: NextRequest) {
               where: { id: existing.id },
               data: {
                 capacity: capacity > 0 ? capacity : existing.capacity,
+                currentVolumeLiters: currentVolumeLiters !== null ? currentVolumeLiters : existing.currentVolumeLiters,
                 kegType: kegType || existing.kegType,
                 status: status || existing.status,
                 currentBeerName: currentBeerName || existing.currentBeerName,
@@ -194,6 +204,7 @@ export async function POST(req: NextRequest) {
                 breweryId,
                 code,
                 capacity,
+                currentVolumeLiters,
                 kegType,
                 status,
                 currentBeerName,

@@ -82,7 +82,7 @@ const ENTITY_CONFIGS: Record<EntityType, EntityDefinition> = {
   KEGS: {
     type: 'KEGS',
     title: 'Parque de Barris',
-    description: 'Barris de inox e growlers com códigos de rastreio e litragens.',
+    description: 'Barris de inox e growlers com códigos de rastreio, capacidade total e litragem real envasada.',
     icon: Cylinder,
     color: 'text-amber-600',
     bgColor: 'bg-amber-50',
@@ -91,16 +91,18 @@ const ENTITY_CONFIGS: Record<EntityType, EntityDefinition> = {
     redirectLabel: 'Ver Parque de Barris',
     fields: [
       { key: 'code', label: 'Código / Patrimônio do Barril', required: true, synonyms: ['codigo', 'código', 'cod', 'patrimonio', 'patrimônio', 'tag', 'id', 'barril', 'numero', 'número'], example: 'BAR-50L-001' },
-      { key: 'capacity', label: 'Capacidade (Litros)', required: true, synonyms: ['capacidade', 'litros', 'litragem', 'volume', 'tamanho', 'l'], example: '50' },
+      { key: 'capacity', label: 'Capacidade Total do Barril (Litros)', required: true, synonyms: ['capacidade', 'litragem', 'volume nominal', 'tamanho', 'capacidade nominal', 'capacidade total', 'cap'], example: '50' },
+      { key: 'currentVolumeLiters', label: 'Quantidade Real de Cerveja Envasada (Litros)', synonyms: ['quantidade real', 'real envasado', 'volume real', 'litros envasados', 'volume envasado', 'quantidade envasada', 'envasado', 'volume', 'saldo litros', 'litros reais', 'qtd real', 'litros', 'l'], example: '50' },
       { key: 'kegType', label: 'Tipo de Barril', synonyms: ['tipo', 'modelo', 'engate', 'valvula'], example: 'INOX_EURO' },
       { key: 'status', label: 'Status Atual', synonyms: ['status', 'situacao', 'situação', 'estado'], example: 'HIGIENIZADO' },
-      { key: 'currentBeerName', label: 'Chopp Envasado (Se Cheio)', synonyms: ['chopp', 'cerveja', 'estilo', 'conteudo'], example: 'Pilsen Especial' },
+      { key: 'currentBeerName', label: 'Chopp Envasado (Se Cheio/Parcial)', synonyms: ['chopp', 'cerveja', 'estilo', 'conteudo'], example: 'Pilsen Especial' },
       { key: 'notes', label: 'Observações / Lote', synonyms: ['observacoes', 'observações', 'obs', 'notas'], example: 'Válvula Tipo S revisada' },
     ],
     sampleData: [
-      { 'Código / Patrimônio do Barril': 'BAR-50L-001', 'Capacidade (Litros)': 50, 'Tipo de Barril': 'INOX_EURO', 'Status Atual': 'HIGIENIZADO', 'Chopp Envasado': '', 'Observações': 'Válvula Tipo S' },
-      { 'Código / Patrimônio do Barril': 'BAR-50L-002', 'Capacidade (Litros)': 50, 'Tipo de Barril': 'INOX_EURO', 'Status Atual': 'EM_ESTOQUE', 'Chopp Envasado': 'German Pilsen', 'Observações': 'Envasado em 20/02' },
-      { 'Código / Patrimônio do Barril': 'BAR-30L-015', 'Capacidade (Litros)': 30, 'Tipo de Barril': 'INOX_SLIM', 'Status Atual': 'HIGIENIZADO', 'Chopp Envasado': '', 'Observações': 'Novo' },
+      { 'Código / Patrimônio do Barril': 'BAR-50L-001', 'Capacidade Total (Litros)': 50, 'Qtd Real Envasada (Litros)': 0, 'Tipo de Barril': 'INOX_EURO', 'Status Atual': 'HIGIENIZADO', 'Chopp Envasado': '', 'Observações': 'Válvula Tipo S' },
+      { 'Código / Patrimônio do Barril': 'BAR-50L-002', 'Capacidade Total (Litros)': 50, 'Qtd Real Envasada (Litros)': 50, 'Tipo de Barril': 'INOX_EURO', 'Status Atual': 'EM_ESTOQUE', 'Chopp Envasado': 'German Pilsen', 'Observações': 'Cheio no estoque' },
+      { 'Código / Patrimônio do Barril': 'BAR-50L-003', 'Capacidade Total (Litros)': 50, 'Qtd Real Envasada (Litros)': 35.5, 'Tipo de Barril': 'INOX_EURO', 'Status Atual': 'EM_ESTOQUE', 'Chopp Envasado': 'IPA Imperial', 'Observações': 'Retorno parcial de evento' },
+      { 'Código / Patrimônio do Barril': 'BAR-30L-015', 'Capacidade Total (Litros)': 30, 'Qtd Real Envasada (Litros)': 0, 'Tipo de Barril': 'INOX_SLIM', 'Status Atual': 'HIGIENIZADO', 'Chopp Envasado': '', 'Observações': 'Novo' },
     ],
   },
   EQUIPMENT: {
