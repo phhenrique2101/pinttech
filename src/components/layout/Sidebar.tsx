@@ -18,6 +18,7 @@ import {
   Crown,
   Key,
   CreditCard,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { CurrentUser } from './Navbar';
 
@@ -30,6 +31,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Cervejarias Clientes', href: '/master/cervejarias', icon: Building2 },
     { label: 'Usuários & Reset Senha', href: '/master/usuarios', icon: Key },
     { label: 'Faturamento & MRR', href: '/master/financeiro', icon: CreditCard },
+    { label: 'Importar / Migrar Dados', href: '/master/importacao', icon: FileSpreadsheet },
   ];
 
   const breweryNavItems = [
@@ -42,6 +44,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Pedidos & Comodato', href: '/pedidos', icon: ShoppingCart, roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Financeiro Cervejaria', href: '/financeiro', icon: DollarSign, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
+    { label: 'Importar Planilha (Excel)', href: '/importacao', icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'Usuários da Cervejaria', href: '/usuarios', icon: UserCheck, roles: ['ADMIN'] },
   ];
 

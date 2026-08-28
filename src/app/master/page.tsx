@@ -18,6 +18,7 @@ import {
   ExternalLink,
   RefreshCw,
   Sliders,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -92,17 +93,25 @@ export default function MasterDashboardPage() {
             </div>
           </div>
           <p className="text-xs text-slate-300 mt-2 max-w-xl leading-relaxed">
-            Painel exclusivo para gerenciar suas cervejarias clientes, receita recorrente (MRR), usuários de clientes, reset de senhas e cobranças de mensalidades.
+            Painel exclusivo para gerenciar suas cervejarias clientes, receita recorrente (MRR), usuários de clientes, reset de senhas e importação em lote para novos clientes.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <Link
-            href="/master/cervejarias"
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-lg shadow-amber-500/30 flex items-center gap-1.5 transition-all hover:scale-105"
+            href="/master/importacao"
+            className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-black rounded-xl shadow-lg shadow-amber-500/30 flex items-center gap-1.5 transition-all hover:scale-105"
           >
-            <Building2 className="w-4 h-4" />
-            <span>Gerenciar Cervejarias</span>
+            <FileSpreadsheet className="w-4 h-4 text-slate-950" />
+            <span>Migrar / Importar Dados</span>
+          </Link>
+
+          <Link
+            href="/master/cervejarias"
+            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all"
+          >
+            <Building2 className="w-4 h-4 text-amber-400" />
+            <span>Cervejarias</span>
           </Link>
 
           <Link
