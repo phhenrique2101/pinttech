@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -26,6 +26,33 @@ import { CurrentUser } from './Navbar';
 export default function Sidebar({ user }: { user: CurrentUser | null }) {
   const pathname = usePathname();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const [breweries, setBreweries] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetch('/api/breweries')
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) setBreweries(data);
+        })
+        .catch(() => {});
+    }
+  }, [isSuperAdmin]);
+
+  const handleSwitchBrewery = async (breweryId: string) => {
+    try {
+      const res = await fetch('/api/auth/switch-brewery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ breweryId }),
+      });
+      if (res.ok) {
+        window.location.href = '/';
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const masterNavItems = [
     { label: 'Visão Master (SaaS)', href: '/master', icon: Crown, highlight: true },
@@ -63,6 +90,37 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col border-r border-slate-800">
+      {/* Super Admin Switcher in Sidebar */}
+      {isSuperAdmin && (
+        <div className="p-3 border-b border-amber-500/20 bg-slate-950/70">
+          <label className="text-[10px] font-black uppercase tracking-widest text-amber-400 block mb-1.5 flex items-center gap-1">
+            <Building2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Cervejaria Selecionada:</span>
+          </label>
+          <select
+            value={user?.breweryId || ''}
+            onChange={(e) => handleSwitchBrewery(e.target.value)}
+            className="w-full text-xs bg-slate-800 text-amber-200 border border-amber-500/40 rounded-xl px-2.5 py-1.5 font-bold focus:outline-none focus:ring-1 focus:ring-amber-400"
+          >
+            <option value="">👑 Visão Master Global</option>
+            {breweries.map((b) => (
+              <option key={b.id} value={b.id}>
+                🏢 {b.name}
+              </option>
+            ))}
+          </select>
+
+          {user?.breweryId && (
+            <button
+              onClick={() => handleSwitchBrewery('')}
+              className="mt-2 w-full py-1 text-[10px] font-black text-amber-400 hover:text-amber-300 bg-amber-950/40 hover:bg-amber-950/70 border border-amber-500/30 rounded-lg text-center transition-colors block"
+            >
+              ← Voltar p/ Visão Master
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Master Section (If Super Admin) */}
       {isSuperAdmin && (
         <div className="p-3 border-b border-amber-500/30 bg-amber-950/20">

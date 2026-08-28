@@ -104,13 +104,18 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
   };
 
   const handleSwitchBrewery = async (breweryId: string) => {
-    await fetch('/api/auth/switch-brewery', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ breweryId }),
-    });
-    router.refresh();
-    window.location.reload();
+    try {
+      const res = await fetch('/api/auth/switch-brewery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ breweryId }),
+      });
+      if (res.ok) {
+        window.location.href = '/';
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const roleInfo = user?.role ? ROLE_MAP[user.role] : null;
@@ -118,10 +123,30 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+      {/* Impersonation Alert Banner for Super Admin */}
+      {isSuperAdmin && user?.breweryId && (
+        <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-yellow-600 text-white px-4 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2 text-center sm:text-left">
+            <span className="p-1 bg-white/20 rounded-md">🏢</span>
+            <span>
+              Acessando a cervejaria: <strong className="underline decoration-white/60">{user.breweryName || 'Cervejaria Selecionada'}</strong> (Visualização do Cliente)
+            </span>
+          </div>
+
+          <button
+            onClick={() => handleSwitchBrewery('')}
+            className="px-3 py-1 bg-white hover:bg-amber-50 text-amber-950 rounded-lg font-black text-[11px] transition-colors shadow-2xs flex items-center gap-1.5 flex-shrink-0"
+          >
+            <Crown className="w-3.5 h-3.5 text-amber-600" />
+            <span>Voltar para Visão Master Global</span>
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between h-16 px-4 md:px-6">
         {/* Logo & Tenant */}
         <div className="flex items-center gap-3">
-          <Link href={isSuperAdmin ? '/master' : '/'} className="flex items-center gap-2 group">
+          <Link href={isSuperAdmin && !user?.breweryId ? '/master' : '/'} className="flex items-center gap-2 group">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
               <Beer className="w-6 h-6" />
             </div>
@@ -130,7 +155,7 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
                 Pint<span className="text-amber-600">Tech</span>
               </span>
               <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 block -mt-1">
-                {isSuperAdmin ? 'SaaS Master OS' : 'Brewery OS'}
+                {isSuperAdmin && !user?.breweryId ? 'SaaS Master OS' : 'Brewery OS'}
               </span>
             </div>
           </Link>
@@ -139,10 +164,10 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
           {isSuperAdmin && (
             <Link
               href="/master"
-              className="hidden sm:flex items-center gap-1.5 ml-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-xs rounded-full shadow-sm"
+              className="hidden sm:flex items-center gap-1.5 ml-2 px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-xs rounded-full shadow-sm"
             >
               <Crown className="w-3.5 h-3.5" />
-              <span>Painel do Proprietário</span>
+              <span>Painel Master</span>
             </Link>
           )}
 
@@ -155,18 +180,17 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
           )}
 
           {/* Super Admin Switcher */}
-          {isSuperAdmin && breweries.length > 0 && (
-            <div className="hidden lg:flex items-center gap-2 ml-3">
-              <span className="text-xs text-slate-500 font-medium">Acessar Cervejaria:</span>
+          {isSuperAdmin && (
+            <div className="hidden md:flex items-center gap-1.5 ml-2">
               <select
-                className="text-xs bg-slate-100 border border-slate-300 rounded-md px-2 py-1 font-semibold text-slate-800"
+                className="text-xs bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl px-2.5 py-1.5 font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
                 value={user.breweryId || ''}
                 onChange={(e) => handleSwitchBrewery(e.target.value)}
               >
-                <option value="">-- Visão Master Global --</option>
+                <option value="">👑 Visão Master Global</option>
                 {breweries.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name}
+                    🏢 {b.name}
                   </option>
                 ))}
               </select>

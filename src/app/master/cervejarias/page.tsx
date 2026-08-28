@@ -124,13 +124,18 @@ export default function MasterCervejariasPage() {
   };
 
   const handleImpersonate = async (breweryId: string) => {
-    await fetch('/api/auth/switch-brewery', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ breweryId }),
-    });
-    router.push('/');
-    router.refresh();
+    try {
+      const res = await fetch('/api/auth/switch-brewery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ breweryId }),
+      });
+      if (res.ok) {
+        window.location.href = '/';
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
