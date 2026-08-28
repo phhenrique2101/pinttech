@@ -52,7 +52,7 @@ export default function ProducaoPage() {
   const [editTankModal, setEditTankModal] = useState<any>(null);
   const [editTankName, setEditTankName] = useState('');
   const [editTankCapacity, setEditTankCapacity] = useState('1000');
-  const [editTankType, setEditTankType] = useState('FERMENTADOR_ISOTERMICO');
+  const [editTankType, setEditTankType] = useState('Fermentador Isotérmico');
   const [editTankStatus, setEditTankStatus] = useState('LIVRE');
   const [editTankNotes, setEditTankNotes] = useState('');
   const [editTankBatchId, setEditTankBatchId] = useState('');
@@ -99,7 +99,7 @@ export default function ProducaoPage() {
   // New tank form
   const [tankName, setTankName] = useState('');
   const [tankCapacity, setTankCapacity] = useState('500');
-  const [tankType, setTankType] = useState('FERMENTADOR_ISOTERMICO');
+  const [tankType, setTankType] = useState('Fermentador Isotérmico');
   const [tankNotes, setTankNotes] = useState('');
 
   const loadData = async () => {
@@ -329,7 +329,7 @@ export default function ProducaoPage() {
     setEditTankModal(tank);
     setEditTankName(tank.name || '');
     setEditTankCapacity(String(tank.capacityLiters || '1000'));
-    setEditTankType(tank.type || 'FERMENTADOR_ISOTERMICO');
+    setEditTankType(tank.type ? (tank.type.includes('_') ? tank.type.replace(/_/g, ' ') : tank.type) : 'Fermentador Isotérmico');
     setEditTankStatus(tank.status || 'LIVRE');
     setEditTankNotes(tank.notes || '');
 
@@ -1600,7 +1600,7 @@ export default function ProducaoPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Capacidade (Litros)</label>
                   <input
@@ -1614,17 +1614,61 @@ export default function ProducaoPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Tipo de Tanque</label>
-                  <select
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Tipo do Tanque (Livre)</span>
+                    <span className="text-[9px] text-slate-400 font-normal">Digite ou selecione</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Fermentador, BBT, Tina de Mostura..."
                     value={tankType}
                     onChange={(e) => setTankType(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                  >
-                    <option value="FERMENTADOR_ISOTERMICO">Fermentador Isotérmico</option>
-                    <option value="MATURADOR">Maturador</option>
-                    <option value="BBT_BRITE_TANK">Brite Tank (BBT)</option>
-                    <option value="PANELA_BRASSAGEM">Panela de Brassagem</option>
-                  </select>
+                    list="new-tank-types-list"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900"
+                  />
+                  <datalist id="new-tank-types-list">
+                    <option value="Fermentador Isotérmico" />
+                    <option value="Fermentador Cônico" />
+                    <option value="Maturador" />
+                    <option value="Brite Tank (BBT)" />
+                    <option value="Panela de Brassagem" />
+                    <option value="Tina de Mostura" />
+                    <option value="Tina de Fervura" />
+                    <option value="Whirlpool" />
+                    <option value="Tanque de Servir / Pressurizado" />
+                    <option value="Barril de Maturação em Madeira" />
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Quick Preset Buttons for Tank Types */}
+              <div>
+                <span className="text-[10px] text-slate-500 font-bold block mb-1">Sugestões rápidas de tipos:</span>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    'Fermentador Isotérmico',
+                    'Fermentador Cônico',
+                    'Maturador',
+                    'Brite Tank (BBT)',
+                    'Panela de Brassagem',
+                    'Tina de Mostura',
+                    'Whirlpool',
+                    'Tanque de Servir',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setTankType(preset)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+                        tankType.toLowerCase() === preset.toLowerCase()
+                          ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1716,19 +1760,33 @@ export default function ProducaoPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Tipo de Tanque</label>
-                    <select
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Tipo do Tanque (Livre)</span>
+                      <span className="text-[9px] text-slate-400 font-normal">Digite ou selecione</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Fermentador, BBT, Tina de Mostura..."
                       value={editTankType}
                       onChange={(e) => setEditTankType(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
-                    >
-                      <option value="FERMENTADOR_ISOTERMICO">Fermentador Isotérmico</option>
-                      <option value="MATURADOR">Maturador</option>
-                      <option value="BBT_BRITE_TANK">Brite Tank (BBT)</option>
-                      <option value="PANELA_BRASSAGEM">Panela de Brassagem</option>
-                    </select>
+                      list="edit-tank-types-list"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-900"
+                    />
+                    <datalist id="edit-tank-types-list">
+                      <option value="Fermentador Isotérmico" />
+                      <option value="Fermentador Cônico" />
+                      <option value="Maturador" />
+                      <option value="Brite Tank (BBT)" />
+                      <option value="Panela de Brassagem" />
+                      <option value="Tina de Mostura" />
+                      <option value="Tina de Fervura" />
+                      <option value="Whirlpool" />
+                      <option value="Tanque de Servir / Pressurizado" />
+                      <option value="Barril de Maturação em Madeira" />
+                    </datalist>
                   </div>
 
                   <div>
@@ -1751,6 +1809,36 @@ export default function ProducaoPage() {
                       <option value="HIGIENIZANDO">🔵 HIGIENIZANDO (CIP / Limpeza)</option>
                       <option value="MANUTENCAO">🟡 MANUTENÇÃO</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Quick Preset Buttons for Edit Tank Types */}
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block mb-1">Sugestões rápidas de tipos:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      'Fermentador Isotérmico',
+                      'Fermentador Cônico',
+                      'Maturador',
+                      'Brite Tank (BBT)',
+                      'Panela de Brassagem',
+                      'Tina de Mostura',
+                      'Whirlpool',
+                      'Tanque de Servir',
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setEditTankType(preset)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+                          editTankType.toLowerCase() === preset.toLowerCase()
+                            ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
