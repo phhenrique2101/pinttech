@@ -45,6 +45,7 @@ export default function ScannerPage() {
   // Recolha Options (Vazio, Parcialmente Cheio ou Cheio Retornado ao Estoque)
   const [returnCondition, setReturnCondition] = useState<'VAZIO_SUJO' | 'PARCIALMENTE_CHEIO' | 'CHEIO_RETORNADO'>('VAZIO_SUJO');
   const [returnVolumeLiters, setReturnVolumeLiters] = useState('20');
+  const [billingMode, setBillingMode] = useState<'FULL' | 'PARTIAL'>('FULL');
 
   // Scanned history list in batch mode
   const [batchScannedCodes, setBatchScannedCodes] = useState<string[]>([]);
@@ -111,6 +112,7 @@ export default function ScannerPage() {
 
         if (mode === 'RETURN') {
           payload.returnCondition = returnCondition;
+          payload.billingMode = billingMode;
           if (returnCondition === 'PARCIALMENTE_CHEIO') {
             payload.returnVolumeLiters = parseFloat(returnVolumeLiters);
           }
@@ -322,16 +324,62 @@ export default function ScannerPage() {
           </div>
 
           {returnCondition === 'PARCIALMENTE_CHEIO' && (
-            <div className="p-3 bg-white border border-orange-200 rounded-xl flex items-center gap-2 animate-in fade-in">
-              <span className="text-slate-700 font-bold">Litros restantes no barril:</span>
-              <input
-                type="number"
-                step="0.5"
-                value={returnVolumeLiters}
-                onChange={(e) => setReturnVolumeLiters(e.target.value)}
-                className="w-24 px-3 py-1.5 bg-slate-50 border border-orange-300 rounded-lg font-black text-center text-orange-900"
-              />
-              <span className="font-bold text-slate-500">Litros</span>
+            <div className="p-3.5 bg-white border border-orange-200 rounded-2xl space-y-3 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-800 font-black text-xs">Litros restantes no barril:</span>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={returnVolumeLiters}
+                  onChange={(e) => setReturnVolumeLiters(e.target.value)}
+                  className="w-24 px-3 py-1.5 bg-slate-50 border border-orange-300 rounded-xl font-black text-center text-orange-950 text-xs"
+                />
+                <span className="font-bold text-slate-500 text-xs">Litros</span>
+              </div>
+
+              {/* Pergunta de Cobrança do Cliente no Pedido */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 block">
+                  💳 Cobrança do Cliente no Pedido:
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBillingMode('FULL')}
+                    className={`p-2.5 rounded-xl text-left border transition-all ${
+                      billingMode === 'FULL'
+                        ? 'bg-amber-50 border-amber-400 text-amber-950 ring-2 ring-amber-300 font-bold shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="font-black text-xs">🧾 Cobrar Barril Inteiro (100%)</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 block leading-tight">
+                      O cliente paga o valor integral do barril (padrão em eventos onde o barril foi aberto).
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBillingMode('PARTIAL')}
+                    className={`p-2.5 rounded-xl text-left border transition-all ${
+                      billingMode === 'PARTIAL'
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-300 font-bold shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="font-black text-xs text-emerald-800">💰 Cobrar Apenas Consumo Parcial</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 block leading-tight">
+                      Calcula os litros consumidos e desconta os litros que voltaram no pedido.
+                    </span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

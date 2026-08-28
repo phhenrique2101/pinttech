@@ -249,6 +249,7 @@ export async function POST(req: NextRequest) {
           // Recolha de Barril (Com suporte a Vazio/Sujo, Parcialmente Cheio ou Cheio Retornado ao Estoque)
           const previousClientId = keg.currentClientId;
           const condition = returnCondition || 'VAZIO_SUJO'; // VAZIO_SUJO, PARCIALMENTE_CHEIO, CHEIO_RETORNADO
+          const clientBillingMode = body.billingMode || 'FULL'; // FULL (Cobrar 100%) ou PARTIAL (Cobrar apenas litros consumidos)
 
           let newStatus = 'VAZIO_SUJO';
           let updatedBatchId = null;
@@ -263,14 +264,12 @@ export async function POST(req: NextRequest) {
             updatedBeerName = keg.currentBeerName;
             updatedVolumeLiters = returnVolumeLiters ? parseFloat(returnVolumeLiters) : 20.0;
             actionName = 'RECOLHA_PARCIAL';
-            message = `Barril ${cleanCode} recolhido com sobra (${updatedVolumeLiters}L) e retornado ao estoque!`;
           } else if (condition === 'CHEIO_RETORNADO') {
             newStatus = 'EM_ESTOQUE';
             updatedBatchId = keg.currentBatchId;
             updatedBeerName = keg.currentBeerName;
             updatedVolumeLiters = keg.capacity;
             actionName = 'RECOLHA_CHEIO';
-            message = `Barril ${cleanCode} recolhido cheio (${keg.capacity}L) e retornado ao estoque!`;
           }
 
           const updated = await prisma.keg.update({
@@ -282,7 +281,7 @@ export async function POST(req: NextRequest) {
               currentBeerName: updatedBeerName,
               currentVolumeLiters: updatedVolumeLiters,
               lastReturnedAt: new Date(),
-              notes: notes || (condition !== 'VAZIO_SUJO' ? `Retorno ${condition} com ${updatedVolumeLiters}L` : keg.notes),
+              notes: notes || (condition !== 'VAZIO_SUJO' ? `Retorno ${condition} com ${updatedVolumeLiters}L (${clientBillingMode === 'PARTIAL' ? 'Cobrança Parcial' : 'Cobrança Integral'})` : keg.notes),
             },
           });
 
@@ -291,6 +290,71 @@ export async function POST(req: NextRequest) {
               where: { id: previousClientId },
               data: { retainedKegsCount: { decrement: 1 } },
             }).catch(() => {});
+          }
+
+          // Se o barril voltou com chopp (Parcial ou Cheio), processar a cobrança do pedido do cliente
+          if (condition !== 'VAZIO_SUJO') {
+            const remainingLiters = updatedVolumeLiters || 0;
+            const consumedLiters = Math.max(0, keg.capacity - remainingLiters);
+
+            // Procurar pedido recente do cliente
+            const activeOrder = previousClientId
+              ? await prisma.order.findFirst({
+                  where: {
+                    clientId: previousClientId,
+                    breweryId,
+                    status: { in: ['CONFIRMADO', 'EM_SEPARACAO', 'EM_ROTA', 'ENTREGUE', 'CONCLUIDO'] },
+                  },
+                  include: { items: { include: { recipe: true } }, transactions: true },
+                  orderBy: { createdAt: 'desc' },
+                })
+              : null;
+
+            if (clientBillingMode === 'PARTIAL') {
+              // Calcular preço do litro do chopp
+              let pricePerLiter = 18.0;
+              if (activeOrder && activeOrder.items.length > 0) {
+                const matchedItem = activeOrder.items.find((it) => it.kegId === keg.id || (it.recipe && it.recipe.name === keg.currentBeerName)) || activeOrder.items[0];
+                if (matchedItem) {
+                  pricePerLiter = matchedItem.recipe?.salePricePerLiter || (matchedItem.totalPrice / (matchedItem.quantity * (keg.capacity || 50))) || 18.0;
+                }
+              }
+
+              const creditDiscount = parseFloat((remainingLiters * pricePerLiter).toFixed(2));
+
+              if (activeOrder) {
+                const newDiscount = (activeOrder.discount || 0) + creditDiscount;
+                const newTotal = Math.max(0, activeOrder.totalAmount - creditDiscount);
+                const newRemaining = Math.max(0, newTotal - (activeOrder.paidAmount || 0));
+
+                const noteAppend = `\n[Retorno Parcial ${cleanCode}]: ${remainingLiters}L retornados ao estoque. Cobrado ${consumedLiters}L consumidos. Abatimento de R$ ${creditDiscount.toFixed(2)} aplicado.`;
+
+                await prisma.order.update({
+                  where: { id: activeOrder.id },
+                  data: {
+                    discount: newDiscount,
+                    totalAmount: newTotal,
+                    remainingAmount: newRemaining,
+                    notes: (activeOrder.notes || '') + noteAppend,
+                  },
+                });
+
+                // Atualizar transação financeira vinculada se estiver pendente
+                const pendingTx = activeOrder.transactions?.find((t) => t.status === 'PENDING' && t.type === 'INCOME');
+                if (pendingTx) {
+                  await prisma.financialTransaction.update({
+                    where: { id: pendingTx.id },
+                    data: { amount: newRemaining },
+                  }).catch(() => {});
+                }
+
+                message = `Barril ${cleanCode} retornado ao estoque com ${remainingLiters}L! Pedido #${activeOrder.orderNumber} atualizado: cobrado apenas ${consumedLiters}L consumidos (Abatimento de R$ ${creditDiscount.toFixed(2)}).`;
+              } else {
+                message = `Barril ${cleanCode} retornado ao estoque com ${remainingLiters}L! Cobrança proporcional registrada para ${consumedLiters}L consumidos.`;
+              }
+            } else {
+              message = `Barril ${cleanCode} retornado ao estoque com ${remainingLiters}L! Cobrança integral do barril mantida (100%).`;
+            }
           }
 
           await prisma.kegMovement.create({
@@ -305,7 +369,7 @@ export async function POST(req: NextRequest) {
               userId: session.userId,
               userName: session.name,
               driverName: driverName || session.name,
-              notes: notes || `Recolha (${condition}) com ${updatedVolumeLiters || 0}L`,
+              notes: notes || `Recolha (${condition}) com ${updatedVolumeLiters || 0}L - Modo cobrança: ${clientBillingMode === 'PARTIAL' ? 'Parcial' : 'Integral'}`,
             },
           });
 

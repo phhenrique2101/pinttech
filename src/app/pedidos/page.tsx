@@ -38,6 +38,7 @@ import {
   ShieldAlert,
   AlertTriangle,
   Download,
+  RefreshCw,
 } from 'lucide-react';
 import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMENT_TYPE_MAP } from '@/lib/utils';
 import { exportJsonToExcel } from '@/lib/exportUtils';
@@ -109,6 +110,49 @@ export default function PedidosPage() {
     conflictOrder: any;
     targetMode: 'NEW' | 'EDIT';
   } | null>(null);
+
+  // Keg Return / Recolha modal in order
+  const [returnKegModal, setReturnKegModal] = useState<{
+    keg: any;
+    order: any;
+    condition: 'VAZIO_SUJO' | 'PARCIALMENTE_CHEIO' | 'CHEIO_RETORNADO';
+    returnVolumeLiters: string;
+    billingMode: 'FULL' | 'PARTIAL';
+  } | null>(null);
+  const [processingReturn, setProcessingReturn] = useState(false);
+
+  const handleConfirmKegReturn = async () => {
+    if (!returnKegModal) return;
+    setProcessingReturn(true);
+    try {
+      const res = await fetch('/api/kegs/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: returnKegModal.keg.code,
+          action: 'RETURN',
+          returnCondition: returnKegModal.condition,
+          returnVolumeLiters: parseFloat(returnKegModal.returnVolumeLiters || '0'),
+          billingMode: returnKegModal.billingMode,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao registrar retorno do barril');
+      alert(data.message || 'Retorno registrado com sucesso!');
+      setReturnKegModal(null);
+      loadData();
+      if (selectedOrder) {
+        const updatedRes = await fetch('/api/orders');
+        const updatedOrders = await updatedRes.json();
+        const found = (updatedOrders || []).find((o: any) => o.id === selectedOrder.id);
+        if (found) setSelectedOrder(found);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Erro ao registrar retorno');
+    } finally {
+      setProcessingReturn(false);
+    }
+  };
 
   const getStockAvailability = (recipeId: string, capacity: number, editingOrderId?: string) => {
     const recipe = recipes.find((r) => r.id === recipeId);
@@ -1093,9 +1137,28 @@ export default function PedidosPage() {
                                 </span>
                               )}
                               {it.keg && (
-                                <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
-                                  Barril Físico: {it.keg.code} ({it.keg.capacity}L)
-                                </span>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                  <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block">
+                                    Barril Físico: {it.keg.code} ({it.keg.capacity}L)
+                                  </span>
+                                  {['EM_ROTA', 'ENTREGUE'].includes(selectedOrder.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setReturnKegModal({
+                                        keg: it.keg,
+                                        order: selectedOrder,
+                                        condition: 'VAZIO_SUJO',
+                                        returnVolumeLiters: '15',
+                                        billingMode: 'FULL',
+                                      })}
+                                      className="text-[10px] font-bold text-orange-800 hover:text-orange-950 bg-orange-100/80 hover:bg-orange-200 px-2 py-0.5 rounded-md border border-orange-300 transition-colors flex items-center gap-1 shadow-2xs"
+                                      title="Dar baixa e recolher barril"
+                                    >
+                                      <RefreshCw className="w-2.5 h-2.5" />
+                                      <span>Registrar Retorno</span>
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </td>
                             <td className="p-2.5 text-center font-black text-slate-800">{it.quantity}</td>
@@ -2276,6 +2339,162 @@ export default function PedidosPage() {
               >
                 <ArrowRight className="w-3.5 h-3.5" />
                 <span>Transferir Reserva</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: 🔄 REGISTRAR RETORNO DE BARRIL DO PEDIDO */}
+      {returnKegModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-orange-50 text-orange-600 rounded-2xl border border-orange-200">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">Registrar Retorno de Barril</h3>
+                  <p className="text-xs text-slate-500">
+                    Barril <strong className="font-mono text-slate-900">{returnKegModal.keg.code}</strong> ({returnKegModal.keg.capacity}L) • Pedido #{returnKegModal.order.orderNumber}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReturnKegModal(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Condição do Retorno */}
+            <div className="space-y-2 text-xs">
+              <label className="font-bold text-slate-800 block">
+                1. Condição do Barril Retornado:
+              </label>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReturnKegModal({ ...returnKegModal, condition: 'VAZIO_SUJO' })}
+                  className={`p-2.5 rounded-xl text-left border transition-all ${
+                    returnKegModal.condition === 'VAZIO_SUJO'
+                      ? 'bg-orange-50 border-orange-400 text-orange-950 ring-2 ring-orange-300 font-bold'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="font-black block">1. Vazio / Sujo</span>
+                  <span className="text-[10px] text-slate-500">Vai para CIP</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReturnKegModal({ ...returnKegModal, condition: 'PARCIALMENTE_CHEIO' })}
+                  className={`p-2.5 rounded-xl text-left border transition-all ${
+                    returnKegModal.condition === 'PARCIALMENTE_CHEIO'
+                      ? 'bg-amber-50 border-amber-400 text-amber-950 ring-2 ring-amber-300 font-bold'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="font-black block">2. Parcial / Sobra</span>
+                  <span className="text-[10px] text-slate-500">Retorna ao estoque</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReturnKegModal({ ...returnKegModal, condition: 'CHEIO_RETORNADO' })}
+                  className={`p-2.5 rounded-xl text-left border transition-all ${
+                    returnKegModal.condition === 'CHEIO_RETORNADO'
+                      ? 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-300 font-bold'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="font-black block">3. Cheio Intacto</span>
+                  <span className="text-[10px] text-slate-500">Não consumido</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Se Parcialmente Cheio: Litros + Escolha de Cobrança */}
+            {returnKegModal.condition === 'PARCIALMENTE_CHEIO' && (
+              <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-3 animate-in fade-in text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-800 font-black">Litros restantes no barril:</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    max={returnKegModal.keg.capacity}
+                    value={returnKegModal.returnVolumeLiters}
+                    onChange={(e) => setReturnKegModal({ ...returnKegModal, returnVolumeLiters: e.target.value })}
+                    className="w-24 px-3 py-1.5 bg-white border border-amber-300 rounded-xl font-black text-center text-amber-950 text-xs"
+                  />
+                  <span className="font-bold text-slate-500">Litros</span>
+                </div>
+
+                {/* Pergunta de Cobrança ao Cliente */}
+                <div className="space-y-1.5 pt-2 border-t border-amber-200/60">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 block">
+                    💳 Cobrança do Cliente no Pedido:
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReturnKegModal({ ...returnKegModal, billingMode: 'FULL' })}
+                      className={`p-2.5 rounded-xl text-left border transition-all ${
+                        returnKegModal.billingMode === 'FULL'
+                          ? 'bg-white border-amber-400 text-amber-950 ring-2 ring-amber-300 font-bold shadow-xs'
+                          : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      <span className="font-black text-xs block mb-0.5">🧾 Cobrar Barril Inteiro (100%)</span>
+                      <span className="text-[10px] text-slate-500 block leading-tight">
+                        Mantém o valor integral do barril no pedido (padrão de evento).
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setReturnKegModal({ ...returnKegModal, billingMode: 'PARTIAL' })}
+                      className={`p-2.5 rounded-xl text-left border transition-all ${
+                        returnKegModal.billingMode === 'PARTIAL'
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-300 font-bold shadow-xs'
+                          : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      <span className="font-black text-xs text-emerald-800 block mb-0.5">💰 Cobrar Apenas Consumo Parcial</span>
+                      <span className="text-[10px] text-slate-500 block leading-tight">
+                        Calcula os litros consumidos e desconta a sobra no total do pedido.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 text-xs">
+              <button
+                type="button"
+                onClick={() => setReturnKegModal(null)}
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={processingReturn}
+                onClick={handleConfirmKegReturn}
+                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {processingReturn ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                <span>Confirmar Retorno</span>
               </button>
             </div>
           </div>
