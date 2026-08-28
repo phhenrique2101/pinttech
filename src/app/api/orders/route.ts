@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     const orders = await prisma.order.findMany({
       where,
       include: {
+        brewery: true,
         client: true,
         items: {
           include: {
@@ -73,9 +74,9 @@ export async function POST(req: NextRequest) {
         let desc = item.description;
         if (!desc && item.recipeId) {
           const recipe = await prisma.beerRecipe.findUnique({ where: { id: item.recipeId } });
-          desc = `Barril 50L - ${recipe?.name || 'Chopp Artesanal'}`;
+          desc = `Barril - ${recipe?.name || 'Chopp Artesanal'}`;
         } else if (!desc) {
-          desc = 'Barril de Chopp 50L';
+          desc = 'Barril de Chopp';
         }
 
         const qty = parseFloat(item.quantity) || 1;
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
     const finalDiscount = parseFloat(discount) || 0;
     const finalTotal = totalAmount !== undefined
       ? parseFloat(totalAmount)
-      : finalSubtotal + finalDeliveryFee + finalCautionDeposit - finalDiscount;
+      : Math.max(0, finalSubtotal + finalDeliveryFee + finalCautionDeposit - finalDiscount);
 
     const order = await prisma.order.create({
       data: {
@@ -116,6 +117,8 @@ export async function POST(req: NextRequest) {
         deliveryFee: finalDeliveryFee,
         cautionDeposit: finalCautionDeposit,
         totalAmount: finalTotal,
+        paidAmount: 0,
+        remainingAmount: finalTotal,
         paymentMethod: paymentMethod || 'PIX',
         paymentStatus: 'PENDENTE',
         notes,
@@ -139,6 +142,15 @@ export async function POST(req: NextRequest) {
 
     // Bind Comodato Equipments
     if (Array.isArray(equipmentIds) && equipmentIds.length > 0) {
+      // Release from other active unfulfilled orders
+      await prisma.orderEquipment.deleteMany({
+        where: {
+          equipmentId: { in: equipmentIds },
+          orderId: { not: order.id },
+          order: { status: { in: ['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'] } },
+        },
+      });
+
       for (const eqId of equipmentIds) {
         await prisma.orderEquipment.create({
           data: {

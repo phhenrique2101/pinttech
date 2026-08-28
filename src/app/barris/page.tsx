@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Cylinder,
   Plus,
@@ -17,10 +17,18 @@ import {
   MoreVertical,
   CheckCircle2,
   AlertTriangle,
+  Zap,
+  Camera,
+  X,
+  Trash2,
+  Check,
+  Volume2,
+  ArrowRight,
 } from 'lucide-react';
 import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
 import KegTimelineModal from '@/components/kegs/KegTimelineModal';
+import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 
 export default function BarrisPage() {
   const [kegs, setKegs] = useState<any[]>([]);
@@ -34,17 +42,33 @@ export default function BarrisPage() {
   const [selectedKegForTimeline, setSelectedKegForTimeline] = useState<any>(null);
   const [newKegModalOpen, setNewKegModalOpen] = useState(false);
   const [batchKegModalOpen, setBatchKegModalOpen] = useState(false);
+  const [fastScannerModalOpen, setFastScannerModalOpen] = useState(false);
+  const [deleteConfirmKeg, setDeleteConfirmKeg] = useState<any>(null);
+  const [deletingKeg, setDeletingKeg] = useState(false);
+  const [deleteKegError, setDeleteKegError] = useState('');
 
-  // New keg form
+  // New single keg form (Litragem Livre)
   const [code, setCode] = useState('');
   const [capacity, setCapacity] = useState('50');
   const [kegType, setKegType] = useState('INOX_EURO');
   const [notes, setNotes] = useState('');
 
-  // Batch keg form
+  // Batch keg form (Litragem Livre)
   const [batchPrefix, setBatchPrefix] = useState('BAR-50L');
   const [batchCount, setBatchCount] = useState('10');
   const [batchCapacity, setBatchCapacity] = useState('50');
+
+  // Fast Scanner continuous registration mode
+  const [fastCode, setFastCode] = useState('');
+  const [fastCapacity, setFastCapacity] = useState('50');
+  const [fastKegType, setFastKegType] = useState('INOX_EURO');
+  const [fastNotes, setFastNotes] = useState('');
+  const [useCamera, setUseCamera] = useState(false);
+  const [fastScanning, setFastScanning] = useState(false);
+  const [fastFeedback, setFastFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [sessionRegisteredKegs, setSessionRegisteredKegs] = useState<{ code: string; capacity: number; time: string }[]>([]);
+
+  const fastInputRef = useRef<HTMLInputElement>(null);
 
   const fetchKegs = async () => {
     setLoading(true);
@@ -68,9 +92,61 @@ export default function BarrisPage() {
     fetchKegs();
   }, [statusFilter, capacityFilter]);
 
+  // Focus fast scanner input when modal opens
+  useEffect(() => {
+    if (fastScannerModalOpen && !useCamera) {
+      setTimeout(() => {
+        fastInputRef.current?.focus();
+      }, 200);
+    }
+  }, [fastScannerModalOpen, useCamera]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchKegs();
+  };
+
+  const handleStatusChange = async (kegId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/kegs/${kegId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        setKegs((prev) =>
+          prev.map((k) => (k.id === kegId ? { ...k, status: newStatus } : k))
+        );
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao alterar status do barril');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteKeg = async () => {
+    if (!deleteConfirmKeg) return;
+    setDeletingKeg(true);
+    setDeleteKegError('');
+
+    try {
+      const res = await fetch(`/api/kegs/${deleteConfirmKeg.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setKegs((prev) => prev.filter((k) => k.id !== deleteConfirmKeg.id));
+        setDeleteConfirmKeg(null);
+      } else {
+        setDeleteKegError(data.error || 'Erro ao excluir barril');
+      }
+    } catch (e) {
+      setDeleteKegError('Erro de conexão ao excluir');
+    } finally {
+      setDeletingKeg(false);
+    }
   };
 
   const handleCreateSingleKeg = async (e: React.FormEvent) => {
@@ -79,13 +155,21 @@ export default function BarrisPage() {
       const res = await fetch('/api/kegs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, capacity, kegType, notes }),
+        body: JSON.stringify({
+          code: code.trim().toUpperCase(),
+          capacity: parseInt(capacity, 10) || 50,
+          kegType,
+          notes,
+        }),
       });
       if (res.ok) {
         setNewKegModalOpen(false);
         setCode('');
         setNotes('');
         fetchKegs();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Erro ao cadastrar barril');
       }
     } catch (err) {
       console.error(err);
@@ -101,16 +185,89 @@ export default function BarrisPage() {
         body: JSON.stringify({
           prefix: batchPrefix,
           count: parseInt(batchCount, 10),
-          capacity: batchCapacity,
+          capacity: parseInt(batchCapacity, 10) || 50,
           kegType: 'INOX_EURO',
         }),
       });
       if (res.ok) {
         setBatchKegModalOpen(false);
         fetchKegs();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Erro ao cadastrar barris em lote');
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const playSuccessSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+      osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e) {
+      // Audio context might be restricted
+    }
+  };
+
+  const handleFastScanRegister = async (scannedCode: string) => {
+    const cleanCode = scannedCode.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    setFastScanning(true);
+    setFastFeedback(null);
+
+    try {
+      const cap = parseInt(fastCapacity, 10) || 50;
+      const res = await fetch('/api/kegs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: cleanCode,
+          capacity: cap,
+          kegType: fastKegType,
+          notes: fastNotes || 'Cadastrado via Scanner Rápido',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao cadastrar barril');
+      }
+
+      playSuccessSound();
+      setFastFeedback({
+        text: `✓ Barril ${cleanCode} (${cap}L) cadastrado com sucesso!`,
+        type: 'success',
+      });
+
+      setSessionRegisteredKegs((prev) => [
+        { code: cleanCode, capacity: cap, time: new Date().toLocaleTimeString('pt-BR') },
+        ...prev,
+      ]);
+
+      setFastCode('');
+      fetchKegs();
+    } catch (err: any) {
+      setFastFeedback({
+        text: err.message || 'Erro ao cadastrar código',
+        type: 'error',
+      });
+    } finally {
+      setFastScanning(false);
+      if (!useCamera) {
+        setTimeout(() => fastInputRef.current?.focus(), 50);
+      }
     }
   };
 
@@ -124,6 +281,11 @@ export default function BarrisPage() {
     }
   };
 
+  // Extract unique registered capacities for dynamic filter
+  const registeredCapacities = Array.from(new Set(kegs.map((k) => k.capacity).filter(Boolean))).sort(
+    (a, b) => b - a
+  );
+
   return (
     <div className="space-y-6 pb-12">
       {/* Top Header */}
@@ -134,11 +296,24 @@ export default function BarrisPage() {
             Controle & Rastreabilidade de Barris
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Gerenciamento de ativos, etiquetas de código de barras / QR e histórico de clientes
+            Gerenciamento de ativos, litragens de 5L a 50L+, inativação, exclusão e scanner rápido
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Fast Scanner Button */}
+          <button
+            onClick={() => {
+              setFastFeedback(null);
+              setFastCode('');
+              setFastScannerModalOpen(true);
+            }}
+            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-black rounded-xl shadow-md shadow-amber-500/25 flex items-center gap-1.5 transition-all active:scale-95"
+          >
+            <Zap className="w-4 h-4 fill-current" />
+            <span>Bipar & Cadastrar Barris (Rápido)</span>
+          </button>
+
           <button
             onClick={() => setBatchKegModalOpen(true)}
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 flex items-center gap-1.5 transition-all"
@@ -149,7 +324,7 @@ export default function BarrisPage() {
 
           <button
             onClick={() => setNewKegModalOpen(true)}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all active:scale-95"
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Barril</span>
@@ -166,7 +341,7 @@ export default function BarrisPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código, cerveja, cliente..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </form>
 
@@ -185,21 +360,23 @@ export default function BarrisPage() {
               <option value="VAZIO_SUJO">Vazio / Sujo</option>
               <option value="EM_TRANSITO">Em Trânsito</option>
               <option value="MANUTENCAO">Em Manutenção</option>
+              <option value="INATIVO">Inativo (Desativado)</option>
             </select>
           </div>
 
           <div className="flex items-center gap-1">
-            <span className="text-xs font-bold text-slate-500">Capacidade:</span>
+            <span className="text-xs font-bold text-slate-500">Litragem:</span>
             <select
               value={capacityFilter}
               onChange={(e) => setCapacityFilter(e.target.value)}
               className="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-slate-800"
             >
-              <option value="ALL">Todas</option>
-              <option value="50">50 Litros</option>
-              <option value="30">30 Litros</option>
-              <option value="20">20 Litros</option>
-              <option value="10">10 Litros</option>
+              <option value="ALL">Todas ({registeredCapacities.length > 0 ? `${registeredCapacities.length} tipos` : ''})</option>
+              {registeredCapacities.map((cap) => (
+                <option key={cap} value={String(cap)}>
+                  {cap} Litros
+                </option>
+              ))}
             </select>
           </div>
 
@@ -243,14 +420,23 @@ export default function BarrisPage() {
                 </tr>
               ) : (
                 kegs.map((keg) => {
-                  const statusInfo = KEG_STATUS_MAP[keg.status] || {
-                    label: keg.status,
-                    bg: 'bg-slate-100',
-                    color: 'text-slate-800',
-                  };
+                  const isInactive = keg.status === 'INATIVO';
+                  const inClient = keg.status === 'NO_CLIENTE' || keg.currentClientId;
+                  const statusInfo = isInactive
+                    ? { label: 'Inativo (Desativado)', bg: 'bg-slate-200', color: 'text-slate-700' }
+                    : KEG_STATUS_MAP[keg.status] || {
+                        label: keg.status,
+                        bg: 'bg-slate-100',
+                        color: 'text-slate-800',
+                      };
 
                   return (
-                    <tr key={keg.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={keg.id}
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        isInactive ? 'opacity-70 bg-slate-50/40' : ''
+                      }`}
+                    >
                       {/* Código */}
                       <td className="p-3.5 pl-5">
                         <div className="flex items-center gap-2">
@@ -262,15 +448,15 @@ export default function BarrisPage() {
                               {keg.code}
                             </span>
                             <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                              {keg.kegType.replace('_', ' ')}
+                              {keg.kegType?.replace('_', ' ') || 'INOX EURO'}
                             </span>
                           </div>
                         </div>
                       </td>
 
-                      {/* Capacidade */}
+                      {/* Capacidade Livre */}
                       <td className="p-3.5">
-                        <span className="font-extrabold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs">
+                        <span className="font-black text-slate-900 bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-0.5 rounded-lg text-xs">
                           {keg.capacity} L
                         </span>
                       </td>
@@ -303,7 +489,9 @@ export default function BarrisPage() {
 
                       {/* Localização / Cliente */}
                       <td className="p-3.5">
-                        {keg.currentClient ? (
+                        {isInactive ? (
+                          <span className="text-slate-400 italic text-xs">Barril Inativado</span>
+                        ) : keg.currentClient ? (
                           <div>
                             <span className="font-bold text-orange-900 flex items-center gap-1">
                               <MapPin className="w-3.5 h-3.5 text-orange-600" />
@@ -340,6 +528,41 @@ export default function BarrisPage() {
                           >
                             <History className="w-4 h-4" />
                           </button>
+
+                          {/* Inactivate / Reactivate */}
+                          {isInactive ? (
+                            <button
+                              onClick={() => handleStatusChange(keg.id, 'HIGIENIZADO')}
+                              className="px-2 py-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
+                              title="Reativar Barril"
+                            >
+                              Reativar
+                            </button>
+                          ) : (
+                            !inClient && (
+                              <button
+                                onClick={() => handleStatusChange(keg.id, 'INATIVO')}
+                                className="px-2 py-1 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors"
+                                title="Inativar Barril"
+                              >
+                                Inativar
+                              </button>
+                            )
+                          )}
+
+                          {/* Delete */}
+                          {!inClient && (
+                            <button
+                              onClick={() => {
+                                setDeleteKegError('');
+                                setDeleteConfirmKeg(keg);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Excluir Barril"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -351,62 +574,313 @@ export default function BarrisPage() {
         </div>
       </div>
 
-      {/* Modal: Novo Barril */}
-      {newKegModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
-            <h3 className="font-black text-lg text-slate-900 mb-4">Cadastrar Novo Barril</h3>
-            <form onSubmit={handleCreateSingleKeg} className="space-y-3">
+      {/* MODAL 1: ⚡ MODO BIPAR & CADASTRAR BARRIS (SCANNER RÁPIDO) */}
+      {fastScannerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Código Único (Barcode / QR)</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: BAR-50L-016"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs uppercase font-mono font-bold"
-                />
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 fill-current" /> Modo Cadastro Contínuo
+                </span>
+                <h3 className="text-lg font-black text-slate-900">
+                  Bipar & Cadastrar Barris Rapidamente
+                </h3>
               </div>
+              <button
+                onClick={() => setFastScannerModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            {/* Session Parameters (Litragem livre e Tipo) */}
+            <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-3">
+              <span className="text-[11px] font-black text-amber-950 block uppercase tracking-wider">
+                1. Configure a Litragem & Tipo dos Barris da Sessão:
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Litragem Livre Input + Quick Chips */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Capacidade</label>
-                  <select
-                    value={capacity}
-                    onChange={(e) => setCapacity(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
-                  >
-                    <option value="50">50 Litros</option>
-                    <option value="30">30 Litros</option>
-                    <option value="20">20 Litros</option>
-                    <option value="10">10 Litros</option>
-                  </select>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Litragem do Barril (Litros Livre)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      placeholder="Ex: 50, 30, 25..."
+                      value={fastCapacity}
+                      onChange={(e) => setFastCapacity(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-black text-slate-900"
+                    />
+                    <span className="text-xs font-extrabold text-amber-800">Litros</span>
+                  </div>
+
+                  {/* Preset chips */}
+                  <div className="flex gap-1.5 mt-2">
+                    {['50', '30', '20', '15', '10', '5'].map((cap) => (
+                      <button
+                        key={cap}
+                        type="button"
+                        onClick={() => setFastCapacity(cap)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                          fastCapacity === cap
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'bg-white text-slate-600 border border-amber-200 hover:bg-amber-100'
+                        }`}
+                      >
+                        {cap}L
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
+                {/* Tipo de Barril */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Tipo de Barril</label>
                   <select
-                    value={kegType}
-                    onChange={(e) => setKegType(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
+                    value={fastKegType}
+                    onChange={(e) => setFastKegType(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800"
                   >
                     <option value="INOX_EURO">Inox Euro</option>
                     <option value="INOX_DIN">Inox DIN</option>
                     <option value="INOX_SLIM">Inox Slim</option>
                     <option value="PET_ONEWAY">Keg PET</option>
+                    <option value="OUTRO">Outro Material</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Input Mode Toggle (Pistola Barcode vs Câmera) */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setUseCamera(false)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  !useCamera
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                <span>Leitor / Pistola USB / Teclado</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setUseCamera(true)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  useCamera
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                <span>Câmera do Dispositivo</span>
+              </button>
+            </div>
+
+            {/* Camera View */}
+            {useCamera ? (
+              <div className="p-3 bg-slate-900 rounded-2xl space-y-2">
+                <BarcodeScanner onScan={handleFastScanRegister} isProcessing={fastScanning} />
+              </div>
+            ) : (
+              /* USB / Gun Beep Input Form */
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (fastCode.trim()) handleFastScanRegister(fastCode);
+                }}
+                className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2"
+              >
+                <label className="block text-xs font-black text-slate-800">
+                  2. Bipe o código do barril (ou digite e pressione Enter):
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    ref={fastInputRef}
+                    type="text"
+                    required
+                    placeholder="Bipe com a pistola ou digite ex: BAR-001..."
+                    value={fastCode}
+                    onChange={(e) => setFastCode(e.target.value.toUpperCase())}
+                    disabled={fastScanning}
+                    className="flex-1 px-4 py-3 bg-white border-2 border-amber-500 focus:border-amber-600 focus:ring-4 focus:ring-amber-500/20 rounded-2xl font-mono text-base font-black text-slate-900 uppercase"
+                  />
+                  <button
+                    type="submit"
+                    disabled={fastScanning || !fastCode.trim()}
+                    className="px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl text-xs shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Cadastrar</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  💡 A pistola de código de barras envia um Enter automaticamente ao bipar.
+                </p>
+              </form>
+            )}
+
+            {/* Instant Feedback Message */}
+            {fastFeedback && (
+              <div
+                className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in ${
+                  fastFeedback.type === 'success'
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border border-rose-200 text-rose-800'
+                }`}
+              >
+                {fastFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                )}
+                <span>{fastFeedback.text}</span>
+              </div>
+            )}
+
+            {/* List of Kegs Registered In This Session */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Barris Cadastrados Nesta Sessão ({sessionRegisteredKegs.length}):
+                </span>
+                {sessionRegisteredKegs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSessionRegisteredKegs([])}
+                    className="text-[10px] text-slate-400 hover:text-slate-600"
+                  >
+                    Limpar histórico da sessão
+                  </button>
+                )}
+              </div>
+
+              {sessionRegisteredKegs.length > 0 ? (
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {sessionRegisteredKegs.map((k, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 bg-emerald-50/60 border border-emerald-200 rounded-xl flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-slate-900">{k.code}</span>
+                        <span className="text-[10px] font-bold bg-white text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                          {k.capacity} Litros
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium">{k.time}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 text-center py-2">
+                  Nenhum barril bipado nesta sessão ainda.
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setFastScannerModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl"
+              >
+                Concluir & Fechar Scanner
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: NOVO BARRIL INDIVIDUAL (COM LITRAGEM LIVRE) */}
+      {newKegModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <h3 className="font-black text-lg text-slate-900 mb-1">Cadastrar Novo Barril</h3>
+            <p className="text-xs text-slate-500 mb-4">Insira o código e defina a litragem livre desejada</p>
+
+            <form onSubmit={handleCreateSingleKeg} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Código Único (Barcode / QR)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: BAR-50L-016 ou 3001"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl uppercase font-mono font-bold"
+                />
+              </div>
+
+              {/* Litragem Livre Input + Quick Buttons */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Capacidade em Litros (Litragem Livre)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    placeholder="Ex: 50, 30, 20, 15, 10, 5..."
+                    value={capacity}
+                    onChange={(e) => setCapacity(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-black text-slate-900"
+                  />
+                  <span className="font-black text-slate-700">Litros</span>
+                </div>
+
+                {/* Preset Chips */}
+                <div className="flex gap-1.5 mt-2">
+                  {['50', '30', '20', '15', '10', '5'].map((cap) => (
+                    <button
+                      key={cap}
+                      type="button"
+                      onClick={() => setCapacity(cap)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all ${
+                        capacity === cap
+                          ? 'bg-amber-500 text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {cap}L
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Observações</label>
+                <label className="block font-bold text-slate-700 mb-1">Tipo de Barril</label>
+                <select
+                  value={kegType}
+                  onChange={(e) => setKegType(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                >
+                  <option value="INOX_EURO">Inox Euro</option>
+                  <option value="INOX_DIN">Inox DIN</option>
+                  <option value="INOX_SLIM">Inox Slim</option>
+                  <option value="PET_ONEWAY">Keg PET</option>
+                  <option value="OUTRO">Outro Material</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Observações</label>
                 <textarea
                   rows={2}
                   placeholder="Número de série do fabricante, fornecedor, etc."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
                 />
               </div>
 
@@ -414,13 +888,13 @@ export default function BarrisPage() {
                 <button
                   type="button"
                   onClick={() => setNewKegModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-sm"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
                 >
                   Salvar Barril
                 </button>
@@ -430,16 +904,16 @@ export default function BarrisPage() {
         </div>
       )}
 
-      {/* Modal: Cadastro em Lote */}
+      {/* MODAL 3: CADASTRO EM LOTE (COM LITRAGEM LIVRE) */}
       {batchKegModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
             <h3 className="font-black text-lg text-slate-900 mb-1">Cadastrar Barris em Lote</h3>
-            <p className="text-xs text-slate-500 mb-4">Gera sequências automáticas inteligentes (ex: 3001 até 3020)</p>
+            <p className="text-xs text-slate-500 mb-4">Gera sequências automáticas com a litragem que você definir</p>
 
-            <form onSubmit={handleCreateBatchKegs} className="space-y-3">
+            <form onSubmit={handleCreateBatchKegs} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block font-bold text-slate-700 mb-1">
                   Código Inicial ou Prefixo
                 </label>
                 <input
@@ -448,7 +922,7 @@ export default function BarrisPage() {
                   placeholder="Ex: 3001 ou BAR-3001 ou BAR-50L"
                   value={batchPrefix}
                   onChange={(e) => setBatchPrefix(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs uppercase font-mono font-bold"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl uppercase font-mono font-bold"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
                   Digite apenas o número inicial (ex: <strong>3001</strong>) ou com prefixo (ex: <strong>BAR-3001</strong>).
@@ -457,30 +931,47 @@ export default function BarrisPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Quantidade de Barris</label>
+                  <label className="block font-bold text-slate-700 mb-1">Quantidade de Barris</label>
                   <input
                     type="number"
                     min="1"
                     max="500"
                     value={batchCount}
                     onChange={(e) => setBatchCount(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
                   />
                 </div>
 
+                {/* Litragem Livre Batch */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Capacidade (Litros)</label>
-                  <select
+                  <label className="block font-bold text-slate-700 mb-1">Capacidade (Litros)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
                     value={batchCapacity}
                     onChange={(e) => setBatchCapacity(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
-                  >
-                    <option value="50">50 Litros</option>
-                    <option value="30">30 Litros</option>
-                    <option value="20">20 Litros</option>
-                    <option value="10">10 Litros</option>
-                  </select>
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
                 </div>
+              </div>
+
+              {/* Quick Chips for batch capacity */}
+              <div className="flex gap-1.5">
+                {['50', '30', '20', '15', '10', '5'].map((cap) => (
+                  <button
+                    key={cap}
+                    type="button"
+                    onClick={() => setBatchCapacity(cap)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                      batchCapacity === cap
+                        ? 'bg-amber-500 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {cap}L
+                  </button>
+                ))}
               </div>
 
               {/* Prévia Inteligente da Sequência */}
@@ -509,15 +1000,15 @@ export default function BarrisPage() {
                 const last = count > 1 ? `${basePrefix}${String(startNumber + count - 1).padStart(padLength, '0')}` : null;
 
                 return (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-1">
                     <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
-                      ✨ Sequência que será criada ({count} barris):
+                      ✨ Sequência que será criada ({count} barris de {batchCapacity}L):
                     </span>
                     <div className="font-mono text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                      <span className="px-2 py-0.5 bg-white rounded border border-amber-200 text-amber-900">{first}</span>
-                      {second && <span className="px-2 py-0.5 bg-white rounded border border-amber-200 text-amber-900">{second}</span>}
+                      <span className="px-2 py-0.5 bg-white rounded-lg border border-amber-200 text-amber-900">{first}</span>
+                      {second && <span className="px-2 py-0.5 bg-white rounded-lg border border-amber-200 text-amber-900">{second}</span>}
                       {count > 2 && <span className="text-slate-400 font-normal">... até ...</span>}
-                      {last && count > 2 && <span className="px-2 py-0.5 bg-white rounded border border-amber-200 text-amber-900">{last}</span>}
+                      {last && count > 2 && <span className="px-2 py-0.5 bg-white rounded-lg border border-amber-200 text-amber-900">{last}</span>}
                     </div>
                   </div>
                 );
@@ -527,18 +1018,68 @@ export default function BarrisPage() {
                 <button
                   type="button"
                   onClick={() => setBatchKegModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-sm"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
                 >
                   Gerar Lote de Barris
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmação de Exclusão de Barril */}
+      {deleteConfirmKeg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-2.5 bg-rose-50 rounded-2xl">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-900 text-base">Excluir Barril</h3>
+                <p className="text-xs text-slate-500">Confirmação de exclusão definitiva</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Tem certeza que deseja excluir o barril{' '}
+              <strong className="text-slate-900 font-black font-mono">{deleteConfirmKeg.code}</strong> (
+              {deleteConfirmKeg.capacity} Litros)? Esta ação apagará o histórico e não poderá ser desfeita.
+            </p>
+
+            {deleteKegError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-bold flex items-start gap-1.5">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{deleteKegError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmKeg(null)}
+                disabled={deletingKeg}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteKeg}
+                disabled={deletingKeg}
+                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{deletingKeg ? 'Excluindo...' : 'Sim, Excluir'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -114,9 +114,49 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: 'Apenas administradores podem excluir barris' }, { status: 403 });
     }
 
+    const existingKeg = await prisma.keg.findUnique({
+      where: { id: params.id },
+      include: { currentClient: true },
+    });
+
+    if (!existingKeg) {
+      return NextResponse.json({ error: 'Barril não encontrado' }, { status: 404 });
+    }
+
+    if (session.role !== 'SUPER_ADMIN' && existingKeg.breweryId !== session.breweryId) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
+
+    if (existingKeg.status === 'NO_CLIENTE' || existingKeg.currentClientId) {
+      return NextResponse.json(
+        {
+          error: `O barril ${existingKeg.code} está atualmente no cliente (${existingKeg.currentClient?.tradeName || existingKeg.currentClient?.name || 'Cliente'}). Dê baixa de recolha antes de excluir ou inative o barril.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    await prisma.kegMovement.deleteMany({ where: { kegId: params.id } });
+    await prisma.orderItem.updateMany({ where: { kegId: params.id }, data: { kegId: null } });
     await prisma.keg.delete({ where: { id: params.id } });
+
+    await prisma.actionLog.create({
+      data: {
+        breweryId: existingKeg.breweryId,
+        userId: session.userId,
+        userName: session.name,
+        actionType: 'KEG_DELETE',
+        description: `Exclusão do barril ${existingKeg.code} (${existingKeg.capacity}L)`,
+        entityType: 'Keg',
+        entityId: existingKeg.id,
+        previousData: JSON.stringify(existingKeg),
+        newData: null,
+      },
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('Error deleting keg:', error);
     return NextResponse.json({ error: 'Erro ao excluir barril' }, { status: 500 });
   }
 }

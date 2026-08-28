@@ -10,6 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const order = await prisma.order.findUnique({
       where: { id: params.id },
       include: {
+        brewery: true,
         client: true,
         items: {
           include: { recipe: true, keg: true },
@@ -152,6 +153,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // Replace equipments if provided
     if (Array.isArray(equipmentIds)) {
+      if (equipmentIds.length > 0) {
+        // Release from other active unfulfilled orders
+        await prisma.orderEquipment.deleteMany({
+          where: {
+            equipmentId: { in: equipmentIds },
+            orderId: { not: params.id },
+            order: { status: { in: ['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'] } },
+          },
+        });
+      }
+
       await prisma.orderEquipment.deleteMany({ where: { orderId: params.id } });
       for (const eqId of equipmentIds) {
         await prisma.orderEquipment.create({
