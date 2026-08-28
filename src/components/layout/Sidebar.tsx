@@ -38,21 +38,28 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
 
   const breweryNavItems = [
     { label: 'Dashboard Operacional', href: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'SALES', 'FINANCE', 'LOGISTICS'] },
-    { label: 'Controle de Barris', href: '/barris', icon: Cylinder, roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
-    { label: 'Equipamentos & Chopeiras', href: '/equipamentos', icon: Wrench, roles: ['SUPER_ADMIN', 'ADMIN', 'LOGISTICS', 'SALES'] },
-    { label: 'Scanner Mobile (Câmera)', href: '/scanner', icon: QrCode, badge: 'PWA', highlight: true, roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
-    { label: 'Produção & Tanques', href: '/producao', icon: Flame, roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
-    { label: 'Estoque & Insumos', href: '/estoque', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
-    { label: 'Pedidos & Comodato', href: '/pedidos', icon: ShoppingCart, roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
-    { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
-    { label: 'Financeiro Cervejaria', href: '/financeiro', icon: DollarSign, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
-    { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES'] },
-    { label: 'Importar Planilha (Excel)', href: '/importacao', icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'ADMIN'] },
-    { label: 'Usuários da Cervejaria', href: '/usuarios', icon: UserCheck, roles: ['ADMIN'] },
+    { label: 'Controle de Barris', href: '/barris', icon: Cylinder, moduleKey: 'BARRIS', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
+    { label: 'Equipamentos & Chopeiras', href: '/equipamentos', icon: Wrench, moduleKey: 'EQUIPAMENTOS', roles: ['SUPER_ADMIN', 'ADMIN', 'LOGISTICS', 'SALES'] },
+    { label: 'Scanner Mobile (Câmera)', href: '/scanner', icon: QrCode, badge: 'PWA', highlight: true, moduleKey: 'SCANNER', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
+    { label: 'Produção & Tanques', href: '/producao', icon: Flame, moduleKey: 'PRODUCAO', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
+    { label: 'Estoque & Insumos', href: '/estoque', icon: Package, moduleKey: 'ESTOQUE', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
+    { label: 'Pedidos & Comodato', href: '/pedidos', icon: ShoppingCart, moduleKey: 'PEDIDOS', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
+    { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, moduleKey: 'CLIENTES', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
+    { label: 'Financeiro Cervejaria', href: '/financeiro', icon: DollarSign, moduleKey: 'FINANCEIRO', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
+    { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download, moduleKey: 'RELATORIOS', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES'] },
+    { label: 'Importar Planilha (Excel)', href: '/importacao', icon: FileSpreadsheet, moduleKey: 'USUARIOS', roles: ['SUPER_ADMIN', 'ADMIN'] },
+    { label: 'Usuários da Cervejaria', href: '/usuarios', icon: UserCheck, moduleKey: 'USUARIOS', roles: ['ADMIN'] },
   ];
 
   const userRole = user?.role || 'LOGISTICS';
-  const allowedBreweryItems = breweryNavItems.filter((item) => item.roles.includes(userRole));
+  const allowedBreweryItems = breweryNavItems.filter((item) => {
+    if (isSuperAdmin || userRole === 'ADMIN') return true;
+    if (user?.permissions && user.permissions.length > 0) {
+      if (!item.moduleKey) return true;
+      return user.permissions.includes(item.moduleKey);
+    }
+    return item.roles.includes(userRole);
+  });
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col border-r border-slate-800">

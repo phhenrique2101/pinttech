@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
         role: true,
         phone: true,
         active: true,
+        permissions: true,
+        mustChangePassword: true,
         createdAt: true,
         brewery: { select: { id: true, name: true } },
       },
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, password, role, phone, breweryId } = body;
+    const { name, email, password, role, phone, permissions, mustChangePassword, breweryId } = body;
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: 'Nome, e-mail e senha são obrigatórios' }, { status: 400 });
@@ -56,6 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const permissionsStr = Array.isArray(permissions) ? JSON.stringify(permissions) : permissions || null;
 
     const user = await prisma.user.create({
       data: {
@@ -65,6 +68,8 @@ export async function POST(req: NextRequest) {
         password: passwordHash,
         role: role || 'LOGISTICS',
         phone,
+        permissions: permissionsStr,
+        mustChangePassword: mustChangePassword !== undefined ? mustChangePassword : true,
       },
       select: {
         id: true,
@@ -72,6 +77,8 @@ export async function POST(req: NextRequest) {
         email: true,
         role: true,
         phone: true,
+        permissions: true,
+        mustChangePassword: true,
         active: true,
       },
     });

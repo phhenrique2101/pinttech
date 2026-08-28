@@ -75,10 +75,12 @@ model User {
   password     String
   role         String    @default("LOGISTICS")
   phone        String?
-  avatarUrl    String?
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  avatarUrl          String?
+  permissions        String?   // JSON string of allowed modules, e.g. '["BARRIS","PEDIDOS"]'
+  mustChangePassword Boolean   @default(true)
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   assignedOrders Order[] @relation("DriverOrders")
 }

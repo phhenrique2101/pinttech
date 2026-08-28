@@ -25,6 +25,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Credenciais inválidas' }, { status: 401 });
     }
 
+    let parsedPermissions: string[] | undefined = undefined;
+    if (user.permissions) {
+      try {
+        parsedPermissions = JSON.parse(user.permissions);
+      } catch {
+        parsedPermissions = user.permissions.split(',').map((p) => p.trim());
+      }
+    }
+
     const tokenPayload = {
       userId: user.id,
       name: user.name,
@@ -33,6 +42,8 @@ export async function POST(req: NextRequest) {
       breweryId: user.breweryId,
       breweryName: user.brewery?.name,
       brewerySlug: user.brewery?.slug,
+      permissions: parsedPermissions,
+      mustChangePassword: user.mustChangePassword,
     };
 
     const token = signJwtToken(tokenPayload);
@@ -40,6 +51,7 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       user: tokenPayload,
+      mustChangePassword: user.mustChangePassword,
     });
 
     // Set HTTP-only cookie

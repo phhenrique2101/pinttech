@@ -12,6 +12,8 @@ export interface UserSession {
   breweryId: string | null;
   breweryName?: string;
   brewerySlug?: string;
+  permissions?: string[];
+  mustChangePassword?: boolean;
 }
 
 export function signJwtToken(payload: UserSession): string {

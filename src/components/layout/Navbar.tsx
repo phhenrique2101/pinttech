@@ -26,6 +26,8 @@ export interface CurrentUser {
   breweryId: string | null;
   breweryName?: string;
   brewerySlug?: string;
+  permissions?: string[];
+  mustChangePassword?: boolean;
 }
 
 export default function Navbar({ user }: { user: CurrentUser | null }) {
@@ -33,6 +35,56 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
   const pathname = usePathname();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [breweries, setBreweries] = useState<{ id: string; name: string }[]>([]);
+
+  // Mandatory password change state
+  const [forcePasswordModal, setForcePasswordModal] = useState(false);
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passLoading, setPassLoading] = useState(false);
+  const [passError, setPassError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.mustChangePassword) {
+      setForcePasswordModal(true);
+    }
+  }, [user]);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassError(null);
+
+    if (newPass.length < 6) {
+      setPassError('A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+
+    if (newPass !== confirmPass) {
+      setPassError('A confirmação de senha não confere com a nova senha digitada.');
+      return;
+    }
+
+    setPassLoading(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: newPass }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao alterar senha.');
+      }
+
+      setForcePasswordModal(false);
+      alert('Senha definida com sucesso! Bem-vindo ao PintTech.');
+      window.location.reload();
+    } catch (err: any) {
+      setPassError(err.message);
+    } finally {
+      setPassLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.role === 'SUPER_ADMIN') {
@@ -228,6 +280,69 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
           )}
         </div>
       </div>
+
+      {/* Mandatory First Access Password Change Modal */}
+      {forcePasswordModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-amber-300 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                <Key className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-black text-slate-900">
+                Defina sua Nova Senha Pessoal
+              </h2>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Olá, <strong>{user?.name}</strong>! Por motivos de segurança, você precisa cadastrar sua senha pessoal definitiva no primeiro acesso ao sistema.
+              </p>
+            </div>
+
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              {passError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl">
+                  {passError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nova Senha Pessoal (mínimo 6 dígitos)
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Confirmar Nova Senha
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={passLoading}
+                className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-sm rounded-xl shadow-md transition-all disabled:opacity-50"
+              >
+                {passLoading ? 'Salvando Nova Senha...' : 'Salvar Nova Senha & Acessar'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
