@@ -169,7 +169,8 @@ export async function POST(req: NextRequest) {
         }
 
         const notes = cleanStr(row.notes);
-        const currentBeerName = cleanStr(row.currentBeerName || row.beerName);
+        const currentBeerName = cleanStr(row.currentBeerName || row.beerName || row.cerveja);
+        const beerStyle = cleanStr(row.style || row.beerStyle || row.estilo);
         const batchNumber = cleanStr(row.batchNumber || row.lote || row.batch);
 
         let currentVolumeLiters: number | null = null;
@@ -183,9 +184,10 @@ export async function POST(req: NextRequest) {
 
         try {
           let currentBatchId: string | null = null;
-          if (batchNumber) {
+          if (batchNumber || currentBeerName) {
+            const batchCode = batchNumber || `LOT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
             let batch = await prisma.productionBatch.findUnique({
-              where: { breweryId_batchNumber: { breweryId, batchNumber } },
+              where: { breweryId_batchNumber: { breweryId, batchNumber: batchCode } },
             });
 
             if (!batch) {
@@ -199,10 +201,15 @@ export async function POST(req: NextRequest) {
                   data: {
                     breweryId,
                     name: recipeName,
-                    style: 'Estilo Artesanal',
+                    style: beerStyle || 'Estilo Artesanal',
                     suggestedPricePerLiter: 20.0,
                     costPerLiter: 4.5,
                   },
+                });
+              } else if (beerStyle && (recipe.style === 'Estilo Artesanal' || !recipe.style)) {
+                recipe = await prisma.beerRecipe.update({
+                  where: { id: recipe.id },
+                  data: { style: beerStyle },
                 });
               }
 
@@ -210,7 +217,7 @@ export async function POST(req: NextRequest) {
                 data: {
                   breweryId,
                   recipeId: recipe.id,
-                  batchNumber,
+                  batchNumber: batchCode,
                   volumePlannedLiters: 1000,
                   volumeProducedLiters: 1000,
                   status: 'PRONTO_ENVASE',
