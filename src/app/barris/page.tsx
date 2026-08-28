@@ -24,6 +24,7 @@ import {
   Check,
   Volume2,
   ArrowRight,
+  Lock,
 } from 'lucide-react';
 import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
@@ -32,6 +33,7 @@ import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 
 export default function BarrisPage() {
   const [kegs, setKegs] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -70,17 +72,52 @@ export default function BarrisPage() {
 
   const fastInputRef = useRef<HTMLInputElement>(null);
 
+  const getKegReservation = (keg: any) => {
+    if (keg.status !== 'EM_ESTOQUE' && keg.status !== 'ENVASADO') return null;
+
+    for (const o of orders) {
+      if (['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
+        for (const it of o.items || []) {
+          if (it.kegId === keg.id) {
+            return {
+              orderNumber: o.orderNumber,
+              clientName: o.client?.tradeName || o.client?.name || 'Cliente',
+              deliveryDate: o.deliveryDate,
+            };
+          }
+          const itRecipeName = it.recipe?.name || it.description?.replace(/Barril.*?-\s*/i, '').trim();
+          const matches =
+            (it.recipeId && keg.currentBatch?.recipeId === it.recipeId) ||
+            (itRecipeName && keg.currentBeerName && itRecipeName.toLowerCase() === keg.currentBeerName.toLowerCase());
+          if (matches && (it.kegCapacity || 50) === keg.capacity) {
+            return {
+              orderNumber: o.orderNumber,
+              clientName: o.client?.tradeName || o.client?.name || 'Cliente',
+              deliveryDate: o.deliveryDate,
+            };
+          }
+        }
+      }
+    }
+    return null;
+  };
+
   const fetchKegs = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'ALL') params.append('status', statusFilter);
+      if (statusFilter !== 'ALL' && statusFilter !== 'RESERVADO') params.append('status', statusFilter);
       if (capacityFilter !== 'ALL') params.append('capacity', capacityFilter);
       if (search) params.append('search', search);
 
-      const res = await fetch(`/api/kegs?${params.toString()}`);
-      const data = await res.json();
-      if (Array.isArray(data)) setKegs(data);
+      const [kRes, oRes] = await Promise.all([
+        fetch(`/api/kegs?${params.toString()}`),
+        fetch('/api/orders'),
+      ]);
+      const [kData, oData] = await Promise.all([kRes.json(), oRes.json()]);
+
+      if (Array.isArray(kData)) setKegs(kData);
+      if (Array.isArray(oData)) setOrders(oData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -354,6 +391,7 @@ export default function BarrisPage() {
               className="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-slate-800"
             >
               <option value="ALL">Todos os Status</option>
+              <option value="RESERVADO">🔒 Reservado em Pedido</option>
               <option value="NO_CLIENTE">No Cliente</option>
               <option value="EM_ESTOQUE">Na Câmara Fria (Cheio)</option>
               <option value="HIGIENIZADO">Higienizado (Pronto)</option>
@@ -412,16 +450,20 @@ export default function BarrisPage() {
                     Carregando barris...
                   </td>
                 </tr>
-              ) : kegs.length === 0 ? (
+              ) : kegs.filter((k) => (statusFilter === 'RESERVADO' ? getKegReservation(k) !== null : true)).length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-slate-400 font-medium">
                     Nenhum barril encontrado com os filtros selecionados.
                   </td>
                 </tr>
               ) : (
-                kegs.map((keg) => {
+                kegs
+                  .filter((k) => (statusFilter === 'RESERVADO' ? getKegReservation(k) !== null : true))
+                  .map((keg) => {
                   const isInactive = keg.status === 'INATIVO';
                   const inClient = keg.status === 'NO_CLIENTE' || keg.currentClientId;
+                  const res = getKegReservation(keg);
+
                   const statusInfo = isInactive
                     ? { label: 'Inativo (Desativado)', bg: 'bg-slate-200', color: 'text-slate-700' }
                     : KEG_STATUS_MAP[keg.status] || {
@@ -434,7 +476,11 @@ export default function BarrisPage() {
                     <tr
                       key={keg.id}
                       className={`hover:bg-slate-50/80 transition-colors ${
-                        isInactive ? 'opacity-70 bg-slate-50/40' : ''
+                        isInactive
+                          ? 'opacity-70 bg-slate-50/40'
+                          : res
+                          ? 'bg-amber-50/30'
+                          : ''
                       }`}
                     >
                       {/* Código */}
@@ -463,9 +509,16 @@ export default function BarrisPage() {
 
                       {/* Status */}
                       <td className="p-3.5">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${statusInfo.bg} ${statusInfo.color}`}>
-                          {statusInfo.label}
-                        </span>
+                        {res ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 inline-flex shadow-xs">
+                            <Lock className="w-3 h-3 text-amber-600" />
+                            Reservado
+                          </span>
+                        ) : (
+                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${statusInfo.bg} ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        )}
                       </td>
 
                       {/* Cerveja / Lote */}
@@ -491,6 +544,18 @@ export default function BarrisPage() {
                       <td className="p-3.5">
                         {isInactive ? (
                           <span className="text-slate-400 italic text-xs">Barril Inativado</span>
+                        ) : res ? (
+                          <div className="text-amber-950">
+                            <span className="font-bold flex items-center gap-1">
+                              <Lock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                              #{res.orderNumber} ({res.clientName})
+                            </span>
+                            {res.deliveryDate && (
+                              <span className="text-[10px] text-amber-800/80 block font-medium">
+                                Entrega: {formatDate(res.deliveryDate)}
+                              </span>
+                            )}
+                          </div>
                         ) : keg.currentClient ? (
                           <div>
                             <span className="font-bold text-orange-900 flex items-center gap-1">

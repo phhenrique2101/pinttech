@@ -16,13 +16,16 @@ import {
   ChevronUp,
   QrCode,
   Sparkles,
+  Lock,
+  CheckCircle2,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
 
 export default function EstoquePage() {
   const [activeTab, setActiveTab] = useState<'PACKAGED_BEER' | 'RAW_MATERIALS'>('PACKAGED_BEER');
   const [kegs, setKegs] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [expandedBeer, setExpandedBeer] = useState<string | null>(null);
@@ -42,13 +45,15 @@ export default function EstoquePage() {
   const loadKegInventory = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/kegs');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          // Filter kegs that are packaged or in stock
-          setKegs(data.filter((k: any) => k.status === 'ENVASADO' || k.status === 'EM_ESTOQUE'));
-        }
+      const [kRes, oRes] = await Promise.all([fetch('/api/kegs'), fetch('/api/orders')]);
+      const [kData, oData] = await Promise.all([kRes.json(), oRes.json()]);
+
+      if (Array.isArray(kData)) {
+        // Filter kegs that are packaged or in stock
+        setKegs(kData.filter((k: any) => k.status === 'ENVASADO' || k.status === 'EM_ESTOQUE'));
+      }
+      if (Array.isArray(oData)) {
+        setOrders(oData);
       }
     } catch (e) {
       console.error(e);
@@ -61,8 +66,28 @@ export default function EstoquePage() {
     loadKegInventory();
   }, []);
 
-  // Group kegs by Beer Name
-  const groupedByBeer: { [key: string]: { beerName: string; style?: string; kegs: any[]; totalLiters: number; count50L: number; count30L: number; count20L: number; count10L: number; costPerLiter: number; salePricePerLiter: number } } = {};
+  // Group kegs by Beer Name and compute Reservations
+  const groupedByBeer: {
+    [key: string]: {
+      beerName: string;
+      style?: string;
+      kegs: any[];
+      totalLiters: number;
+      count50L: number;
+      count30L: number;
+      count20L: number;
+      count15L: number;
+      count10L: number;
+      count5L: number;
+      costPerLiter: number;
+      salePricePerLiter: number;
+      reservedOrders: { orderNumber: string; clientName: string; quantity: number; kegCapacity: number; deliveryDate?: string }[];
+      reservedLiters: number;
+      reservedKegsCount: number;
+      availableLiters: number;
+      availableKegsCount: number;
+    };
+  } = {};
 
   kegs.forEach((keg) => {
     const beerName = keg.currentBeerName || keg.currentBatch?.recipe?.name || 'Chopp Não Identificado';
@@ -80,9 +105,16 @@ export default function EstoquePage() {
         count50L: 0,
         count30L: 0,
         count20L: 0,
+        count15L: 0,
         count10L: 0,
+        count5L: 0,
         costPerLiter: costL,
         salePricePerLiter: saleL,
+        reservedOrders: [],
+        reservedLiters: 0,
+        reservedKegsCount: 0,
+        availableLiters: 0,
+        availableKegsCount: 0,
       };
     }
 
@@ -91,7 +123,48 @@ export default function EstoquePage() {
     if (cap === 50) groupedByBeer[beerName].count50L++;
     else if (cap === 30) groupedByBeer[beerName].count30L++;
     else if (cap === 20) groupedByBeer[beerName].count20L++;
-    else groupedByBeer[beerName].count10L++;
+    else if (cap === 15) groupedByBeer[beerName].count15L++;
+    else if (cap === 10) groupedByBeer[beerName].count10L++;
+    else if (cap === 5) groupedByBeer[beerName].count5L++;
+  });
+
+  // Calculate active reservations for each beer group
+  Object.values(groupedByBeer).forEach((b) => {
+    let reservedL = 0;
+    let reservedK = 0;
+    const resOrders: { orderNumber: string; clientName: string; quantity: number; kegCapacity: number; deliveryDate?: string }[] = [];
+
+    orders.forEach((o) => {
+      if (['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
+        (o.items || []).forEach((it: any) => {
+          const itRecipeName = it.recipe?.name || it.description?.replace(/Barril.*?-\s*/i, '').trim();
+          const itMatches =
+            (it.recipeId && b.kegs.some((k) => k.currentBatch?.recipeId === it.recipeId)) ||
+            (itRecipeName && itRecipeName.toLowerCase() === b.beerName.toLowerCase()) ||
+            (it.description && it.description.toLowerCase().includes(b.beerName.toLowerCase()));
+
+          if (itMatches) {
+            const cap = it.kegCapacity || 50;
+            const qty = it.quantity || 1;
+            reservedL += qty * cap;
+            reservedK += qty;
+            resOrders.push({
+              orderNumber: o.orderNumber,
+              clientName: o.client?.tradeName || o.client?.name || 'Cliente',
+              quantity: qty,
+              kegCapacity: cap,
+              deliveryDate: o.deliveryDate,
+            });
+          }
+        });
+      }
+    });
+
+    b.reservedOrders = resOrders;
+    b.reservedLiters = reservedL;
+    b.reservedKegsCount = reservedK;
+    b.availableLiters = Math.max(0, b.totalLiters - reservedL);
+    b.availableKegsCount = Math.max(0, b.kegs.length - reservedK);
   });
 
   const beerList = Object.values(groupedByBeer).filter(
@@ -102,6 +175,11 @@ export default function EstoquePage() {
   );
 
   const totalVolumeLiters = kegs.reduce((acc, k) => acc + (k.capacity || 50), 0);
+  const totalReservedLiters = Object.values(groupedByBeer).reduce((acc, b) => acc + b.reservedLiters, 0);
+  const totalAvailableLiters = Math.max(0, totalVolumeLiters - totalReservedLiters);
+  const totalReservedKegs = Object.values(groupedByBeer).reduce((acc, b) => acc + b.reservedKegsCount, 0);
+  const totalAvailableKegs = Math.max(0, kegs.length - totalReservedKegs);
+
   const totalCostValue = Object.values(groupedByBeer).reduce(
     (acc, b) => acc + b.totalLiters * b.costPerLiter,
     0
@@ -121,7 +199,7 @@ export default function EstoquePage() {
             Gestão de Estoque
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Cervejas envasadas prontas para venda nos barris e estoque de insumos cervejeiros
+            Cervejas envasadas prontas na câmara fria com controle de reservas em pedidos e estoque de insumos
           </p>
         </div>
 
@@ -157,56 +235,64 @@ export default function EstoquePage() {
         <div className="space-y-6">
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-              <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
-                <Beer className="w-6 h-6" />
-              </div>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  Volume em Estoque
-                </span>
-                <span className="text-xl font-black text-slate-900">{totalVolumeLiters} Litros</span>
-                <span className="text-[10px] text-slate-500 block">Prontos para entrega</span>
-              </div>
-            </div>
-
+            {/* 1. Volume Total na Câmara */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
               <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
                 <Cylinder className="w-6 h-6" />
               </div>
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  Barris Cheios
+                  Total na Câmara Fria
                 </span>
-                <span className="text-xl font-black text-slate-900">{kegs.length} barris</span>
-                <span className="text-[10px] text-slate-500 block">Em câmara fria / fábrica</span>
+                <span className="text-xl font-black text-slate-900">{totalVolumeLiters} Litros</span>
+                <span className="text-[10px] text-slate-500 block">{kegs.length} barris envasados</span>
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-              <div className="p-3 bg-rose-50 rounded-xl text-rose-600">
-                <DollarSign className="w-6 h-6" />
+            {/* 2. Disponível para Venda Imediata */}
+            <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm flex items-center gap-3 bg-emerald-50/20">
+              <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+                <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  Custo Imobilizado
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+                  Livre para Venda
                 </span>
-                <span className="text-xl font-black text-rose-700">{formatCurrency(totalCostValue)}</span>
-                <span className="text-[10px] text-slate-500 block">Custo de fabricação</span>
+                <span className="text-xl font-black text-emerald-800">{totalAvailableLiters} Litros</span>
+                <span className="text-[10px] text-emerald-600 font-bold block">
+                  {totalAvailableKegs} barris disponíveis
+                </span>
               </div>
             </div>
 
+            {/* 3. Reservados em Pedidos */}
+            <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm flex items-center gap-3 bg-amber-50/30">
+              <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                  Reservado em Pedidos
+                </span>
+                <span className="text-xl font-black text-amber-900">{totalReservedLiters} Litros</span>
+                <span className="text-[10px] text-amber-700 font-bold block">
+                  {totalReservedKegs} barris comprometidos
+                </span>
+              </div>
+            </div>
+
+            {/* 4. Potencial de Venda */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-              <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+              <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
                 <TrendingUp className="w-6 h-6" />
               </div>
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  Potencial de Venda
+                  Valor Total em Venda
                 </span>
-                <span className="text-xl font-black text-emerald-700">{formatCurrency(totalSaleValue)}</span>
-                <span className="text-[10px] text-emerald-600 font-semibold block">
-                  Lucro previsto: {formatCurrency(totalSaleValue - totalCostValue)}
+                <span className="text-xl font-black text-purple-900">{formatCurrency(totalSaleValue)}</span>
+                <span className="text-[10px] text-slate-500 font-semibold block">
+                  Custo: {formatCurrency(totalCostValue)}
                 </span>
               </div>
             </div>
@@ -237,8 +323,8 @@ export default function EstoquePage() {
             ) : (
               beerList.map((beer) => {
                 const isExpanded = expandedBeer === beer.beerName;
-                const totalBeerCost = beer.totalLiters * beer.costPerLiter;
                 const totalBeerSale = beer.totalLiters * beer.salePricePerLiter;
+                const hasReservations = beer.reservedKegsCount > 0;
 
                 return (
                   <div
@@ -255,92 +341,174 @@ export default function EstoquePage() {
                           <h3 className="text-base font-black text-slate-900">{beer.beerName}</h3>
                           <p className="text-xs text-purple-700 font-bold">{beer.style}</p>
                           <span className="text-[11px] text-slate-400 font-medium">
-                            Custo: {formatCurrency(beer.costPerLiter)}/L • Preço Venda: {formatCurrency(beer.salePricePerLiter)}/L
+                            Custo: {formatCurrency(beer.costPerLiter)}/L • Venda: {formatCurrency(beer.salePricePerLiter)}/L
                           </span>
                         </div>
                       </div>
 
-                      {/* Keg breakdown badges */}
-                      <div className="flex items-center gap-2 flex-wrap text-xs">
-                        {beer.count50L > 0 && (
-                          <span className="px-3 py-1.5 bg-amber-50 text-amber-900 rounded-xl border border-amber-200 font-black">
-                            {beer.count50L}x 50L ({beer.count50L * 50}L)
+                      {/* Keg breakdown badges with Free / Reserved detail */}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2 flex-wrap text-xs">
+                          {beer.count50L > 0 && (
+                            <span className="px-2.5 py-1 bg-amber-50 text-amber-900 rounded-lg border border-amber-200 font-black text-xs">
+                              {beer.count50L}x 50L
+                            </span>
+                          )}
+                          {beer.count30L > 0 && (
+                            <span className="px-2.5 py-1 bg-blue-50 text-blue-900 rounded-lg border border-blue-200 font-black text-xs">
+                              {beer.count30L}x 30L
+                            </span>
+                          )}
+                          {beer.count20L > 0 && (
+                            <span className="px-2.5 py-1 bg-purple-50 text-purple-900 rounded-lg border border-purple-200 font-black text-xs">
+                              {beer.count20L}x 20L
+                            </span>
+                          )}
+                          {beer.count15L > 0 && (
+                            <span className="px-2.5 py-1 bg-orange-50 text-orange-900 rounded-lg border border-orange-200 font-black text-xs">
+                              {beer.count15L}x 15L
+                            </span>
+                          )}
+                          {beer.count10L > 0 && (
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-800 rounded-lg font-black text-xs">
+                              {beer.count10L}x 10L
+                            </span>
+                          )}
+                          {beer.count5L > 0 && (
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-800 rounded-lg font-black text-xs">
+                              {beer.count5L}x 5L
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Status Balance Pill */}
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            ✓ {beer.availableKegsCount} livres ({beer.availableLiters}L)
                           </span>
-                        )}
-                        {beer.count30L > 0 && (
-                          <span className="px-3 py-1.5 bg-blue-50 text-blue-900 rounded-xl border border-blue-200 font-black">
-                            {beer.count30L}x 30L ({beer.count30L * 30}L)
-                          </span>
-                        )}
-                        {beer.count20L > 0 && (
-                          <span className="px-3 py-1.5 bg-purple-50 text-purple-900 rounded-xl border border-purple-200 font-black">
-                            {beer.count20L}x 20L ({beer.count20L * 20}L)
-                          </span>
-                        )}
-                        {beer.count10L > 0 && (
-                          <span className="px-3 py-1.5 bg-slate-100 text-slate-800 rounded-xl font-black">
-                            {beer.count10L}x 10L ({beer.count10L * 10}L)
-                          </span>
-                        )}
+                          {hasReservations && (
+                            <span className="text-amber-900 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                              <Lock className="w-3 h-3 text-amber-600" />
+                              {beer.reservedKegsCount} reservados ({beer.reservedLiters}L)
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Totals & Expand Button */}
-                      <div className="flex items-center justify-between lg:justify-end gap-6 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                      <div className="flex items-center justify-between lg:justify-end gap-5 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                         <div className="text-right">
-                          <span className="text-xs text-slate-400 block font-bold">Total Disponível</span>
-                          <span className="text-lg font-black text-slate-900">{beer.totalLiters} Litros</span>
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Saldo Livre</span>
+                          <span className="text-base font-black text-emerald-700">{beer.availableLiters} Litros</span>
                         </div>
 
                         <div className="text-right">
-                          <span className="text-xs text-slate-400 block font-bold">Valor em Venda</span>
-                          <span className="text-lg font-black text-emerald-700">{formatCurrency(totalBeerSale)}</span>
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Total Envasado</span>
+                          <span className="text-base font-black text-slate-900">{beer.totalLiters} Litros</span>
                         </div>
 
                         <button
                           onClick={() => setExpandedBeer(isExpanded ? null : beer.beerName)}
                           className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors"
                         >
-                          <span>{isExpanded ? 'Ocultar Barris' : `Ver ${beer.kegs.length} Barris`}</span>
+                          <span>{isExpanded ? 'Ocultar' : `Ver ${beer.kegs.length} Barris`}</span>
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
 
+                    {/* Active Reservations Details Card for this Beer */}
+                    {hasReservations && (
+                      <div className="px-5 py-2.5 bg-amber-50/80 border-t border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2 text-amber-900 font-bold">
+                          <Lock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <span>Pedidos que reservaram esta cerveja:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {beer.reservedOrders.map((ro, roIdx) => (
+                            <span
+                              key={roIdx}
+                              className="px-2.5 py-1 bg-white rounded-lg border border-amber-300 text-amber-950 font-semibold text-[11px] flex items-center gap-1.5 shadow-xs"
+                            >
+                              <strong className="font-bold text-slate-900">#{ro.orderNumber}</strong>
+                              <span>({ro.clientName})</span>
+                              <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-black text-[10px]">
+                                {ro.quantity}x {ro.kegCapacity}L
+                              </span>
+                              {ro.deliveryDate && (
+                                <span className="text-slate-400 font-normal text-[10px]">
+                                  • {formatDate(ro.deliveryDate)}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Expanded Individual Kegs List */}
                     {isExpanded && (
                       <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
                         <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                          Barris Individuais em Estoque ({beer.kegs.length}):
+                          Barris Físicos na Câmara Fria ({beer.kegs.length}):
                         </span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                          {beer.kegs.map((keg: any) => (
-                            <div
-                              key={keg.id}
-                              className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-xs"
-                            >
-                              <div>
-                                <span className="font-mono font-black text-xs text-amber-800 block">
-                                  {keg.code}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-semibold">
-                                  {keg.capacity}L • {keg.status}
-                                </span>
-                                {keg.currentBatch && (
-                                  <span className="text-[9px] text-purple-700 block font-bold">
-                                    Lote: {keg.currentBatch.batchNumber}
-                                  </span>
-                                )}
-                              </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                          {beer.kegs.map((keg: any, kIdx: number) => {
+                            // Check if this physical keg falls within the reserved count or is explicitly reserved
+                            const isKegReserved = kIdx < beer.reservedKegsCount;
+                            const matchedResOrder = isKegReserved ? beer.reservedOrders[kIdx % beer.reservedOrders.length] : null;
 
-                              <button
-                                onClick={() => setSelectedKegForBarcode(keg)}
-                                className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                                title="Ver Etiqueta / QR Code"
+                            return (
+                              <div
+                                key={keg.id}
+                                className={`p-3 bg-white rounded-xl border flex items-start justify-between shadow-xs transition-all ${
+                                  isKegReserved
+                                    ? 'border-amber-300 bg-amber-50/40'
+                                    : 'border-slate-200 hover:border-slate-300'
+                                }`}
                               >
-                                <QrCode className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono font-black text-xs text-slate-900 block">
+                                      {keg.code}
+                                    </span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded">
+                                      {keg.capacity}L
+                                    </span>
+                                  </div>
+
+                                  {/* Status indicator on keg */}
+                                  {isKegReserved && matchedResOrder ? (
+                                    <div className="text-[10px] text-amber-900 font-bold bg-amber-100/90 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                                      <Lock className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                                      <span className="truncate">
+                                        Reservado: #{matchedResOrder.orderNumber} ({matchedResOrder.clientName})
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                                      <span>Livre em Estoque</span>
+                                    </div>
+                                  )}
+
+                                  {keg.currentBatch && (
+                                    <span className="text-[9px] text-purple-700 block font-bold">
+                                      Lote: {keg.currentBatch.batchNumber}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <button
+                                  onClick={() => setSelectedKegForBarcode(keg)}
+                                  className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                  title="Ver Etiqueta / QR Code"
+                                >
+                                  <QrCode className="w-4 h-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
