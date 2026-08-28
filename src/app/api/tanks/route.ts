@@ -16,7 +16,6 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         batches: {
-          take: 1,
           orderBy: { createdAt: 'desc' },
           include: { recipe: true },
         },

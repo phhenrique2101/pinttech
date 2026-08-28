@@ -20,8 +20,19 @@ import {
   Tag,
   Percent,
   Calculator,
+  AlertTriangle,
+  Search,
+  ArrowRight,
+  Zap,
+  Check,
+  X,
+  ShieldCheck,
+  RefreshCw,
+  Sliders,
+  Eye,
+  Activity,
 } from 'lucide-react';
-import { formatDateShort, formatCurrency } from '@/lib/utils';
+import { formatDateShort, formatCurrency, formatDate } from '@/lib/utils';
 
 export default function ProducaoPage() {
   const [batches, setBatches] = useState<any[]>([]);
@@ -36,6 +47,27 @@ export default function ProducaoPage() {
   const [newRecipeModal, setNewRecipeModal] = useState(false);
   const [editRecipeModal, setEditRecipeModal] = useState<any>(null);
   const [newTankModal, setNewTankModal] = useState(false);
+
+  // Edit Tank Modal State
+  const [editTankModal, setEditTankModal] = useState<any>(null);
+  const [editTankName, setEditTankName] = useState('');
+  const [editTankCapacity, setEditTankCapacity] = useState('1000');
+  const [editTankType, setEditTankType] = useState('FERMENTADOR_ISOTERMICO');
+  const [editTankStatus, setEditTankStatus] = useState('LIVRE');
+  const [editTankNotes, setEditTankNotes] = useState('');
+  const [editTankBatchId, setEditTankBatchId] = useState('');
+  const [editTankPackagingDate, setEditTankPackagingDate] = useState('');
+  const [editTankBatchStatus, setEditTankBatchStatus] = useState('FERMENTANDO');
+  const [editTankFermentationStartDate, setEditTankFermentationStartDate] = useState('');
+  const [editTankVolumeProduced, setEditTankVolumeProduced] = useState('');
+  const [editTankMeasuredOg, setEditTankMeasuredOg] = useState('');
+  const [editTankMeasuredFg, setEditTankMeasuredFg] = useState('');
+  const [editTankMeasuredAbv, setEditTankMeasuredAbv] = useState('');
+  const [savingTank, setSavingTank] = useState(false);
+
+  // Filters for Tanks Tab
+  const [tankStatusFilter, setTankStatusFilter] = useState('ALL');
+  const [tankSearch, setTankSearch] = useState('');
 
   // New batch form
   const [recipeId, setRecipeId] = useState('');
@@ -293,6 +325,102 @@ export default function ProducaoPage() {
     }
   };
 
+  const openEditTankModal = (tank: any) => {
+    setEditTankModal(tank);
+    setEditTankName(tank.name || '');
+    setEditTankCapacity(String(tank.capacityLiters || '1000'));
+    setEditTankType(tank.type || 'FERMENTADOR_ISOTERMICO');
+    setEditTankStatus(tank.status || 'LIVRE');
+    setEditTankNotes(tank.notes || '');
+
+    // Active batch in tank if any
+    const activeBatch = (tank.batches || []).find((b: any) => b.status !== 'FINALIZADO') || tank.batches?.[0];
+    if (activeBatch && tank.status === 'OCUPADO') {
+      setEditTankBatchId(activeBatch.id || '');
+      setEditTankPackagingDate(activeBatch.packagingDate ? new Date(activeBatch.packagingDate).toISOString().split('T')[0] : '');
+      setEditTankBatchStatus(activeBatch.status || 'FERMENTANDO');
+      setEditTankFermentationStartDate(activeBatch.fermentationStartDate ? new Date(activeBatch.fermentationStartDate).toISOString().split('T')[0] : (activeBatch.brewDate ? new Date(activeBatch.brewDate).toISOString().split('T')[0] : ''));
+      setEditTankVolumeProduced(String(activeBatch.volumeProducedLiters || activeBatch.volumePlannedLiters || ''));
+      setEditTankMeasuredOg(String(activeBatch.measuredOg || ''));
+      setEditTankMeasuredFg(String(activeBatch.measuredFg || ''));
+      setEditTankMeasuredAbv(String(activeBatch.measuredAbv || ''));
+    } else {
+      setEditTankBatchId('');
+      setEditTankPackagingDate('');
+      setEditTankBatchStatus('FERMENTANDO');
+      setEditTankFermentationStartDate('');
+      setEditTankVolumeProduced('');
+      setEditTankMeasuredOg('');
+      setEditTankMeasuredFg('');
+      setEditTankMeasuredAbv('');
+    }
+  };
+
+  const handleSaveTankEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTankModal) return;
+    setSavingTank(true);
+    try {
+      const res = await fetch(`/api/tanks/${editTankModal.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editTankName,
+          capacityLiters: editTankCapacity,
+          type: editTankType,
+          status: editTankStatus,
+          notes: editTankNotes,
+          batchId: editTankBatchId,
+          packagingDate: editTankPackagingDate || null,
+          batchStatus: editTankBatchStatus,
+          fermentationStartDate: editTankFermentationStartDate || null,
+          volumeProducedLiters: editTankVolumeProduced ? parseFloat(editTankVolumeProduced) : undefined,
+          measuredOg: editTankMeasuredOg ? parseFloat(editTankMeasuredOg) : undefined,
+          measuredFg: editTankMeasuredFg ? parseFloat(editTankMeasuredFg) : undefined,
+          measuredAbv: editTankMeasuredAbv ? parseFloat(editTankMeasuredAbv) : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao atualizar tanque');
+      setEditTankModal(null);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar alterações do tanque');
+    } finally {
+      setSavingTank(false);
+    }
+  };
+
+  const handleQuickTankStatusChange = async (tankId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/tanks/${tankId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) loadData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleLiberateTank = async (tank: any) => {
+    if (!confirm(`Deseja desocupar e liberar o tanque ${tank.name}? O lote atual será desvinculado e o status passará para LIVRE.`)) return;
+    try {
+      const res = await fetch(`/api/tanks/${tank.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'LIVRE',
+          batchId: '',
+        }),
+      });
+      if (res.ok) loadData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -507,76 +635,473 @@ export default function ProducaoPage() {
       )}
 
       {/* Tab: Tanques & Fermentadores */}
-      {activeTab === 'TANKS' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tanks.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-slate-400">Nenhum tanque cadastrado.</div>
-          ) : (
-            tanks.map((tank) => {
-              const isOccupied = tank.status === 'OCUPADO';
+      {activeTab === 'TANKS' && (() => {
+        const totalTankCapacity = tanks.reduce((acc, t) => acc + (t.capacityLiters || 0), 0);
+        const occupiedTanksList = tanks.filter((t) => t.status === 'OCUPADO');
+        const occupiedVolume = tanks.reduce((acc, t) => {
+          if (t.status !== 'OCUPADO') return acc;
+          const b = (t.batches || []).find((x: any) => x.status !== 'FINALIZADO') || t.batches?.[0];
+          return acc + (b ? (b.volumeProducedLiters || b.volumePlannedLiters || t.capacityLiters) : t.capacityLiters);
+        }, 0);
+        const occupancyPercent = totalTankCapacity > 0 ? Math.round((occupiedVolume / totalTankCapacity) * 100) : 0;
+        const freeTanksList = tanks.filter((t) => t.status === 'LIVRE');
+        const freeCapacity = freeTanksList.reduce((acc, t) => acc + (t.capacityLiters || 0), 0);
+        const cleaningTanksList = tanks.filter((t) => t.status === 'HIGIENIZANDO');
+        const maintenanceTanksList = tanks.filter((t) => t.status === 'MANUTENCAO');
+        const readyForPackagingList = tanks.filter((t) =>
+          (t.batches || []).some((b: any) => b.status === 'PRONTO_ENVASE' || b.status === 'MATURANDO')
+        );
 
-              return (
-                <div
-                  key={tank.id}
-                  className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                          {tank.type.replace('_', ' ')}
-                        </span>
-                        <h3 className="font-black text-slate-900 text-lg mt-0.5">{tank.name}</h3>
-                      </div>
+        const filteredTanks = tanks.filter((t) => {
+          const matchesStatus = tankStatusFilter === 'ALL' || t.status === tankStatusFilter;
+          const activeBatch = (t.batches || []).find((b: any) => b.status !== 'FINALIZADO') || t.batches?.[0];
+          const matchesSearch =
+            !tankSearch ||
+            t.name.toLowerCase().includes(tankSearch.toLowerCase()) ||
+            t.type.toLowerCase().includes(tankSearch.toLowerCase()) ||
+            (activeBatch && (
+              (activeBatch.batchNumber && activeBatch.batchNumber.toLowerCase().includes(tankSearch.toLowerCase())) ||
+              (activeBatch.recipe?.name && activeBatch.recipe.name.toLowerCase().includes(tankSearch.toLowerCase())) ||
+              (activeBatch.recipe?.style && activeBatch.recipe.style.toLowerCase().includes(tankSearch.toLowerCase()))
+            ));
+          return matchesStatus && matchesSearch;
+        });
 
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                            isOccupied
-                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          }`}
-                        >
-                          {tank.status}
-                        </span>
-
-                        <button
-                          onClick={() => handleDeleteTank(tank.id, tank.name)}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Excluir Tanque"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs">
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Capacidade Total:</span>
-                        <span className="font-black text-slate-900 text-sm">{tank.capacityLiters} Litros</span>
-                      </div>
-
-                      {tank.batches && tank.batches.length > 0 && (
-                        <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-xl text-xs space-y-0.5">
-                          <span className="text-[10px] font-bold text-purple-700 block uppercase tracking-wider">
-                            Lote em Maturação/Fermentação:
-                          </span>
-                          <p className="font-black text-purple-900">
-                            {tank.batches[0].recipe?.name || 'Cerveja'} ({tank.batches[0].batchNumber})
-                          </p>
-                          <span className="text-[10px] text-purple-600">
-                            Volume: {tank.batches[0].volumePlannedLiters}L • Status: {tank.batches[0].status}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+        return (
+          <div className="space-y-6">
+            {/* Top KPI Cards for Tanks */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                  <Cylinder className="w-6 h-6" />
                 </div>
-              );
-            })
-          )}
-        </div>
-      )}
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                    Capacidade Instalada
+                  </span>
+                  <span className="text-xl font-black text-slate-900">{totalTankCapacity} Litros</span>
+                  <span className="text-[10px] text-slate-500 block">{tanks.length} tanques cadastrados</span>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-purple-200 shadow-sm flex items-center gap-3 bg-purple-50/20">
+                <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 block">
+                    Ocupação da Planta
+                  </span>
+                  <span className="text-xl font-black text-purple-900">{occupancyPercent}% Ocupado</span>
+                  <span className="text-[10px] text-purple-700 font-bold block">
+                    {occupiedVolume}L em fermentação/maturação
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm flex items-center gap-3 bg-emerald-50/20">
+                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+                    Tanques Livres
+                  </span>
+                  <span className="text-xl font-black text-emerald-900">{freeTanksList.length} Livres</span>
+                  <span className="text-[10px] text-emerald-600 font-bold block">
+                    {freeCapacity}L disponíveis para brassagem
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm flex items-center gap-3 bg-amber-50/20">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                    Prontos p/ Envase
+                  </span>
+                  <span className="text-xl font-black text-amber-900">{readyForPackagingList.length} Lotes</span>
+                  <span className="text-[10px] text-amber-700 font-bold block">
+                    Em maturação final / cold crash
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 flex-1 max-w-md bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Buscar tanque por nome, cerveja ou lote..."
+                  value={tankSearch}
+                  onChange={(e) => setTankSearch(e.target.value)}
+                  className="bg-transparent w-full text-xs font-bold text-slate-800 focus:outline-none"
+                />
+                {tankSearch && (
+                  <button onClick={() => setTankSearch('')} className="text-slate-400 hover:text-slate-600">
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { id: 'ALL', label: `Todos (${tanks.length})` },
+                  { id: 'OCUPADO', label: `Ocupados (${occupiedTanksList.length})`, color: 'text-purple-700' },
+                  { id: 'LIVRE', label: `Livres (${freeTanksList.length})`, color: 'text-emerald-700' },
+                  { id: 'HIGIENIZANDO', label: `CIP / Limpeza (${cleaningTanksList.length})`, color: 'text-blue-700' },
+                  { id: 'MANUTENCAO', label: `Manutenção (${maintenanceTanksList.length})`, color: 'text-amber-700' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTankStatusFilter(tab.id)}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                      tankStatusFilter === tab.id
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tanks Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredTanks.length === 0 ? (
+                <div className="col-span-full bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400">
+                  <Cylinder className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                  <p className="font-bold">Nenhum tanque encontrado com os filtros selecionados.</p>
+                </div>
+              ) : (
+                filteredTanks.map((tank) => {
+                  const isOccupied = tank.status === 'OCUPADO';
+                  const isCleaning = tank.status === 'HIGIENIZANDO';
+                  const isMaintenance = tank.status === 'MANUTENCAO';
+                  const isFree = tank.status === 'LIVRE';
+
+                  // Active batch in this tank
+                  const activeBatch = (tank.batches || []).find((b: any) => b.status !== 'FINALIZADO') || tank.batches?.[0];
+                  const hasActiveBatch = isOccupied && activeBatch;
+
+                  const batchVol = hasActiveBatch ? (activeBatch.volumeProducedLiters || activeBatch.volumePlannedLiters || tank.capacityLiters) : 0;
+                  const fillPercentage = tank.capacityLiters > 0 ? Math.min(100, Math.round((batchVol / tank.capacityLiters) * 100)) : 0;
+
+                  // Days in tank calculation
+                  let daysInTank = 0;
+                  if (hasActiveBatch) {
+                    const startDate = activeBatch.fermentationStartDate || activeBatch.brewDate || activeBatch.createdAt;
+                    if (startDate) {
+                      const diffTime = Math.abs(new Date().getTime() - new Date(startDate).getTime());
+                      daysInTank = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    }
+                  }
+
+                  // Packaging forecast calculation
+                  let packagingBadge = null;
+                  if (hasActiveBatch && activeBatch.packagingDate) {
+                    const pkgDate = new Date(activeBatch.packagingDate);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    pkgDate.setHours(0, 0, 0, 0);
+                    const diffDays = Math.round((pkgDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+                    if (diffDays < 0) {
+                      packagingBadge = { text: `Venceu há ${Math.abs(diffDays)}d (Envase Imediato!)`, color: 'bg-rose-100 text-rose-800 border-rose-300' };
+                    } else if (diffDays === 0) {
+                      packagingBadge = { text: 'Envase Previsto para HOJE!', color: 'bg-amber-100 text-amber-900 border-amber-300' };
+                    } else if (diffDays === 1) {
+                      packagingBadge = { text: 'Envase Amanhã', color: 'bg-amber-50 text-amber-800 border-amber-200' };
+                    } else {
+                      packagingBadge = { text: `Faltam ${diffDays} dias`, color: 'bg-blue-50 text-blue-800 border-blue-200' };
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={tank.id}
+                      className={`bg-white rounded-2xl border shadow-sm flex flex-col justify-between overflow-hidden transition-all hover:shadow-md ${
+                        isOccupied
+                          ? 'border-purple-200 hover:border-purple-300'
+                          : isFree
+                          ? 'border-emerald-200 hover:border-emerald-300'
+                          : isCleaning
+                          ? 'border-blue-200 hover:border-blue-300'
+                          : 'border-amber-200 hover:border-amber-300'
+                      }`}
+                    >
+                      <div className="p-5 space-y-3.5">
+                        {/* Tank Header */}
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                              {tank.type?.replace(/_/g, ' ') || 'FERMENTADOR ISOTÉRMICO'}
+                            </span>
+                            <h3 className="font-black text-slate-900 text-lg flex items-center gap-1.5">
+                              <span>{tank.name}</span>
+                            </h3>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {/* Status Badge */}
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black border flex items-center gap-1 shadow-2xs ${
+                                isOccupied
+                                  ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                  : isFree
+                                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                  : isCleaning
+                                  ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                  : 'bg-amber-100 text-amber-900 border-amber-300'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                isOccupied ? 'bg-purple-600' : isFree ? 'bg-emerald-600' : isCleaning ? 'bg-blue-600' : 'bg-amber-600'
+                              }`} />
+                              {tank.status}
+                            </span>
+
+                            {/* Edit & Delete Buttons */}
+                            <button
+                              onClick={() => openEditTankModal(tank)}
+                              className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors border border-slate-200"
+                              title="Editar Tanque & Lote"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteTank(tank.id, tank.name)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200"
+                              title="Excluir Tanque"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Tank Visual Level & Capacity Gauge */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                            <span className="text-[11px] text-slate-500">
+                              Capacidade: <strong>{tank.capacityLiters}L</strong>
+                            </span>
+                            <span className={`text-[11px] ${isOccupied ? 'text-purple-700 font-black' : 'text-slate-500'}`}>
+                              {isOccupied ? `${batchVol}L (${fillPercentage}%)` : isFree ? 'Vazio / Pronto' : tank.status}
+                            </span>
+                          </div>
+
+                          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                isOccupied
+                                  ? 'bg-purple-600'
+                                  : isCleaning
+                                  ? 'bg-blue-500 animate-pulse'
+                                  : isMaintenance
+                                  ? 'bg-amber-500'
+                                  : 'bg-emerald-500/30'
+                              }`}
+                              style={{ width: isOccupied ? `${fillPercentage}%` : isCleaning || isMaintenance ? '100%' : '0%' }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Active Batch Card in Tank */}
+                        {hasActiveBatch ? (
+                          <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-2xl space-y-2.5 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="text-[10px] font-bold text-purple-700 block uppercase tracking-wider">
+                                  Lote em Produção:
+                                </span>
+                                <h4 className="font-black text-purple-950 text-sm">
+                                  🍺 {activeBatch.recipe?.name || 'Cerveja'}
+                                </h4>
+                                <span className="text-[10px] text-purple-700 font-semibold block">
+                                  {activeBatch.recipe?.style || 'Estilo'} • Lote <strong className="font-mono">{activeBatch.batchNumber}</strong>
+                                </span>
+                              </div>
+
+                              <span className="px-2 py-0.5 bg-purple-200/80 text-purple-900 rounded-md font-black text-[10px] uppercase">
+                                {activeBatch.status}
+                              </span>
+                            </div>
+
+                            {/* Forecast Date & Days Counter */}
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-purple-200/60 text-[11px]">
+                              <div>
+                                <span className="text-slate-400 block text-[10px] font-bold">📅 Previsão de Envase:</span>
+                                {activeBatch.packagingDate ? (
+                                  <div>
+                                    <strong className="text-purple-950 font-extrabold block">
+                                      {formatDateShort(activeBatch.packagingDate)}
+                                    </strong>
+                                    {packagingBadge && (
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-black border inline-block mt-0.5 ${packagingBadge.color}`}>
+                                        {packagingBadge.text}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => openEditTankModal(tank)}
+                                    className="text-amber-800 font-bold hover:underline text-[10px] flex items-center gap-1 mt-0.5"
+                                  >
+                                    <Clock className="w-3 h-3" />
+                                    <span>Definir previsão</span>
+                                  </button>
+                                )}
+                              </div>
+
+                              <div>
+                                <span className="text-slate-400 block text-[10px] font-bold">⏱️ Tempo no Tanque:</span>
+                                <strong className="text-purple-950 font-extrabold block">
+                                  {daysInTank > 0 ? `${daysInTank} dias` : 'Hoje'}
+                                </strong>
+                                <span className="text-[9px] text-slate-500">
+                                  Desde {formatDateShort(activeBatch.fermentationStartDate || activeBatch.brewDate || activeBatch.createdAt)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Measured Parameters */}
+                            {(activeBatch.measuredOg || activeBatch.measuredFg || activeBatch.measuredAbv) && (
+                              <div className="flex items-center gap-2 pt-2 border-t border-purple-200/60 text-[10px] font-bold text-purple-900 flex-wrap">
+                                {activeBatch.measuredOg && <span>OG: {activeBatch.measuredOg}</span>}
+                                {activeBatch.measuredFg && <span>• FG: {activeBatch.measuredFg}</span>}
+                                {activeBatch.measuredAbv && <span>• {activeBatch.measuredAbv}% ABV</span>}
+                              </div>
+                            )}
+                          </div>
+                        ) : isCleaning ? (
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs space-y-1 text-blue-900">
+                            <span className="font-black flex items-center gap-1.5">
+                              <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                              Higienização CIP em Andamento
+                            </span>
+                            <p className="text-[11px] text-blue-700">
+                              Tanque em ciclo de limpeza e sanitização química.
+                            </p>
+                          </div>
+                        ) : isMaintenance ? (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-1 text-amber-900">
+                            <span className="font-black flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                              Em Manutenção / Inspeção
+                            </span>
+                            <p className="text-[11px] text-amber-700">
+                              {tank.notes || 'Tanque temporariamente indisponível para produção.'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl text-xs space-y-1 text-emerald-900">
+                            <span className="font-black flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Tanque Vazio & Pronto para Uso
+                            </span>
+                            <p className="text-[11px] text-emerald-700">
+                              Disponível para receber nova brassagem de até {tank.capacityLiters}L.
+                            </p>
+                          </div>
+                        )}
+
+                        {tank.notes && !isMaintenance && (
+                          <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-xl border border-slate-100">
+                            {tank.notes}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Card Footer Quick Actions */}
+                      <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+                        <button
+                          onClick={() => openEditTankModal(tank)}
+                          className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-xl border border-slate-200 transition-colors flex items-center gap-1 shadow-2xs"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Gerenciar</span>
+                        </button>
+
+                        <div className="flex items-center gap-1.5">
+                          {isOccupied && (
+                            <>
+                              <a
+                                href="/scanner"
+                                className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl flex items-center gap-1 transition-colors shadow-2xs text-[11px]"
+                                title="Bipar e Envasar Barris deste Tanque"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Envasar</span>
+                              </a>
+
+                              <button
+                                onClick={() => handleLiberateTank(tank)}
+                                className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition-colors text-[11px]"
+                                title="Desocupar e Liberar Tanque"
+                              >
+                                Liberar
+                              </button>
+                            </>
+                          )}
+
+                          {isFree && (
+                            <>
+                              <button
+                                onClick={() => handleQuickTankStatusChange(tank.id, 'HIGIENIZANDO')}
+                                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-xl transition-colors text-[11px] flex items-center gap-1"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                <span>CIP</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setTankId(tank.id);
+                                  setNewBatchModal(true);
+                                }}
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-2xs text-[11px] flex items-center gap-1"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>Brassagem</span>
+                              </button>
+                            </>
+                          )}
+
+                          {isCleaning && (
+                            <button
+                              onClick={() => handleQuickTankStatusChange(tank.id, 'LIVRE')}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-2xs text-[11px] flex items-center gap-1"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Concluir CIP</span>
+                            </button>
+                          )}
+
+                          {isMaintenance && (
+                            <button
+                              onClick={() => handleQuickTankStatusChange(tank.id, 'LIVRE')}
+                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-colors shadow-2xs text-[11px] flex items-center gap-1"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Liberar</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tab: Recipes & Pricing Table */}
       {activeTab === 'RECIPES' && (
@@ -1127,6 +1652,284 @@ export default function ProducaoPage() {
                   className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
                 >
                   Salvar Tanque
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Tanque & Gerenciar Lote / Envase */}
+      {editTankModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-purple-50 text-purple-600 rounded-2xl border border-purple-200">
+                  <Cylinder className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">Editar Tanque & Gestão de Lote</h3>
+                  <p className="text-xs text-slate-500">
+                    Tanque <strong className="text-slate-900">{editTankModal.name}</strong> ({editTankModal.capacityLiters}L)
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setEditTankModal(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTankEdit} className="space-y-4 text-xs">
+              {/* Seção 1: Dados do Tanque */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 block">
+                  1. Configuração do Tanque
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Nome / Tag do Tanque</label>
+                    <input
+                      type="text"
+                      required
+                      value={editTankName}
+                      onChange={(e) => setEditTankName(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Capacidade (Litros)</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={editTankCapacity}
+                      onChange={(e) => setEditTankCapacity(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Tipo de Tanque</label>
+                    <select
+                      value={editTankType}
+                      onChange={(e) => setEditTankType(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    >
+                      <option value="FERMENTADOR_ISOTERMICO">Fermentador Isotérmico</option>
+                      <option value="MATURADOR">Maturador</option>
+                      <option value="BBT_BRITE_TANK">Brite Tank (BBT)</option>
+                      <option value="PANELA_BRASSAGEM">Panela de Brassagem</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Status Operacional</label>
+                    <select
+                      value={editTankStatus}
+                      onChange={(e) => setEditTankStatus(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-xl font-black border ${
+                        editTankStatus === 'LIVRE'
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                          : editTankStatus === 'OCUPADO'
+                          ? 'bg-purple-50 text-purple-900 border-purple-300'
+                          : editTankStatus === 'HIGIENIZANDO'
+                          ? 'bg-blue-50 text-blue-900 border-blue-300'
+                          : 'bg-amber-50 text-amber-900 border-amber-300'
+                      }`}
+                    >
+                      <option value="LIVRE">🟢 LIVRE (Vazio / Pronto)</option>
+                      <option value="OCUPADO">🟣 OCUPADO (Em Produção)</option>
+                      <option value="HIGIENIZANDO">🔵 HIGIENIZANDO (CIP / Limpeza)</option>
+                      <option value="MANUTENCAO">🟡 MANUTENÇÃO</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 2: Lote Vinculado ao Tanque & Previsão de Envase */}
+              <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
+                <span className="text-[11px] font-black uppercase tracking-wider text-purple-900 block">
+                  2. Lote Alocado & Controle de Envase
+                </span>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Lote de Produção no Tanque
+                  </label>
+                  <select
+                    value={editTankBatchId}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      setEditTankBatchId(newId);
+                      if (newId) {
+                        setEditTankStatus('OCUPADO');
+                        const b = batches.find((x) => x.id === newId);
+                        if (b) {
+                          setEditTankPackagingDate(b.packagingDate ? new Date(b.packagingDate).toISOString().split('T')[0] : '');
+                          setEditTankBatchStatus(b.status || 'FERMENTANDO');
+                          setEditTankFermentationStartDate(b.fermentationStartDate ? new Date(b.fermentationStartDate).toISOString().split('T')[0] : (b.brewDate ? new Date(b.brewDate).toISOString().split('T')[0] : ''));
+                          setEditTankVolumeProduced(String(b.volumeProducedLiters || b.volumePlannedLiters || ''));
+                          setEditTankMeasuredOg(String(b.measuredOg || ''));
+                          setEditTankMeasuredFg(String(b.measuredFg || ''));
+                          setEditTankMeasuredAbv(String(b.measuredAbv || ''));
+                        }
+                      } else {
+                        setEditTankStatus('LIVRE');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                  >
+                    <option value="">-- Nenhum Lote / Tanque Vazio --</option>
+                    {batches
+                      .filter((b) => b.status !== 'FINALIZADO' || b.tankId === editTankModal.id)
+                      .map((b) => (
+                        <option key={b.id} value={b.id}>
+                          🍺 {b.recipe?.name || 'Cerveja'} ({b.batchNumber}) - {b.volumePlannedLiters}L [{b.status}]
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {editTankBatchId && (
+                  <div className="space-y-3 pt-2 border-t border-purple-200/80">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Fase da Produção</label>
+                        <select
+                          value={editTankBatchStatus}
+                          onChange={(e) => setEditTankBatchStatus(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                        >
+                          <option value="BRASSAGEM">BRASSAGEM (Fervura/Mosto)</option>
+                          <option value="FERMENTANDO">FERMENTANDO (Atenuação)</option>
+                          <option value="MATURANDO">MATURANDO (Aromas/Sabor)</option>
+                          <option value="PRONTO_ENVASE">PRONTO P/ ENVASE (Cold Crash)</option>
+                          <option value="ENVASADO">ENVASADO</option>
+                          <option value="FINALIZADO">FINALIZADO (Liberar)</option>
+                        </select>
+                      </div>
+
+                      {/* Previsão de Envase */}
+                      <div>
+                        <label className="block font-bold text-purple-950 mb-1 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Previsão de Envase</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={editTankPackagingDate}
+                          onChange={(e) => setEditTankPackagingDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-purple-400 rounded-xl font-black text-purple-950"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Início da Fermentação</label>
+                        <input
+                          type="date"
+                          value={editTankFermentationStartDate}
+                          onChange={(e) => setEditTankFermentationStartDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Volume Real no Tanque (L)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          placeholder="Ex: 950"
+                          value={editTankVolumeProduced}
+                          onChange={(e) => setEditTankVolumeProduced(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Parâmetros Cervejeiros (OG, FG, ABV) */}
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-purple-200/60">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">OG Medida</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          placeholder="Ex: 1.054"
+                          value={editTankMeasuredOg}
+                          onChange={(e) => setEditTankMeasuredOg(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">FG Medida</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          placeholder="Ex: 1.010"
+                          value={editTankMeasuredFg}
+                          onChange={(e) => setEditTankMeasuredFg(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">ABV (% Álcool)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 5.8"
+                          value={editTankMeasuredAbv}
+                          onChange={(e) => setEditTankMeasuredAbv(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Observações */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Observações do Tanque / Histórico</label>
+                <textarea
+                  rows={2}
+                  placeholder="Informações adicionais, dry hopping, controle de pressão..."
+                  value={editTankNotes}
+                  onChange={(e) => setEditTankNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditTankModal(null)}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingTank}
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md shadow-purple-600/20 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingTank ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
+                  <span>Salvar Alterações</span>
                 </button>
               </div>
             </form>

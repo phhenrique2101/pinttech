@@ -50,6 +50,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       measuredOg,
       measuredFg,
       measuredAbv,
+      packagingDate,
+      fermentationStartDate,
+      maturationStartDate,
     } = body;
 
     const volPlanned = volumePlannedLiters !== undefined ? parseFloat(volumePlannedLiters) : existing.volumePlannedLiters;
@@ -74,6 +77,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         measuredOg: measuredOg !== undefined ? (measuredOg ? parseFloat(measuredOg) : null) : existing.measuredOg,
         measuredFg: measuredFg !== undefined ? (measuredFg ? parseFloat(measuredFg) : null) : existing.measuredFg,
         measuredAbv: measuredAbv !== undefined ? (measuredAbv ? parseFloat(measuredAbv) : null) : existing.measuredAbv,
+        packagingDate: packagingDate !== undefined ? (packagingDate ? new Date(packagingDate) : null) : existing.packagingDate,
+        fermentationStartDate: fermentationStartDate !== undefined ? (fermentationStartDate ? new Date(fermentationStartDate) : null) : existing.fermentationStartDate,
+        maturationStartDate: maturationStartDate !== undefined ? (maturationStartDate ? new Date(maturationStartDate) : null) : existing.maturationStartDate,
       },
       include: { recipe: true, tank: true },
     });

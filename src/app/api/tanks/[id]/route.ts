@@ -41,21 +41,99 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!session) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
 
     const body = await req.json();
-    const { name, capacityLiters, type, status, notes } = body;
+    const {
+      name,
+      capacityLiters,
+      type,
+      status,
+      notes,
+      batchId, // ID do lote para vincular (ou null / '' para desvincular)
+      packagingDate,
+      batchStatus,
+      fermentationStartDate,
+      volumeProducedLiters,
+      measuredOg,
+      measuredFg,
+      measuredAbv,
+    } = body;
+
+    const existingTank = await prisma.tank.findUnique({
+      where: { id: params.id },
+      include: { batches: { where: { status: { not: 'FINALIZADO' } }, orderBy: { createdAt: 'desc' } } },
+    });
+
+    if (!existingTank) return NextResponse.json({ error: 'Tanque não encontrado' }, { status: 404 });
+
+    let finalStatus = status !== undefined ? status : existingTank.status;
+
+    // Gerenciamento de alocação de lote no tanque
+    if (batchId !== undefined) {
+      if (!batchId) {
+        // Desvincular lotes ativos deste tanque
+        await prisma.productionBatch.updateMany({
+          where: { tankId: existingTank.id, status: { not: 'FINALIZADO' } },
+          data: { tankId: null },
+        });
+        if (finalStatus === 'OCUPADO') finalStatus = 'LIVRE';
+      } else {
+        // Desvincular de outros tanques e vincular ao tanque atual
+        await prisma.productionBatch.update({
+          where: { id: batchId },
+          data: {
+            tankId: existingTank.id,
+            ...(packagingDate !== undefined ? { packagingDate: packagingDate ? new Date(packagingDate) : null } : {}),
+            ...(batchStatus !== undefined ? { status: batchStatus } : {}),
+            ...(fermentationStartDate !== undefined ? { fermentationStartDate: fermentationStartDate ? new Date(fermentationStartDate) : null } : {}),
+            ...(volumeProducedLiters !== undefined ? { volumeProducedLiters: volumeProducedLiters ? parseFloat(volumeProducedLiters) : null } : {}),
+            ...(measuredOg !== undefined ? { measuredOg: measuredOg ? parseFloat(measuredOg) : null } : {}),
+            ...(measuredFg !== undefined ? { measuredFg: measuredFg ? parseFloat(measuredFg) : null } : {}),
+            ...(measuredAbv !== undefined ? { measuredAbv: measuredAbv ? parseFloat(measuredAbv) : null } : {}),
+          },
+        });
+        if (finalStatus === 'LIVRE') finalStatus = 'OCUPADO';
+      }
+    } else {
+      // Se não passou batchId mas passou campos de atualização do lote ativo existente no tanque
+      const activeBatch = existingTank.batches[0];
+      if (activeBatch) {
+        const batchUpdateData: any = {};
+        if (packagingDate !== undefined) batchUpdateData.packagingDate = packagingDate ? new Date(packagingDate) : null;
+        if (batchStatus !== undefined) batchUpdateData.status = batchStatus;
+        if (fermentationStartDate !== undefined) batchUpdateData.fermentationStartDate = fermentationStartDate ? new Date(fermentationStartDate) : null;
+        if (volumeProducedLiters !== undefined) batchUpdateData.volumeProducedLiters = volumeProducedLiters ? parseFloat(volumeProducedLiters) : null;
+        if (measuredOg !== undefined) batchUpdateData.measuredOg = measuredOg ? parseFloat(measuredOg) : null;
+        if (measuredFg !== undefined) batchUpdateData.measuredFg = measuredFg ? parseFloat(measuredFg) : null;
+        if (measuredAbv !== undefined) batchUpdateData.measuredAbv = measuredAbv ? parseFloat(measuredAbv) : null;
+
+        if (Object.keys(batchUpdateData).length > 0) {
+          await prisma.productionBatch.update({
+            where: { id: activeBatch.id },
+            data: batchUpdateData,
+          });
+        }
+      }
+    }
 
     const tank = await prisma.tank.update({
       where: { id: params.id },
       data: {
-        name: name !== undefined ? name : undefined,
+        name: name !== undefined ? name.trim() : undefined,
         capacityLiters: capacityLiters !== undefined ? parseFloat(capacityLiters) : undefined,
         type: type !== undefined ? type : undefined,
-        status: status !== undefined ? status : undefined,
+        status: finalStatus,
         notes: notes !== undefined ? notes : undefined,
+      },
+      include: {
+        batches: {
+          orderBy: { createdAt: 'desc' },
+          include: { recipe: true },
+        },
       },
     });
 
     return NextResponse.json(tank);
   } catch (error: any) {
+    console.error('Error updating tank:', error);
     return NextResponse.json({ error: 'Erro ao atualizar tanque' }, { status: 500 });
   }
 }
