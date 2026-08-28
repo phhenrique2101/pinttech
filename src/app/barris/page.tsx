@@ -433,9 +433,11 @@ export default function BarrisPage() {
               const filtered = kegs.filter((k) => (statusFilter === 'RESERVADO' ? getKegReservation(k) !== null : true));
               const rows = filtered.map((k) => {
                 const res = getKegReservation(k);
+                const realVol = k.currentVolumeLiters !== null && k.currentVolumeLiters !== undefined ? k.currentVolumeLiters : (k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO' || k.status === 'NO_CLIENTE' ? k.capacity : 0);
                 return {
                   'Código': k.code,
-                  'Capacidade': `${k.capacity}L`,
+                  'Capacidade Nominal': `${k.capacity}L`,
+                  'Volume Real de Chopp': `${realVol}L`,
                   'Tipo': k.kegType?.replace('_', ' ') || 'INOX EURO',
                   'Status': res ? 'RESERVADO' : k.status,
                   'Chopp Envasado': k.currentBeerName || '—',
@@ -468,7 +470,7 @@ export default function BarrisPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
                 <th className="p-3.5 pl-5">Código & Tipo</th>
-                <th className="p-3.5">Capacidade</th>
+                <th className="p-3.5">Capacidade & Volume Real</th>
                 <th className="p-3.5">Status Atual</th>
                 <th className="p-3.5">Cerveja / Lote</th>
                 <th className="p-3.5">Localização / Cliente</th>
@@ -533,11 +535,21 @@ export default function BarrisPage() {
                         </div>
                       </td>
 
-                      {/* Capacidade Livre */}
+                      {/* Capacidade e Volume Real */}
                       <td className="p-3.5">
-                        <span className="font-black text-slate-900 bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-0.5 rounded-lg text-xs">
-                          {keg.capacity} L
-                        </span>
+                        <div className="space-y-1">
+                          <span className="font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px] block w-fit">
+                            Capacidade: {keg.capacity}L
+                          </span>
+                          {(keg.status === 'EM_ESTOQUE' || keg.status === 'ENVASADO' || keg.status === 'NO_CLIENTE') && (
+                            <span className="font-black text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px] block w-fit">
+                              🍺 Chopp: {keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined ? keg.currentVolumeLiters : keg.capacity}L
+                              {keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined && keg.currentVolumeLiters < keg.capacity && (
+                                <span className="text-[9px] text-amber-700 font-normal ml-1">(Parcial)</span>
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Status */}

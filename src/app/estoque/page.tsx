@@ -72,7 +72,8 @@ export default function EstoquePage() {
       beerName: string;
       style?: string;
       kegs: any[];
-      totalLiters: number;
+      totalRealLiters: number;
+      totalNominalCapacity: number;
       count50L: number;
       count30L: number;
       count20L: number;
@@ -95,13 +96,15 @@ export default function EstoquePage() {
     const costL = keg.currentBatch?.costPerLiter || keg.currentBatch?.recipe?.costPerLiter || 4.5;
     const saleL = keg.currentBatch?.recipe?.salePricePerLiter || keg.currentBatch?.recipe?.suggestedPricePerLiter || 20.0;
     const cap = keg.capacity || 50;
+    const actualLiters = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined ? keg.currentVolumeLiters : cap;
 
     if (!groupedByBeer[beerName]) {
       groupedByBeer[beerName] = {
         beerName,
         style,
         kegs: [],
-        totalLiters: 0,
+        totalRealLiters: 0,
+        totalNominalCapacity: 0,
         count50L: 0,
         count30L: 0,
         count20L: 0,
@@ -119,7 +122,8 @@ export default function EstoquePage() {
     }
 
     groupedByBeer[beerName].kegs.push(keg);
-    groupedByBeer[beerName].totalLiters += cap;
+    groupedByBeer[beerName].totalRealLiters += actualLiters;
+    groupedByBeer[beerName].totalNominalCapacity += cap;
     if (cap === 50) groupedByBeer[beerName].count50L++;
     else if (cap === 30) groupedByBeer[beerName].count30L++;
     else if (cap === 20) groupedByBeer[beerName].count20L++;
@@ -163,7 +167,7 @@ export default function EstoquePage() {
     b.reservedOrders = resOrders;
     b.reservedLiters = reservedL;
     b.reservedKegsCount = reservedK;
-    b.availableLiters = Math.max(0, b.totalLiters - reservedL);
+    b.availableLiters = Math.max(0, b.totalRealLiters - reservedL);
     b.availableKegsCount = Math.max(0, b.kegs.length - reservedK);
   });
 
@@ -174,18 +178,19 @@ export default function EstoquePage() {
       (b.style && b.style.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const totalVolumeLiters = kegs.reduce((acc, k) => acc + (k.capacity || 50), 0);
+  const totalRealLiters = kegs.reduce((acc, k) => acc + (k.currentVolumeLiters !== null && k.currentVolumeLiters !== undefined ? k.currentVolumeLiters : (k.capacity || 50)), 0);
+  const totalNominalCapacity = kegs.reduce((acc, k) => acc + (k.capacity || 50), 0);
   const totalReservedLiters = Object.values(groupedByBeer).reduce((acc, b) => acc + b.reservedLiters, 0);
-  const totalAvailableLiters = Math.max(0, totalVolumeLiters - totalReservedLiters);
+  const totalAvailableLiters = Math.max(0, totalRealLiters - totalReservedLiters);
   const totalReservedKegs = Object.values(groupedByBeer).reduce((acc, b) => acc + b.reservedKegsCount, 0);
   const totalAvailableKegs = Math.max(0, kegs.length - totalReservedKegs);
 
   const totalCostValue = Object.values(groupedByBeer).reduce(
-    (acc, b) => acc + b.totalLiters * b.costPerLiter,
+    (acc, b) => acc + b.totalRealLiters * b.costPerLiter,
     0
   );
   const totalSaleValue = Object.values(groupedByBeer).reduce(
-    (acc, b) => acc + b.totalLiters * b.salePricePerLiter,
+    (acc, b) => acc + b.totalRealLiters * b.salePricePerLiter,
     0
   );
 
@@ -242,10 +247,12 @@ export default function EstoquePage() {
               </div>
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  Total na Câmara Fria
+                  Chopp Real na Câmara
                 </span>
-                <span className="text-xl font-black text-slate-900">{totalVolumeLiters} Litros</span>
-                <span className="text-[10px] text-slate-500 block">{kegs.length} barris envasados</span>
+                <span className="text-xl font-black text-slate-900">{totalRealLiters} Litros</span>
+                <span className="text-[10px] text-slate-500 block">
+                  {kegs.length} barris • {totalNominalCapacity}L capacidade
+                </span>
               </div>
             </div>
 
@@ -323,7 +330,7 @@ export default function EstoquePage() {
             ) : (
               beerList.map((beer) => {
                 const isExpanded = expandedBeer === beer.beerName;
-                const totalBeerSale = beer.totalLiters * beer.salePricePerLiter;
+                const totalBeerSale = beer.totalRealLiters * beer.salePricePerLiter;
                 const hasReservations = beer.reservedKegsCount > 0;
 
                 return (
@@ -398,13 +405,18 @@ export default function EstoquePage() {
                       {/* Totals & Expand Button */}
                       <div className="flex items-center justify-between lg:justify-end gap-5 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                         <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Saldo Livre</span>
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Saldo Livre Real</span>
                           <span className="text-base font-black text-emerald-700">{beer.availableLiters} Litros</span>
                         </div>
 
                         <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Total Envasado</span>
-                          <span className="text-base font-black text-slate-900">{beer.totalLiters} Litros</span>
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Total de Chopp Real</span>
+                          <span className="text-base font-black text-slate-900">{beer.totalRealLiters} Litros</span>
+                          {beer.totalRealLiters !== beer.totalNominalCapacity && (
+                            <span className="text-[9px] text-slate-400 block font-bold">
+                              Capacidade: {beer.totalNominalCapacity}L
+                            </span>
+                          )}
                         </div>
 
                         <button
@@ -454,9 +466,10 @@ export default function EstoquePage() {
                         </span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
                           {beer.kegs.map((keg: any, kIdx: number) => {
-                            // Check if this physical keg falls within the reserved count or is explicitly reserved
                             const isKegReserved = kIdx < beer.reservedKegsCount;
                             const matchedResOrder = isKegReserved ? beer.reservedOrders[kIdx % beer.reservedOrders.length] : null;
+                            const realVolume = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined ? keg.currentVolumeLiters : keg.capacity;
+                            const isPartial = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined && keg.currentVolumeLiters < keg.capacity;
 
                             return (
                               <div
@@ -467,13 +480,24 @@ export default function EstoquePage() {
                                     : 'border-slate-200 hover:border-slate-300'
                                 }`}
                               >
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-1.5">
+                                <div className="space-y-1.5 min-w-0 flex-1 pr-2">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="font-mono font-black text-xs text-slate-900 block">
                                       {keg.code}
                                     </span>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded">
-                                      {keg.capacity}L
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded" title="Capacidade total do barril">
+                                      Capacidade: {keg.capacity}L
+                                    </span>
+                                  </div>
+
+                                  {/* Real Chopp Volume Badge */}
+                                  <div className="flex items-center gap-1">
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
+                                      isPartial
+                                        ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    }`}>
+                                      🍺 Chopp Real: {realVolume}L {isPartial ? '(Parcial)' : ''}
                                     </span>
                                   </div>
 
@@ -501,7 +525,7 @@ export default function EstoquePage() {
 
                                 <button
                                   onClick={() => setSelectedKegForBarcode(keg)}
-                                  className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                  className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex-shrink-0"
                                   title="Ver Etiqueta / QR Code"
                                 >
                                   <QrCode className="w-4 h-4" />

@@ -46,20 +46,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!session) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
 
     const body = await req.json();
-    const { status, currentClientId, currentBatchId, currentBeerName, notes } = body;
+    const { status, currentClientId, currentBatchId, currentBeerName, notes, capacity, currentVolumeLiters } = body;
 
     const existingKeg = await prisma.keg.findUnique({ where: { id: params.id } });
     if (!existingKeg) return NextResponse.json({ error: 'Barril não encontrado' }, { status: 404 });
 
+    const updateData: any = {
+      status: status ?? existingKeg.status,
+      currentClientId: currentClientId !== undefined ? currentClientId : existingKeg.currentClientId,
+      currentBatchId: currentBatchId !== undefined ? currentBatchId : existingKeg.currentBatchId,
+      currentBeerName: currentBeerName !== undefined ? currentBeerName : existingKeg.currentBeerName,
+      notes: notes !== undefined ? notes : existingKeg.notes,
+    };
+
+    if (capacity !== undefined) {
+      updateData.capacity = parseInt(capacity, 10);
+    }
+
+    if (currentVolumeLiters !== undefined) {
+      updateData.currentVolumeLiters = currentVolumeLiters === null || currentVolumeLiters === '' ? null : parseFloat(currentVolumeLiters);
+    }
+
     const updatedKeg = await prisma.keg.update({
       where: { id: params.id },
-      data: {
-        status: status ?? existingKeg.status,
-        currentClientId: currentClientId !== undefined ? currentClientId : existingKeg.currentClientId,
-        currentBatchId: currentBatchId !== undefined ? currentBatchId : existingKeg.currentBatchId,
-        currentBeerName: currentBeerName !== undefined ? currentBeerName : existingKeg.currentBeerName,
-        notes: notes !== undefined ? notes : existingKeg.notes,
-      },
+      data: updateData,
     });
 
     // Register movement if status changed

@@ -119,7 +119,8 @@ export default function RelatoriosPage() {
     ],
     KEGS: [
       { id: 'code', label: 'Código do Barril', defaultSelected: true, getter: (k) => k.code },
-      { id: 'capacity', label: 'Capacidade (Litros)', defaultSelected: true, getter: (k) => `${k.capacity}L` },
+      { id: 'capacity', label: 'Capacidade Nominal (L)', defaultSelected: true, getter: (k) => `${k.capacity}L` },
+      { id: 'currentVolumeLiters', label: 'Volume Real de Chopp (L)', defaultSelected: true, getter: (k) => k.currentVolumeLiters !== null && k.currentVolumeLiters !== undefined ? `${k.currentVolumeLiters}L` : (k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO' || k.status === 'NO_CLIENTE' ? `${k.capacity}L` : '0L (Vazio)') },
       { id: 'kegType', label: 'Tipo de Válvula / Barril', defaultSelected: true, getter: (k) => k.kegType?.replace('_', ' ') || 'INOX EURO' },
       { id: 'status', label: 'Status Atual', defaultSelected: true, getter: (k) => k.status },
       { id: 'currentBeerName', label: 'Chopp Envasado', defaultSelected: true, getter: (k) => k.currentBeerName || '—' },
@@ -172,8 +173,9 @@ export default function RelatoriosPage() {
     STOCK: [
       { id: 'beerName', label: 'Estilo / Cerveja', defaultSelected: true, getter: (s) => s.beerName },
       { id: 'style', label: 'Família / Estilo Cervejeiro', defaultSelected: true, getter: (s) => s.style },
-      { id: 'totalLiters', label: 'Total Envasado (Litros)', defaultSelected: true, getter: (s) => s.totalLiters },
-      { id: 'availableLiters', label: 'Saldo Livre para Venda (Litros)', defaultSelected: true, getter: (s) => s.availableLiters },
+      { id: 'totalRealLiters', label: 'Volume Real de Chopp (Litros)', defaultSelected: true, getter: (s) => s.totalRealLiters },
+      { id: 'totalNominalCapacity', label: 'Capacidade Nominal Total (Litros)', defaultSelected: false, getter: (s) => s.totalNominalCapacity },
+      { id: 'availableLiters', label: 'Saldo Livre para Venda (Litros Reais)', defaultSelected: true, getter: (s) => s.availableLiters },
       { id: 'reservedLiters', label: 'Reservado em Pedidos (Litros)', defaultSelected: true, getter: (s) => s.reservedLiters },
       { id: 'totalKegs', label: 'Total de Barris Cheios', defaultSelected: true, getter: (s) => s.kegsCount },
       { id: 'availableKegs', label: 'Barris Livres para Venda', defaultSelected: true, getter: (s) => s.availableKegsCount },
@@ -326,12 +328,14 @@ export default function RelatoriosPage() {
         const costL = k.currentBatch?.costPerLiter || k.currentBatch?.recipe?.costPerLiter || 4.5;
         const saleL = k.currentBatch?.recipe?.salePricePerLiter || k.currentBatch?.recipe?.suggestedPricePerLiter || 20.0;
         const cap = k.capacity || 50;
+        const actualLiters = k.currentVolumeLiters !== null && k.currentVolumeLiters !== undefined ? k.currentVolumeLiters : cap;
 
         if (!stockMap[beerName]) {
           stockMap[beerName] = {
             beerName,
             style,
-            totalLiters: 0,
+            totalRealLiters: 0,
+            totalNominalCapacity: 0,
             kegsCount: 0,
             reservedKegsCount: 0,
             reservedLiters: 0,
@@ -343,7 +347,8 @@ export default function RelatoriosPage() {
           };
         }
 
-        stockMap[beerName].totalLiters += cap;
+        stockMap[beerName].totalRealLiters += actualLiters;
+        stockMap[beerName].totalNominalCapacity += cap;
         stockMap[beerName].kegsCount += 1;
       });
 
@@ -366,9 +371,9 @@ export default function RelatoriosPage() {
         });
         b.reservedLiters = resL;
         b.reservedKegsCount = resK;
-        b.availableLiters = Math.max(0, b.totalLiters - resL);
+        b.availableLiters = Math.max(0, b.totalRealLiters - resL);
         b.availableKegsCount = Math.max(0, b.kegsCount - resK);
-        b.totalPotentialSale = b.totalLiters * b.salePricePerLiter;
+        b.totalPotentialSale = b.totalRealLiters * b.salePricePerLiter;
       });
 
       return Object.values(stockMap).filter((b: any) => {
