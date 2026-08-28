@@ -46,6 +46,7 @@ export default function PedidosPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [recipes, setRecipes] = useState<any[]>([]);
   const [equipment, setEquipment] = useState<any[]>([]);
+  const [kegs, setKegs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -106,6 +107,35 @@ export default function PedidosPage() {
     conflictOrder: any;
     targetMode: 'NEW' | 'EDIT';
   } | null>(null);
+
+  const getStockAvailability = (recipeId: string, capacity: number, editingOrderId?: string) => {
+    const recipe = recipes.find((r) => r.id === recipeId);
+    if (!recipe) return { available: 0, matchingTotal: 0, reserved: 0, recipeName: 'Chopp' };
+
+    // Find filled kegs in stock matching this recipe and capacity
+    const matchingKegs = kegs.filter(
+      (k) =>
+        (k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO') &&
+        k.capacity === capacity &&
+        (k.currentBatch?.recipeId === recipeId ||
+          (k.currentBeerName && k.currentBeerName.toLowerCase() === recipe.name.toLowerCase()))
+    );
+
+    // Calculate quantity already committed in active unfulfilled orders
+    let reservedCount = 0;
+    orders.forEach((o) => {
+      if (o.id !== editingOrderId && ['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
+        (o.items || []).forEach((it: any) => {
+          if (it.recipeId === recipeId && (it.kegCapacity || 50) === capacity) {
+            reservedCount += (it.quantity || 1);
+          }
+        });
+      }
+    });
+
+    const available = Math.max(0, matchingKegs.length - reservedCount);
+    return { available, matchingTotal: matchingKegs.length, reserved: reservedCount, recipeName: recipe.name };
+  };
 
   const getEquipmentReservationConflict = (equipmentId: string, currentOrderId?: string) => {
     return orders.find(
@@ -181,18 +211,20 @@ export default function PedidosPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [oRes, cRes, rRes, eRes] = await Promise.all([
+      const [oRes, cRes, rRes, eRes, kRes] = await Promise.all([
         fetch('/api/orders'),
         fetch('/api/clients'),
         fetch('/api/recipes'),
         fetch('/api/equipment'),
+        fetch('/api/kegs'),
       ]);
 
-      const [oData, cData, rData, eData] = await Promise.all([
+      const [oData, cData, rData, eData, kData] = await Promise.all([
         oRes.json(),
         cRes.json(),
         rRes.json(),
         eRes.json(),
+        kRes.json(),
       ]);
 
       if (Array.isArray(oData)) setOrders(oData);
@@ -215,6 +247,7 @@ export default function PedidosPage() {
         }
       }
       if (Array.isArray(eData)) setEquipment(eData);
+      if (Array.isArray(kData)) setKegs(kData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -334,6 +367,18 @@ export default function PedidosPage() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Verify stock availability on the client side before submitting
+    for (const it of orderItems) {
+      const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
+      if (it.quantity > stock.available) {
+        alert(
+          `⛔ Estoque Insuficiente!\n\nO estilo "${stock.recipeName} (${it.kegCapacity || 50}L)" possui apenas ${stock.available} barril(is) disponível(is) na câmara fria (Solicitado: ${it.quantity}).\n\nRealize o envase de novos barris na aba Produção antes de vender.`
+        );
+        return;
+      }
+    }
+
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
@@ -367,6 +412,18 @@ export default function PedidosPage() {
   const handleSaveOrderEdits = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
+
+    // Verify stock availability
+    for (const it of editItems) {
+      const stock = getStockAvailability(it.recipeId, 50, selectedOrder.id);
+      if (it.quantity > stock.available) {
+        alert(
+          `⛔ Estoque Insuficiente!\n\nO estilo "${stock.recipeName}" possui apenas ${stock.available} barril(is) disponível(is) na câmara fria (Solicitado: ${it.quantity}).`
+        );
+        return;
+      }
+    }
+
     setSavingOrder(true);
     try {
       const computedSubtotal = editItems.reduce((acc, it) => acc + it.quantity * it.unitPrice, 0);
@@ -399,8 +456,8 @@ export default function PedidosPage() {
       if (res.ok) {
         const updated = await res.json();
         setSelectedOrder(updated);
-        loadData();
         setOrderModalTab('DETAILS');
+        loadData();
       } else {
         const data = await res.json();
         alert(data.error || 'Erro ao atualizar pedido');
@@ -1240,82 +1297,113 @@ export default function PedidosPage() {
                     </button>
                   </div>
 
-                  {editItems.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-white p-2.5 rounded-xl border border-purple-200">
-                      <div className="col-span-5">
-                        <select
-                          value={item.recipeId}
-                          onChange={(e) => {
-                            const updated = [...editItems];
-                            updated[idx].recipeId = e.target.value;
-                            const r = recipes.find((rec) => rec.id === e.target.value);
-                            if (r) {
-                              updated[idx].description = `Barril - ${r.name}`;
-                              updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * 50;
-                              updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
-                            }
-                            setEditItems(updated);
-                          }}
-                          className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold"
-                        >
-                          {recipes.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name} ({formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                  {editItems.map((item, idx) => {
+                    const stock = getStockAvailability(item.recipeId, 50, selectedOrder?.id);
+                    const isOutOfStock = stock.available <= 0;
+                    const isInsufficient = item.quantity > stock.available;
 
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const updated = [...editItems];
-                            const qty = parseInt(e.target.value, 10) || 1;
-                            updated[idx].quantity = qty;
-                            updated[idx].totalPrice = qty * updated[idx].unitPrice;
-                            setEditItems(updated);
-                          }}
-                          className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-center"
-                          placeholder="Qtd"
-                        />
-                      </div>
+                    return (
+                      <div key={idx} className="space-y-1 bg-white p-2.5 rounded-xl border border-purple-200 text-xs">
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-5">
+                            <select
+                              value={item.recipeId}
+                              onChange={(e) => {
+                                const updated = [...editItems];
+                                updated[idx].recipeId = e.target.value;
+                                const r = recipes.find((rec) => rec.id === e.target.value);
+                                if (r) {
+                                  updated[idx].description = `Barril - ${r.name}`;
+                                  updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * 50;
+                                  updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                }
+                                setEditItems(updated);
+                              }}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                            >
+                              {recipes.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.name} ({formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                      <div className="col-span-3">
-                        <input
-                          type="number"
-                          step="10"
-                          value={item.unitPrice}
-                          onChange={(e) => {
-                            const updated = [...editItems];
-                            const price = parseFloat(e.target.value) || 0;
-                            updated[idx].unitPrice = price;
-                            updated[idx].totalPrice = updated[idx].quantity * price;
-                            setEditItems(updated);
-                          }}
-                          className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800"
-                          placeholder="Preço Unit."
-                        />
-                      </div>
+                          <div className="col-span-2">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const updated = [...editItems];
+                                const qty = parseInt(e.target.value, 10) || 1;
+                                updated[idx].quantity = qty;
+                                updated[idx].totalPrice = qty * updated[idx].unitPrice;
+                                setEditItems(updated);
+                              }}
+                              className={`w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs border ${
+                                isInsufficient || isOutOfStock
+                                  ? 'bg-rose-50 border-rose-300 text-rose-800'
+                                  : 'bg-slate-50 border-slate-300'
+                              }`}
+                              placeholder="Qtd"
+                            />
+                          </div>
 
-                      <div className="col-span-2 flex items-center justify-end gap-1">
-                        <span className="font-black text-slate-900 text-xs">
-                          {formatCurrency(item.quantity * item.unitPrice)}
-                        </span>
-                        {editItems.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => setEditItems(editItems.filter((_, i) => i !== idx))}
-                            className="text-slate-400 hover:text-rose-600 p-1"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                          <div className="col-span-3">
+                            <input
+                              type="number"
+                              step="10"
+                              value={item.unitPrice}
+                              onChange={(e) => {
+                                const updated = [...editItems];
+                                const price = parseFloat(e.target.value) || 0;
+                                updated[idx].unitPrice = price;
+                                updated[idx].totalPrice = updated[idx].quantity * price;
+                                setEditItems(updated);
+                              }}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs"
+                              placeholder="Preço Unit."
+                            />
+                          </div>
+
+                          <div className="col-span-2 flex items-center justify-end gap-1">
+                            <span className="font-black text-slate-900 text-xs">
+                              {formatCurrency(item.quantity * item.unitPrice)}
+                            </span>
+                            {editItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setEditItems(editItems.filter((_, i) => i !== idx))}
+                                className="text-slate-400 hover:text-rose-600 p-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Stock indicator in edit tab */}
+                        <div className="flex items-center justify-between text-[10px] pt-1 border-t border-purple-50">
+                          <div>
+                            {isOutOfStock ? (
+                              <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
+                                ⛔ Sem estoque na câmara fria (0 disponíveis)
+                              </span>
+                            ) : isInsufficient ? (
+                              <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
+                                ⚠️ Quantidade solicitada ({item.quantity}) maior que o estoque ({stock.available} disponíveis)
+                              </span>
+                            ) : (
+                              <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
+                                ✓ {stock.available} barril(is) disponíveis em estoque
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Comodato de Chopeiras */}
@@ -1430,6 +1518,25 @@ export default function PedidosPage() {
                   );
                 })()}
 
+                {/* Stock Insufficiency Warning Banner in Edit */}
+                {(() => {
+                  const hasStockErrors = editItems.some((it) => {
+                    const stock = getStockAvailability(it.recipeId, 50, selectedOrder?.id);
+                    return it.quantity > stock.available;
+                  });
+
+                  return (
+                    hasStockErrors && (
+                      <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                        <span>
+                          Não é possível salvar: Há itens sem estoque disponível suficiente na câmara fria.
+                        </span>
+                      </div>
+                    )
+                  );
+                })()}
+
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
                     type="button"
@@ -1438,13 +1545,26 @@ export default function PedidosPage() {
                   >
                     Voltar aos Detalhes
                   </button>
-                  <button
-                    type="submit"
-                    disabled={savingOrder}
-                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
-                  >
-                    {savingOrder ? 'Salvando...' : 'Salvar Alterações do Pedido'}
-                  </button>
+                  {(() => {
+                    const hasStockErrors = editItems.some((it) => {
+                      const stock = getStockAvailability(it.recipeId, 50, selectedOrder?.id);
+                      return it.quantity > stock.available;
+                    });
+
+                    return (
+                      <button
+                        type="submit"
+                        disabled={savingOrder || hasStockErrors}
+                        className={`px-5 py-2.5 font-bold rounded-xl shadow-sm transition-all ${
+                          hasStockErrors
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                            : 'bg-amber-500 hover:bg-amber-600 text-white'
+                        }`}
+                      >
+                        {savingOrder ? 'Salvando...' : hasStockErrors ? 'Estoque Insuficiente' : 'Salvar Alterações do Pedido'}
+                      </button>
+                    );
+                  })()}
                 </div>
               </form>
             )}
@@ -1722,75 +1842,110 @@ export default function PedidosPage() {
                   </button>
                 </div>
 
-                {orderItems.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-white p-2.5 rounded-xl border border-purple-200 text-xs">
-                    <div className="col-span-5">
-                      <select
-                        value={item.recipeId}
-                        onChange={(e) => {
-                          const newItems = [...orderItems];
-                          newItems[idx].recipeId = e.target.value;
-                          const r = recipes.find((rec) => rec.id === e.target.value);
-                          if (r) {
-                            newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * (item.kegCapacity || 50);
-                          }
-                          setOrderItems(newItems);
-                        }}
-                        className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                      >
-                        {recipes.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} ({formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                {orderItems.map((item, idx) => {
+                  const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
+                  const isOutOfStock = stock.available <= 0;
+                  const isInsufficient = item.quantity > stock.available;
 
-                    {/* Capacity Preset Selector */}
-                    <div className="col-span-3">
-                      <select
-                        value={item.kegCapacity || 50}
-                        onChange={(e) => {
-                          const cap = parseInt(e.target.value, 10) || 50;
-                          const newItems = [...orderItems];
-                          newItems[idx].kegCapacity = cap;
-                          const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
-                          if (r) {
-                            newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
-                          }
-                          setOrderItems(newItems);
-                        }}
-                        className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                      >
-                        <option value="50">50 Litros</option>
-                        <option value="30">30 Litros</option>
-                        <option value="20">20 Litros</option>
-                        <option value="15">15 Litros</option>
-                        <option value="10">10 Litros</option>
-                        <option value="5">5 Litros</option>
-                      </select>
-                    </div>
+                  return (
+                    <div key={idx} className="space-y-1 bg-white p-2.5 rounded-xl border border-purple-200 text-xs">
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-5">
+                          <select
+                            value={item.recipeId}
+                            onChange={(e) => {
+                              const newItems = [...orderItems];
+                              newItems[idx].recipeId = e.target.value;
+                              const r = recipes.find((rec) => rec.id === e.target.value);
+                              if (r) {
+                                newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * (item.kegCapacity || 50);
+                              }
+                              setOrderItems(newItems);
+                            }}
+                            className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                          >
+                            {recipes.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.name} ({formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                    <div className="col-span-2">
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const newItems = [...orderItems];
-                          newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
-                          setOrderItems(newItems);
-                        }}
-                        className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-center text-xs"
-                        placeholder="Qtd"
-                      />
-                    </div>
+                        {/* Capacity Preset Selector */}
+                        <div className="col-span-3">
+                          <select
+                            value={item.kegCapacity || 50}
+                            onChange={(e) => {
+                              const cap = parseInt(e.target.value, 10) || 50;
+                              const newItems = [...orderItems];
+                              newItems[idx].kegCapacity = cap;
+                              const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
+                              if (r) {
+                                newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                              }
+                              setOrderItems(newItems);
+                            }}
+                            className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                          >
+                            <option value="50">50 Litros</option>
+                            <option value="30">30 Litros</option>
+                            <option value="20">20 Litros</option>
+                            <option value="15">15 Litros</option>
+                            <option value="10">10 Litros</option>
+                            <option value="5">5 Litros</option>
+                          </select>
+                        </div>
 
-                    <div className="col-span-2 font-black text-right pr-1 text-slate-900 text-xs">
-                      {formatCurrency(item.unitPrice * item.quantity)}
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max={stock.available > 0 ? stock.available : 1}
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const newItems = [...orderItems];
+                              newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
+                              setOrderItems(newItems);
+                            }}
+                            className={`w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs border ${
+                              isInsufficient || isOutOfStock
+                                ? 'bg-rose-50 border-rose-300 text-rose-800'
+                                : 'bg-slate-50 border-slate-300'
+                            }`}
+                            placeholder="Qtd"
+                          />
+                        </div>
+
+                        <div className="col-span-2 font-black text-right pr-1 text-slate-900 text-xs">
+                          {formatCurrency(item.unitPrice * item.quantity)}
+                        </div>
+                      </div>
+
+                      {/* Real-Time Stock Status Badge */}
+                      <div className="flex items-center justify-between text-[10px] pt-1 border-t border-purple-50">
+                        <div>
+                          {isOutOfStock ? (
+                            <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
+                              ⛔ Sem estoque deste barril (0 disponíveis na câmara fria)
+                            </span>
+                          ) : isInsufficient ? (
+                            <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
+                              ⚠️ Quantidade solicitada ({item.quantity}) maior que o estoque ({stock.available} disponíveis)
+                            </span>
+                          ) : (
+                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
+                              ✓ {stock.available} barril(is) de {item.kegCapacity || 50}L disponíveis em estoque
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-slate-400 font-medium">
+                          {stock.matchingTotal} cheios / {stock.reserved} reservados
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Comodato de Chopeiras */}
@@ -1886,6 +2041,25 @@ export default function PedidosPage() {
                 />
               </div>
 
+              {/* Stock Insufficiency Warning Banner */}
+              {(() => {
+                const hasStockErrors = orderItems.some((it) => {
+                  const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
+                  return it.quantity > stock.available;
+                });
+
+                return (
+                  hasStockErrors && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                      <span>
+                        Não é possível gerar o pedido: Há itens sem estoque disponível suficiente na câmara fria.
+                      </span>
+                    </div>
+                  )
+                );
+              })()}
+
               {/* Prévia do Total */}
               {(() => {
                 const sub = orderItems.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0);
@@ -1913,12 +2087,26 @@ export default function PedidosPage() {
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
-                >
-                  Gerar Pedido
-                </button>
+                {(() => {
+                  const hasStockErrors = orderItems.some((it) => {
+                    const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
+                    return it.quantity > stock.available;
+                  });
+
+                  return (
+                    <button
+                      type="submit"
+                      disabled={hasStockErrors}
+                      className={`px-5 py-2.5 font-bold rounded-xl shadow-sm transition-all ${
+                        hasStockErrors
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                          : 'bg-amber-500 hover:bg-amber-600 text-white'
+                      }`}
+                    >
+                      {hasStockErrors ? 'Estoque Insuficiente' : 'Gerar Pedido'}
+                    </button>
+                  );
+                })()}
               </div>
             </form>
           </div>
