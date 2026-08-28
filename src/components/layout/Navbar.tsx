@@ -103,19 +103,9 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
     router.refresh();
   };
 
-  const handleSwitchBrewery = async (breweryId: string) => {
-    try {
-      const res = await fetch('/api/auth/switch-brewery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ breweryId }),
-      });
-      if (res.ok) {
-        window.location.href = '/';
-      }
-    } catch (e) {
-      console.error(e);
-    }
+  const handleSwitchBrewery = (breweryId: string) => {
+    const targetUrl = breweryId ? '/' : '/master';
+    window.location.href = `/api/auth/switch-brewery?breweryId=${encodeURIComponent(breweryId)}&redirect=${encodeURIComponent(targetUrl)}`;
   };
 
   const roleInfo = user?.role ? ROLE_MAP[user.role] : null;

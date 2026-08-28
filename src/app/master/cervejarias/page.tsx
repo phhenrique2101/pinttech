@@ -237,14 +237,14 @@ export default function MasterCervejariasPage() {
 
               {/* Botões de Ação do Proprietário */}
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                <button
-                  onClick={() => handleImpersonate(b.id)}
+                <a
+                  href={`/api/auth/switch-brewery?breweryId=${b.id}&redirect=/`}
                   className="flex-1 py-1.5 px-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all"
                   title="Entrar no sistema desta cervejaria"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Acessar Cervejaria</span>
-                </button>
+                </a>
 
                 <Link
                   href={`/master/usuarios?breweryId=${b.id}`}

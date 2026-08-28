@@ -325,14 +325,14 @@ export default function MasterDashboardPage() {
 
                       <td className="p-3.5 text-right pr-4">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleImpersonate(brewery.id)}
+                          <a
+                            href={`/api/auth/switch-brewery?breweryId=${brewery.id}&redirect=/`}
                             className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-lg border border-amber-200 flex items-center gap-1 transition-colors"
                             title="Entrar no sistema como esta cervejaria"
                           >
                             <ExternalLink className="w-3.5 h-3.5 text-amber-700" />
                             <span>Acessar</span>
-                          </button>
+                          </a>
 
                           <Link
                             href={`/master/usuarios?breweryId=${brewery.id}`}

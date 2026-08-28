@@ -2,20 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, signJwtToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const session = getSessionFromRequest(req);
     if (!session || session.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Acesso não autorizado' }, { status: 403 });
+      return NextResponse.redirect(new URL('/login', req.url));
     }
 
-    const body = await req.json().catch(() => ({}));
-    const { breweryId } = body;
+    const { searchParams } = new URL(req.url);
+    const breweryId = searchParams.get('breweryId');
+    const redirectTo = searchParams.get('redirect') || '/';
 
     let breweryName: string | undefined = undefined;
     let brewerySlug: string | undefined = undefined;
 
-    if (breweryId) {
+    if (breweryId && breweryId !== '' && breweryId !== 'null') {
       const brewery = await prisma.brewery.findUnique({ where: { id: breweryId } });
       if (brewery) {
         breweryName = brewery.name;
@@ -25,7 +26,58 @@ export async function POST(req: NextRequest) {
 
     const newPayload = {
       ...session,
-      breweryId: breweryId || null,
+      breweryId: (breweryId && breweryId !== '' && breweryId !== 'null') ? breweryId : null,
+      breweryName: breweryName || undefined,
+      brewerySlug: brewerySlug || undefined,
+    };
+
+    const token = signJwtToken(newPayload);
+
+    // Create redirect response
+    const redirectUrl = new URL(redirectTo, req.url);
+    const res = NextResponse.redirect(redirectUrl);
+
+    const isHttps = req.nextUrl.protocol === 'https:' || req.headers.get('x-forwarded-proto') === 'https';
+
+    res.cookies.set('pinttech_token', token, {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    return res;
+  } catch (error: any) {
+    console.error('Error in switch-brewery GET:', error);
+    return NextResponse.redirect(new URL('/master/cervejarias', req.url));
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = getSessionFromRequest(req);
+    if (!session || session.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Acesso não autorizado' }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const breweryId = body.breweryId;
+
+    let breweryName: string | undefined = undefined;
+    let brewerySlug: string | undefined = undefined;
+
+    if (breweryId && breweryId !== '' && breweryId !== 'null') {
+      const brewery = await prisma.brewery.findUnique({ where: { id: breweryId } });
+      if (brewery) {
+        breweryName = brewery.name;
+        brewerySlug = brewery.slug;
+      }
+    }
+
+    const newPayload = {
+      ...session,
+      breweryId: (breweryId && breweryId !== '' && breweryId !== 'null') ? breweryId : null,
       breweryName: breweryName || undefined,
       brewerySlug: brewerySlug || undefined,
     };
@@ -45,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     return res;
   } catch (error: any) {
-    console.error('Error switching brewery:', error);
+    console.error('Error switching brewery POST:', error);
     return NextResponse.json({ error: 'Erro ao trocar organização' }, { status: 500 });
   }
 }
