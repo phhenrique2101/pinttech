@@ -75,6 +75,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           notes: notes || 'Alteração manual de status',
         },
       });
+
+      await prisma.actionLog.create({
+        data: {
+          breweryId: existingKeg.breweryId,
+          userId: session.userId,
+          userName: session.name,
+          actionType: 'KEG_STATUS',
+          description: `Alteração do barril ${existingKeg.code} de ${existingKeg.status} para ${status}`,
+          entityType: 'Keg',
+          entityId: existingKeg.id,
+          previousData: JSON.stringify({
+            status: existingKeg.status,
+            currentClientId: existingKeg.currentClientId,
+            currentBatchId: existingKeg.currentBatchId,
+            currentBeerName: existingKeg.currentBeerName,
+          }),
+          newData: JSON.stringify({
+            status,
+            currentClientId,
+            currentBatchId,
+            currentBeerName,
+          }),
+        },
+      });
     }
 
     return NextResponse.json(updatedKeg);

@@ -69,14 +69,33 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { code, capacity, kegType, notes, count, prefix } = body;
 
-    // Batch creation of multiple kegs (e.g. BAR-50L-001 to BAR-50L-020)
-    if (count && count > 1 && prefix) {
-      const createdKegs = [];
+    // Batch creation of multiple kegs (e.g. 3001 -> 3001, 3002, 3003... or BAR-3001 -> BAR-3001, BAR-3002...)
+    if (count && count >= 1 && (prefix || body.startCode)) {
+      const inputStr = (body.startCode || prefix || '').trim();
       const numCapacity = parseInt(capacity, 10) || 50;
+      const numCount = parseInt(count, 10) || 1;
 
-      for (let i = 1; i <= count; i++) {
-        const paddedNum = String(i).padStart(3, '0');
-        const generatedCode = `${prefix}-${paddedNum}`;
+      // Intelligent parser for prefix and start number
+      let basePrefix = '';
+      let startNumber = 1;
+      let padLength = 3;
+
+      const match = inputStr.match(/^(.*?)(\d+)$/);
+      if (match) {
+        basePrefix = match[1];
+        startNumber = parseInt(match[2], 10);
+        padLength = match[2].length;
+      } else {
+        basePrefix = inputStr ? (inputStr.endsWith('-') ? inputStr : `${inputStr}-`) : 'BAR-';
+        startNumber = 1;
+        padLength = 3;
+      }
+
+      const createdKegs = [];
+      for (let i = 0; i < numCount; i++) {
+        const currentNum = startNumber + i;
+        const paddedNum = String(currentNum).padStart(padLength, '0');
+        const generatedCode = `${basePrefix}${paddedNum}`.toUpperCase();
 
         try {
           const keg = await prisma.keg.create({
@@ -103,8 +122,24 @@ export async function POST(req: NextRequest) {
 
           createdKegs.push(keg);
         } catch (err) {
-          // If code already exists, skip or continue
+          // If code already exists, skip duplicate
         }
+      }
+
+      if (createdKegs.length > 0) {
+        await prisma.actionLog.create({
+          data: {
+            breweryId: session.breweryId,
+            userId: session.userId,
+            userName: session.name,
+            actionType: 'KEG_BATCH_CREATE',
+            description: `Cadastro em lote de ${createdKegs.length} barris (${createdKegs[0].code} até ${createdKegs[createdKegs.length - 1].code})`,
+            entityType: 'Keg',
+            entityId: createdKegs[0].id,
+            previousData: null,
+            newData: JSON.stringify({ kegIds: createdKegs.map((k) => k.id) }),
+          },
+        });
       }
 
       return NextResponse.json({ success: true, count: createdKegs.length, kegs: createdKegs });
@@ -147,6 +182,20 @@ export async function POST(req: NextRequest) {
         toStatus: 'VAZIO_SUJO',
         userName: session.name,
         notes: 'Barril cadastrado no sistema',
+      },
+    });
+
+    await prisma.actionLog.create({
+      data: {
+        breweryId: session.breweryId,
+        userId: session.userId,
+        userName: session.name,
+        actionType: 'KEG_CREATE',
+        description: `Cadastro do barril ${keg.code} (${keg.capacity}L)`,
+        entityType: 'Keg',
+        entityId: keg.id,
+        previousData: null,
+        newData: JSON.stringify({ id: keg.id, code: keg.code }),
       },
     });
 

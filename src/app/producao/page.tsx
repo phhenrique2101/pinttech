@@ -14,8 +14,14 @@ import {
   Droplet,
   Trash2,
   Cylinder,
+  DollarSign,
+  TrendingUp,
+  Edit3,
+  Tag,
+  Percent,
+  Calculator,
 } from 'lucide-react';
-import { formatDateShort } from '@/lib/utils';
+import { formatDateShort, formatCurrency } from '@/lib/utils';
 
 export default function ProducaoPage() {
   const [batches, setBatches] = useState<any[]>([]);
@@ -26,7 +32,9 @@ export default function ProducaoPage() {
 
   // Modals
   const [newBatchModal, setNewBatchModal] = useState(false);
+  const [editBatchModal, setEditBatchModal] = useState<any>(null);
   const [newRecipeModal, setNewRecipeModal] = useState(false);
+  const [editRecipeModal, setEditRecipeModal] = useState<any>(null);
   const [newTankModal, setNewTankModal] = useState(false);
 
   // New batch form
@@ -34,14 +42,26 @@ export default function ProducaoPage() {
   const [batchNumber, setBatchNumber] = useState('');
   const [volumePlanned, setVolumePlanned] = useState('500');
   const [tankId, setTankId] = useState('');
+  const [costPerLiter, setCostPerLiter] = useState('4.50');
   const [notes, setNotes] = useState('');
 
-  // New recipe form
+  // Edit batch form
+  const [editBatchStatus, setEditBatchStatus] = useState('BRASSAGEM');
+  const [editBatchCostPerLiter, setEditBatchCostPerLiter] = useState('0');
+  const [editBatchVolumeProduced, setEditBatchVolumeProduced] = useState('500');
+  const [editBatchTankId, setEditBatchTankId] = useState('');
+  const [editBatchNotes, setEditBatchNotes] = useState('');
+
+  // New / Edit recipe form
   const [recipeName, setRecipeName] = useState('');
   const [recipeStyle, setRecipeStyle] = useState('American IPA');
   const [abv, setAbv] = useState('6.5');
   const [ibu, setIbu] = useState('55');
-  const [pricePerLiter, setPricePerLiter] = useState('22.0');
+  const [recipeCostPerLiter, setRecipeCostPerLiter] = useState('4.80');
+  const [pricingModel, setPricingModel] = useState('MANUAL'); // MANUAL, AT_COST, MARKUP, BY_STYLE
+  const [profitMargin, setProfitMargin] = useState('150');
+  const [styleCategory, setStyleCategory] = useState('PREMIUM');
+  const [salePricePerLiter, setSalePricePerLiter] = useState('22.0');
   const [description, setDescription] = useState('');
 
   // New tank form
@@ -80,9 +100,30 @@ export default function ProducaoPage() {
     loadData();
   }, []);
 
+  // Update sale price dynamically based on pricing model
+  useEffect(() => {
+    const cost = parseFloat(recipeCostPerLiter) || 0;
+    const margin = parseFloat(profitMargin) || 0;
+
+    if (pricingModel === 'AT_COST') {
+      setSalePricePerLiter(cost.toFixed(2));
+    } else if (pricingModel === 'MARKUP') {
+      const calculated = cost > 0 ? cost * (1 + margin / 100) : 18;
+      setSalePricePerLiter(calculated.toFixed(2));
+    } else if (pricingModel === 'BY_STYLE') {
+      if (styleCategory === 'STANDARD') setSalePricePerLiter('16.00');
+      else if (styleCategory === 'PREMIUM') setSalePricePerLiter('22.00');
+      else if (styleCategory === 'ESPECIAL') setSalePricePerLiter('28.00');
+      else if (styleCategory === 'HIGH_GRAVITY') setSalePricePerLiter('34.00');
+    }
+  }, [pricingModel, recipeCostPerLiter, profitMargin, styleCategory]);
+
   const handleCreateBatch = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const cost = parseFloat(costPerLiter) || 0;
+      const vol = parseFloat(volumePlanned) || 0;
+
       const res = await fetch('/api/batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -90,7 +131,9 @@ export default function ProducaoPage() {
           recipeId,
           batchNumber,
           tankId: tankId || null,
-          volumePlannedLiters: volumePlanned,
+          volumePlannedLiters: vol,
+          costPerLiter: cost,
+          totalCost: cost * vol,
           status: 'BRASSAGEM',
           notes,
         }),
@@ -106,6 +149,43 @@ export default function ProducaoPage() {
     }
   };
 
+  const handleUpdateBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editBatchModal) return;
+    try {
+      const cost = parseFloat(editBatchCostPerLiter) || 0;
+      const vol = parseFloat(editBatchVolumeProduced) || 0;
+
+      const res = await fetch(`/api/batches/${editBatchModal.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: editBatchStatus,
+          costPerLiter: cost,
+          volumeProducedLiters: vol,
+          totalCost: cost * vol,
+          tankId: editBatchTankId || null,
+          notes: editBatchNotes,
+        }),
+      });
+      if (res.ok) {
+        setEditBatchModal(null);
+        loadData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const openEditBatchModal = (batch: any) => {
+    setEditBatchModal(batch);
+    setEditBatchStatus(batch.status || 'BRASSAGEM');
+    setEditBatchCostPerLiter(String(batch.costPerLiter || '0'));
+    setEditBatchVolumeProduced(String(batch.volumeProducedLiters || batch.volumePlannedLiters || '500'));
+    setEditBatchTankId(batch.tankId || '');
+    setEditBatchNotes(batch.notes || '');
+  };
+
   const handleCreateRecipe = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -117,7 +197,11 @@ export default function ProducaoPage() {
           style: recipeStyle,
           abv,
           ibu,
-          suggestedPricePerLiter: pricePerLiter,
+          costPerLiter: recipeCostPerLiter,
+          salePricePerLiter,
+          pricingModel,
+          profitMarginPercent: profitMargin,
+          styleCategory,
           description,
         }),
       });
@@ -130,6 +214,49 @@ export default function ProducaoPage() {
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleUpdateRecipe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editRecipeModal) return;
+    try {
+      const res = await fetch(`/api/recipes/${editRecipeModal.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: recipeName,
+          style: recipeStyle,
+          abv,
+          ibu,
+          costPerLiter: recipeCostPerLiter,
+          salePricePerLiter,
+          pricingModel,
+          profitMarginPercent: profitMargin,
+          styleCategory,
+          description,
+        }),
+      });
+      if (res.ok) {
+        setEditRecipeModal(null);
+        loadData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const openEditRecipeModal = (r: any) => {
+    setEditRecipeModal(r);
+    setRecipeName(r.name || '');
+    setRecipeStyle(r.style || '');
+    setAbv(String(r.abv || '5.0'));
+    setIbu(String(r.ibu || '20'));
+    setRecipeCostPerLiter(String(r.costPerLiter || '4.50'));
+    setPricingModel(r.pricingModel || 'MANUAL');
+    setProfitMargin(String(r.profitMarginPercent || '100'));
+    setStyleCategory(r.styleCategory || 'STANDARD');
+    setSalePricePerLiter(String(r.salePricePerLiter || r.suggestedPricePerLiter || '18.00'));
+    setDescription(r.description || '');
   };
 
   const handleCreateTank = async (e: React.FormEvent) => {
@@ -160,9 +287,7 @@ export default function ProducaoPage() {
     if (!confirm(`Tem certeza que deseja excluir o tanque ${name}?`)) return;
     try {
       const res = await fetch(`/api/tanks/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadData();
-      }
+      if (res.ok) loadData();
     } catch (e) {
       console.error(e);
     }
@@ -175,10 +300,10 @@ export default function ProducaoPage() {
         <div>
           <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
             <Flame className="w-5 h-5 text-amber-600" />
-            Produção, Tanques & Lotes de Cerveja
+            Produção, Tanques, Custos & Preços
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Brassagens, controle de tanques, receitas cervejeiras e envase parcial ou total de barris
+            Brassagens com custo por litro, precificação inteligente, tanques e catálogo de receitas
           </p>
         </div>
 
@@ -192,11 +317,16 @@ export default function ProducaoPage() {
           </button>
 
           <button
-            onClick={() => setNewRecipeModal(true)}
+            onClick={() => {
+              setPricingModel('MANUAL');
+              setRecipeCostPerLiter('4.50');
+              setSalePricePerLiter('18.00');
+              setNewRecipeModal(true);
+            }}
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 flex items-center gap-1.5 transition-all"
           >
             <Beer className="w-4 h-4 text-purple-600" />
-            <span>Nova Receita</span>
+            <span>Nova Receita / Preço</span>
           </button>
 
           <button
@@ -220,7 +350,7 @@ export default function ProducaoPage() {
             activeTab === 'BATCHES' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Lotes de Produção ({batches.length})
+          Lotes & Custos ({batches.length})
         </button>
         <button
           onClick={() => setActiveTab('TANKS')}
@@ -236,7 +366,7 @@ export default function ProducaoPage() {
             activeTab === 'RECIPES' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Catálogo de Receitas ({recipes.length})
+          Tabela de Preços & Receitas ({recipes.length})
         </button>
       </div>
 
@@ -250,6 +380,13 @@ export default function ProducaoPage() {
           ) : (
             batches.map((batch) => {
               const isReady = batch.status === 'PRONTO_ENVASE' || batch.status === 'ENVASADO';
+              const vol = batch.volumeProducedLiters || batch.volumePlannedLiters || 0;
+              const costL = batch.costPerLiter || 0;
+              const totalCost = batch.totalCost || costL * vol;
+              const salePriceL = batch.recipe?.salePricePerLiter || batch.recipe?.suggestedPricePerLiter || 20;
+              const projectedRevenue = vol * salePriceL;
+              const projectedProfit = projectedRevenue - totalCost;
+              const marginPercent = totalCost > 0 ? ((projectedProfit / totalCost) * 100) : 0;
 
               return (
                 <div
@@ -270,26 +407,67 @@ export default function ProducaoPage() {
                         </p>
                       </div>
 
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                          isReady
-                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                            : 'bg-blue-100 text-blue-800 border border-blue-200'
-                        }`}
-                      >
-                        {batch.status}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                            isReady
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                              : 'bg-blue-100 text-blue-800 border border-blue-200'
+                          }`}
+                        >
+                          {batch.status}
+                        </span>
+                        <button
+                          onClick={() => openEditBatchModal(batch)}
+                          className="p-1 text-slate-400 hover:text-amber-600 rounded"
+                          title="Editar Lote e Custos"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs">
+                    {/* Cost & Financial Analysis Box */}
+                    <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-medium">Custo por Litro:</span>
+                        <span className="font-black text-rose-700">
+                          {costL > 0 ? formatCurrency(costL) + '/L' : 'Não informado'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-medium">Custo Total Brassagem:</span>
+                        <span className="font-bold text-slate-900">{formatCurrency(totalCost)}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
+                        <span className="text-slate-500 font-medium">Preço Venda Sugerido:</span>
+                        <span className="font-extrabold text-emerald-700">
+                          {formatCurrency(salePriceL)}/L
+                        </span>
+                      </div>
+
+                      {costL > 0 && (
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
+                          <span className="text-slate-500 font-medium">Margem Projetada:</span>
+                          <span className="font-black text-emerald-600 flex items-center gap-0.5">
+                            <TrendingUp className="w-3 h-3" />
+                            +{marginPercent.toFixed(0)}% ({formatCurrency(projectedProfit)})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5 text-xs">
                       <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Volume Planejado:</span>
-                        <span className="font-bold text-slate-800">{batch.volumePlannedLiters} Litros</span>
+                        <span className="text-slate-400">Volume:</span>
+                        <span className="font-bold text-slate-800">{vol} Litros</span>
                       </div>
 
                       <div className="flex items-center justify-between text-slate-600">
                         <span className="text-slate-400">Tanque:</span>
-                        <span className="font-semibold text-blue-700">{batch.tank?.name || 'Tanque não atribuído'}</span>
+                        <span className="font-semibold text-blue-700">{batch.tank?.name || 'Sem tanque'}</span>
                       </div>
 
                       <div className="flex items-center justify-between text-slate-600">
@@ -300,19 +478,22 @@ export default function ProducaoPage() {
                       <div className="flex items-center justify-between text-slate-600">
                         <span className="text-slate-400">Barris Vinculados:</span>
                         <span className="font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                          {batch._count?.kegs || 0} barris envasados
+                          {batch._count?.kegs || 0} barris
                         </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400">
-                      {batch.measuredOg ? `OG: ${batch.measuredOg}` : ''}
-                    </span>
+                    <button
+                      onClick={() => openEditBatchModal(batch)}
+                      className="text-xs font-bold text-slate-600 hover:text-slate-900"
+                    >
+                      Alterar Etapa / Custo
+                    </button>
                     <a
                       href="/scanner"
-                      className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-lg border border-purple-200 flex items-center gap-1 transition-colors"
+                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl border border-purple-200 flex items-center gap-1 transition-colors shadow-sm"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       Envasar Barris
@@ -397,44 +578,482 @@ export default function ProducaoPage() {
         </div>
       )}
 
-      {/* Tab: Recipes */}
+      {/* Tab: Recipes & Pricing Table */}
       {activeTab === 'RECIPES' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {recipes.map((recipe) => (
-            <div
-              key={recipe.id}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-black text-slate-900 text-base">{recipe.name}</h3>
-                    <p className="text-xs font-bold text-purple-700">{recipe.style}</p>
-                  </div>
-                  <span className="text-xs font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
-                    R$ {recipe.suggestedPricePerLiter?.toFixed(2)}/L
-                  </span>
-                </div>
+          {recipes.map((recipe) => {
+            const saleL = recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 18.0;
+            const costL = recipe.costPerLiter || 0;
+            const modelLabel =
+              recipe.pricingModel === 'AT_COST'
+                ? 'Preço de Custo'
+                : recipe.pricingModel === 'MARKUP'
+                ? `Custo + ${recipe.profitMarginPercent || 100}%`
+                : recipe.pricingModel === 'BY_STYLE'
+                ? `Tabela (${recipe.styleCategory || 'Estilo'})`
+                : 'Preço Manual';
 
-                <p className="text-xs text-slate-600 mt-2 line-clamp-2">{recipe.description || 'Sem descrição.'}</p>
+            return (
+              <div
+                key={recipe.id}
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-black text-slate-900 text-base">{recipe.name}</h3>
+                      <p className="text-xs font-bold text-purple-700">{recipe.style}</p>
+                    </div>
+                    <button
+                      onClick={() => openEditRecipeModal(recipe)}
+                      className="p-1.5 text-slate-400 hover:text-purple-600 rounded-lg hover:bg-purple-50"
+                      title="Editar Precificação"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                  </div>
 
-                <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-center text-xs">
-                  <div className="p-2 bg-slate-50 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block font-bold">ABV</span>
-                    <span className="font-black text-slate-800">{recipe.abv || '-'}%</span>
+                  {/* Pricing Badges */}
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200">
+                      {modelLabel}
+                    </span>
+                    {costL > 0 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                        Custo: {formatCurrency(costL)}/L
+                      </span>
+                    )}
+                    <span className="text-[11px] font-black px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      Venda: {formatCurrency(saleL)}/L
+                    </span>
                   </div>
-                  <div className="p-2 bg-slate-50 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block font-bold">IBU</span>
-                    <span className="font-black text-slate-800">{recipe.ibu || '-'}</span>
+
+                  {/* Calculated Keg Pricing Table */}
+                  <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      Tabela de Preços por Barril:
+                    </span>
+                    <div className="grid grid-cols-4 gap-1.5 text-center">
+                      <div className="p-1.5 bg-white rounded-lg border border-slate-200">
+                        <span className="text-[9px] font-bold text-slate-400 block">10 Litros</span>
+                        <span className="text-xs font-black text-slate-900">{formatCurrency(saleL * 10)}</span>
+                      </div>
+                      <div className="p-1.5 bg-white rounded-lg border border-slate-200">
+                        <span className="text-[9px] font-bold text-slate-400 block">20 Litros</span>
+                        <span className="text-xs font-black text-slate-900">{formatCurrency(saleL * 20)}</span>
+                      </div>
+                      <div className="p-1.5 bg-white rounded-lg border border-slate-200">
+                        <span className="text-[9px] font-bold text-slate-400 block">30 Litros</span>
+                        <span className="text-xs font-black text-slate-900">{formatCurrency(saleL * 30)}</span>
+                      </div>
+                      <div className="p-1.5 bg-amber-50 rounded-lg border border-amber-300">
+                        <span className="text-[9px] font-bold text-amber-700 block">50 Litros</span>
+                        <span className="text-xs font-black text-amber-900">{formatCurrency(saleL * 50)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-2 bg-slate-50 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block font-bold">Lotes</span>
-                    <span className="font-black text-purple-700">{recipe._count?.batches || 0}</span>
+
+                  <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-center text-xs">
+                    <div className="p-2 bg-slate-50 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">ABV</span>
+                      <span className="font-black text-slate-800">{recipe.abv || '-'}%</span>
+                    </div>
+                    <div className="p-2 bg-slate-50 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">IBU</span>
+                      <span className="font-black text-slate-800">{recipe.ibu || '-'}</span>
+                    </div>
+                    <div className="p-2 bg-slate-50 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Lotes</span>
+                      <span className="font-black text-purple-700">{recipe._count?.batches || 0}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal: Nova Brassagem com Custo */}
+      {newBatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-black text-lg text-slate-900 mb-1">Iniciar Nova Brassagem</h3>
+            <p className="text-xs text-slate-500 mb-4">Cadastre o lote e o custo apurado por litro</p>
+
+            <form onSubmit={handleCreateBatch} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Receita da Cerveja</label>
+                <select
+                  value={recipeId}
+                  onChange={(e) => {
+                    setRecipeId(e.target.value);
+                    const r = recipes.find((rec) => rec.id === e.target.value);
+                    if (r && r.costPerLiter) setCostPerLiter(String(r.costPerLiter));
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                >
+                  {recipes.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} ({r.style})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Número / Código do Lote</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: LOTE-2026-003"
+                  value={batchNumber}
+                  onChange={(e) => setBatchNumber(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Volume Previsto (L)</label>
+                  <input
+                    type="number"
+                    required
+                    value={volumePlanned}
+                    onChange={(e) => setVolumePlanned(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tanque / Fermentador</label>
+                  <select
+                    value={tankId}
+                    onChange={(e) => setTankId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  >
+                    <option value="">-- Sem Tanque --</option>
+                    {tanks.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.capacityLiters}L) - {t.status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Cost per Liter Input */}
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-amber-900">Preço de Custo da Cerveja</span>
+                  <span className="text-[10px] text-amber-700">Insumos + brassagem</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 items-center">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Custo por Litro (R$/L)</label>
+                    <input
+                      type="number"
+                      step="0.10"
+                      value={costPerLiter}
+                      onChange={(e) => setCostPerLiter(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl font-bold text-slate-900"
+                      placeholder="Ex: 4.80"
+                    />
+                  </div>
+                  <div className="text-right pr-2">
+                    <span className="text-[10px] text-slate-500 block">Custo Total Lote:</span>
+                    <span className="text-base font-black text-rose-700">
+                      {formatCurrency((parseFloat(volumePlanned) || 0) * (parseFloat(costPerLiter) || 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Notas da Brassagem</label>
+                <textarea
+                  rows={2}
+                  placeholder="OG medida, temperatura de mostura, etc."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setNewBatchModal(false)}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
+                >
+                  Iniciar Lote com Custo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Lote e Custo */}
+      {editBatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-black text-lg text-slate-900 mb-1">Editar Lote {editBatchModal.batchNumber}</h3>
+            <p className="text-xs text-slate-500 mb-4">{editBatchModal.recipe?.name} ({editBatchModal.recipe?.style})</p>
+
+            <form onSubmit={handleUpdateBatch} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Etapa de Produção (Status)</label>
+                <select
+                  value={editBatchStatus}
+                  onChange={(e) => setEditBatchStatus(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                >
+                  <option value="BRASSAGEM">BRASSAGEM</option>
+                  <option value="FERMENTANDO">FERMENTANDO</option>
+                  <option value="MATURANDO">MATURANDO</option>
+                  <option value="PRONTO_ENVASE">PRONTO P/ ENVASE</option>
+                  <option value="ENVASADO">ENVASADO</option>
+                  <option value="FINALIZADO">FINALIZADO (Liberar Tanque)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Volume Produzido Real (L)</label>
+                  <input
+                    type="number"
+                    value={editBatchVolumeProduced}
+                    onChange={(e) => setEditBatchVolumeProduced(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Custo por Litro (R$/L)</label>
+                  <input
+                    type="number"
+                    step="0.10"
+                    value={editBatchCostPerLiter}
+                    onChange={(e) => setEditBatchCostPerLiter(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-rose-700"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                <span className="text-slate-500 font-bold">Custo Total Apurado:</span>
+                <span className="text-base font-black text-slate-900">
+                  {formatCurrency((parseFloat(editBatchVolumeProduced) || 0) * (parseFloat(editBatchCostPerLiter) || 0))}
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Anotações / Densidades</label>
+                <textarea
+                  rows={2}
+                  value={editBatchNotes}
+                  onChange={(e) => setEditBatchNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditBatchModal(null)}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Nova / Editar Receita com Modelo de Precificação */}
+      {(newRecipeModal || editRecipeModal) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-black text-lg text-slate-900 mb-1">
+              {editRecipeModal ? 'Editar Receita & Precificação' : 'Cadastrar Nova Receita & Preços'}
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Configure o custo de produção e o método de precificação de venda
+            </p>
+
+            <form onSubmit={editRecipeModal ? handleUpdateRecipe : handleCreateRecipe} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Nome da Cerveja</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Hop Storm IPA"
+                    value={recipeName}
+                    onChange={(e) => setRecipeName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Estilo Cervejeiro</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: American IPA"
+                    value={recipeStyle}
+                    onChange={(e) => setRecipeStyle(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {/* Precificação Inteligente */}
+              <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
+                <div className="flex items-center gap-2 text-purple-950 font-black">
+                  <Calculator className="w-4 h-4 text-purple-600" />
+                  <span>Regra de Precificação e Preço de Venda</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Preço de Custo (R$/Litro)</label>
+                    <input
+                      type="number"
+                      step="0.10"
+                      value={recipeCostPerLiter}
+                      onChange={(e) => setRecipeCostPerLiter(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Modelo de Preço</label>
+                    <select
+                      value={pricingModel}
+                      onChange={(e) => setPricingModel(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                    >
+                      <option value="MANUAL">Preço Manual Fixo</option>
+                      <option value="AT_COST">A Preço de Custo (Venda = Custo)</option>
+                      <option value="MARKUP">Margem de Lucro % (Markup)</option>
+                      <option value="BY_STYLE">Tabela de Preço por Estilo</option>
+                    </select>
+                  </div>
+                </div>
+
+                {pricingModel === 'MARKUP' && (
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Margem de Lucro (%)</label>
+                    <input
+                      type="number"
+                      value={profitMargin}
+                      onChange={(e) => setProfitMargin(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                      placeholder="Ex: 150%"
+                    />
+                  </div>
+                )}
+
+                {pricingModel === 'BY_STYLE' && (
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Categoria de Estilo na Tabela</label>
+                    <select
+                      value={styleCategory}
+                      onChange={(e) => setStyleCategory(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                    >
+                      <option value="STANDARD">Standard (Pilsen / Lager) - R$ 16,00/L</option>
+                      <option value="PREMIUM">Premium (IPA / APA / Weizen) - R$ 22,00/L</option>
+                      <option value="ESPECIAL">Especial (Sour / Stout / Belgian) - R$ 28,00/L</option>
+                      <option value="HIGH_GRAVITY">High Gravity (Imperial Stout / Barleywine) - R$ 34,00/L</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Preço Final de Venda por Litro (R$/L)</label>
+                  <input
+                    type="number"
+                    step="0.50"
+                    disabled={pricingModel === 'AT_COST' || pricingModel === 'BY_STYLE'}
+                    value={salePricePerLiter}
+                    onChange={(e) => setSalePricePerLiter(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-purple-400 rounded-xl font-black text-emerald-800 text-sm"
+                  />
+                </div>
+
+                {/* Live Preview of Keg Prices */}
+                <div className="pt-2 border-t border-purple-200">
+                  <span className="text-[10px] font-black uppercase text-purple-900 block mb-1">
+                    Preço Calculado por Barril:
+                  </span>
+                  <div className="grid grid-cols-4 gap-1 text-center text-[11px] font-bold">
+                    <span className="bg-white p-1 rounded border border-purple-200">10L: {formatCurrency((parseFloat(salePricePerLiter) || 0) * 10)}</span>
+                    <span className="bg-white p-1 rounded border border-purple-200">20L: {formatCurrency((parseFloat(salePricePerLiter) || 0) * 20)}</span>
+                    <span className="bg-white p-1 rounded border border-purple-200">30L: {formatCurrency((parseFloat(salePricePerLiter) || 0) * 30)}</span>
+                    <span className="bg-white p-1 rounded border border-purple-200 text-amber-800 font-black">50L: {formatCurrency((parseFloat(salePricePerLiter) || 0) * 50)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">ABV (% Álcool)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={abv}
+                    onChange={(e) => setAbv(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">IBU (Amargor)</label>
+                  <input
+                    type="number"
+                    value={ibu}
+                    onChange={(e) => setIbu(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewRecipeModal(false);
+                    setEditRecipeModal(null);
+                  }}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
+                >
+                  {editRecipeModal ? 'Salvar Alterações' : 'Salvar Receita & Preços'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -508,185 +1127,6 @@ export default function ProducaoPage() {
                   className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
                 >
                   Salvar Tanque
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Nova Brassagem */}
-      {newBatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
-            <h3 className="font-black text-lg text-slate-900 mb-4">Iniciar Nova Brassagem (Lote)</h3>
-            <form onSubmit={handleCreateBatch} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Receita da Cerveja</label>
-                <select
-                  value={recipeId}
-                  onChange={(e) => setRecipeId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                >
-                  {recipes.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} ({r.style})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Número / Código do Lote</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: LOTE-2026-003"
-                  value={batchNumber}
-                  onChange={(e) => setBatchNumber(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Volume Previsto (Litros)</label>
-                  <input
-                    type="number"
-                    required
-                    value={volumePlanned}
-                    onChange={(e) => setVolumePlanned(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Tanque / Fermentador</label>
-                  <select
-                    value={tankId}
-                    onChange={(e) => setTankId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                  >
-                    <option value="">-- Sem Tanque --</option>
-                    {tanks.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.capacityLiters}L) - {t.status}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Notas da Brassagem</label>
-                <textarea
-                  rows={2}
-                  placeholder="OG medida, temperatura de mostura, etc."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setNewBatchModal(false)}
-                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
-                >
-                  Iniciar Lote
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Nova Receita */}
-      {newRecipeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
-            <h3 className="font-black text-lg text-slate-900 mb-4">Cadastrar Nova Receita</h3>
-            <form onSubmit={handleCreateRecipe} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Nome da Cerveja</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Red Velvet Amber Ale"
-                  value={recipeName}
-                  onChange={(e) => setRecipeName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Estilo</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Irish Red Ale"
-                    value={recipeStyle}
-                    onChange={(e) => setRecipeStyle(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Preço Sugerido (R$/Litro)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={pricePerLiter}
-                    onChange={(e) => setPricePerLiter(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">ABV (% Álcool)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={abv}
-                    onChange={(e) => setAbv(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">IBU (Amargor)</label>
-                  <input
-                    type="number"
-                    value={ibu}
-                    onChange={(e) => setIbu(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setNewRecipeModal(false)}
-                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
-                >
-                  Salvar Receita
                 </button>
               </div>
             </form>

@@ -16,6 +16,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { ROLE_MAP } from '@/lib/utils';
+import UndoActionWidget from '@/components/common/UndoActionWidget';
 
 export interface CurrentUser {
   userId: string;
@@ -121,8 +122,11 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
           )}
         </div>
 
-        {/* Right Actions: Quick Scanner & User Menu */}
-        <div className="flex items-center gap-3">
+        {/* Right Actions: Undo Widget, Quick Scanner & User Menu */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Global Undo Action Widget */}
+          <UndoActionWidget />
+
           {/* Quick Scanner Mobile Button */}
           <Link
             href="/scanner"

@@ -35,11 +35,16 @@ export async function POST(req: NextRequest) {
     if (!session || !session.breweryId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const body = await req.json();
-    const { recipeId, batchNumber, tankId, volumePlannedLiters, status, measuredOg, notes } = body;
+    const { recipeId, batchNumber, tankId, volumePlannedLiters, volumeProducedLiters, status, measuredOg, costPerLiter, totalCost, notes } = body;
 
     if (!recipeId || !batchNumber || !volumePlannedLiters) {
       return NextResponse.json({ error: 'Receita, número do lote e volume planejado são obrigatórios' }, { status: 400 });
     }
+
+    const volPlanned = parseFloat(volumePlannedLiters) || 0;
+    const volProd = volumeProducedLiters ? parseFloat(volumeProducedLiters) : volPlanned;
+    const numCostPerLiter = costPerLiter !== undefined ? parseFloat(costPerLiter) : 0;
+    const numTotalCost = totalCost !== undefined ? parseFloat(totalCost) : (numCostPerLiter * (volProd || volPlanned));
 
     const batch = await prisma.productionBatch.create({
       data: {
@@ -48,7 +53,10 @@ export async function POST(req: NextRequest) {
         batchNumber: batchNumber.trim().toUpperCase(),
         tankId: tankId || null,
         status: status || 'BRASSAGEM',
-        volumePlannedLiters: parseFloat(volumePlannedLiters),
+        volumePlannedLiters: volPlanned,
+        volumeProducedLiters: volProd,
+        costPerLiter: numCostPerLiter,
+        totalCost: numTotalCost,
         measuredOg: measuredOg ? parseFloat(measuredOg) : null,
         notes,
       },
@@ -61,6 +69,20 @@ export async function POST(req: NextRequest) {
         data: { status: 'OCUPADO', currentBatchId: batch.id },
       });
     }
+
+    await prisma.actionLog.create({
+      data: {
+        breweryId: session.breweryId,
+        userId: session.userId,
+        userName: session.name,
+        actionType: 'BATCH_CREATE',
+        description: `Criado lote ${batch.batchNumber} (${batch.recipe.name}) - ${volPlanned}L com custo R$ ${numCostPerLiter.toFixed(2)}/L`,
+        entityType: 'ProductionBatch',
+        entityId: batch.id,
+        previousData: null,
+        newData: JSON.stringify(batch),
+      },
+    });
 
     return NextResponse.json(batch);
   } catch (error: any) {

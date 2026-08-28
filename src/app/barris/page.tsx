@@ -435,19 +435,24 @@ export default function BarrisPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
             <h3 className="font-black text-lg text-slate-900 mb-1">Cadastrar Barris em Lote</h3>
-            <p className="text-xs text-slate-500 mb-4">Gera sequências automáticas (ex: BAR-50L-001 até 020)</p>
+            <p className="text-xs text-slate-500 mb-4">Gera sequências automáticas inteligentes (ex: 3001 até 3020)</p>
 
             <form onSubmit={handleCreateBatchKegs} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Prefixo do Código</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Código Inicial ou Prefixo
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ex: BAR-50L"
+                  placeholder="Ex: 3001 ou BAR-3001 ou BAR-50L"
                   value={batchPrefix}
                   onChange={(e) => setBatchPrefix(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs uppercase font-mono font-bold"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Digite apenas o número inicial (ex: <strong>3001</strong>) ou com prefixo (ex: <strong>BAR-3001</strong>).
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -455,8 +460,8 @@ export default function BarrisPage() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Quantidade de Barris</label>
                   <input
                     type="number"
-                    min="2"
-                    max="100"
+                    min="1"
+                    max="500"
                     value={batchCount}
                     onChange={(e) => setBatchCount(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
@@ -473,9 +478,50 @@ export default function BarrisPage() {
                     <option value="50">50 Litros</option>
                     <option value="30">30 Litros</option>
                     <option value="20">20 Litros</option>
+                    <option value="10">10 Litros</option>
                   </select>
                 </div>
               </div>
+
+              {/* Prévia Inteligente da Sequência */}
+              {(() => {
+                const input = (batchPrefix || '').trim().toUpperCase();
+                const count = parseInt(batchCount, 10) || 1;
+                if (!input) return null;
+
+                let basePrefix = '';
+                let startNumber = 1;
+                let padLength = 3;
+
+                const match = input.match(/^(.*?)(\d+)$/);
+                if (match) {
+                  basePrefix = match[1];
+                  startNumber = parseInt(match[2], 10);
+                  padLength = match[2].length;
+                } else {
+                  basePrefix = input.endsWith('-') ? input : `${input}-`;
+                  startNumber = 1;
+                  padLength = 3;
+                }
+
+                const first = `${basePrefix}${String(startNumber).padStart(padLength, '0')}`;
+                const second = count > 1 ? `${basePrefix}${String(startNumber + 1).padStart(padLength, '0')}` : null;
+                const last = count > 1 ? `${basePrefix}${String(startNumber + count - 1).padStart(padLength, '0')}` : null;
+
+                return (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                      ✨ Sequência que será criada ({count} barris):
+                    </span>
+                    <div className="font-mono text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 bg-white rounded border border-amber-200 text-amber-900">{first}</span>
+                      {second && <span className="px-2 py-0.5 bg-white rounded border border-amber-200 text-amber-900">{second}</span>}
+                      {count > 2 && <span className="text-slate-400 font-normal">... até ...</span>}
+                      {last && count > 2 && <span className="px-2 py-0.5 bg-white rounded border border-amber-200 text-amber-900">{last}</span>}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button

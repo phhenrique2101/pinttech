@@ -42,6 +42,7 @@ model Brewery {
   orders                Order[]
   financialTransactions FinancialTransaction[]
   saasPayments          SaasSubscriptionPayment[]
+  actionLogs            ActionLog[]
 }
 
 // ----------------------------------------------------
@@ -213,7 +214,12 @@ model BeerRecipe {
   ibu                   Int?
   ebc                   Float?
   description           String?
+  costPerLiter          Float?            @default(0)
+  salePricePerLiter     Float?            @default(18.0)
   suggestedPricePerLiter Float?           @default(18.0)
+  pricingModel          String            @default("MANUAL") // MANUAL, MARKUP, AT_COST, BY_STYLE
+  profitMarginPercent   Float?            @default(50.0)
+  styleCategory         String?           @default("STANDARD") // STANDARD, PREMIUM, ESPECIAL, HIGH_GRAVITY
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -237,6 +243,8 @@ model ProductionBatch {
   status                String         @default("BRASSAGEM")
   volumePlannedLiters   Float
   volumeProducedLiters  Float?
+  costPerLiter          Float?         @default(0)
+  totalCost             Float?         @default(0)
   brewDate              DateTime       @default(now())
   fermentationStartDate DateTime?
   maturationStartDate   DateTime?
@@ -351,6 +359,8 @@ model Order {
   totalAmount         Float                  @default(0)
   paymentMethod       String?                @default("PIX")
   paymentStatus       String                 @default("PENDENTE")
+  paidAmount          Float                  @default(0)
+  remainingAmount     Float                  @default(0)
   driverUserId        String?
   driverUser          User?                  @relation("DriverOrders", fields: [driverUserId], references: [id], onDelete: SetNull)
   notes               String?
@@ -420,3 +430,24 @@ model FinancialTransaction {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
+
+// ----------------------------------------------------
+// AUDITORIA E DESFAZER AÇÕES (Undo System)
+// ----------------------------------------------------
+model ActionLog {
+  id           String    @id @default(uuid())
+  breweryId    String
+  brewery      Brewery   @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  userId       String?
+  userName     String?
+  actionType   String    // KEG_STATUS, BATCH_STATUS, ORDER_STATUS, ORDER_UPDATE, PAYMENT_RECORD, KEG_BATCH_CREATE
+  description  String
+  entityType   String    // Keg, ProductionBatch, Order, FinancialTransaction, etc.
+  entityId     String
+  previousData String?   // JSON com estado anterior para restauração
+  newData      String?   // JSON com novo estado
+  canUndo      Boolean   @default(true)
+  undone       Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+}
+
