@@ -170,6 +170,7 @@ export async function POST(req: NextRequest) {
 
         const notes = cleanStr(row.notes);
         const currentBeerName = cleanStr(row.currentBeerName || row.beerName);
+        const batchNumber = cleanStr(row.batchNumber || row.lote || row.batch);
 
         let currentVolumeLiters: number | null = null;
         if (row.currentVolumeLiters !== undefined && row.currentVolumeLiters !== null && row.currentVolumeLiters !== '') {
@@ -181,6 +182,48 @@ export async function POST(req: NextRequest) {
         }
 
         try {
+          let currentBatchId: string | null = null;
+          if (batchNumber) {
+            let batch = await prisma.productionBatch.findUnique({
+              where: { breweryId_batchNumber: { breweryId, batchNumber } },
+            });
+
+            if (!batch) {
+              const recipeName = currentBeerName || 'Chopp Artesanal';
+              let recipe = await prisma.beerRecipe.findFirst({
+                where: { breweryId, name: { equals: recipeName, mode: 'insensitive' } },
+              });
+
+              if (!recipe) {
+                recipe = await prisma.beerRecipe.create({
+                  data: {
+                    breweryId,
+                    name: recipeName,
+                    style: 'Estilo Artesanal',
+                    suggestedPricePerLiter: 20.0,
+                    costPerLiter: 4.5,
+                  },
+                });
+              }
+
+              batch = await prisma.productionBatch.create({
+                data: {
+                  breweryId,
+                  recipeId: recipe.id,
+                  batchNumber,
+                  volumePlannedLiters: 1000,
+                  volumeProducedLiters: 1000,
+                  status: 'PRONTO_ENVASE',
+                  notes: 'Importado via planilha de dados',
+                },
+              });
+            }
+
+            if (batch) {
+              currentBatchId = batch.id;
+            }
+          }
+
           const existing = await prisma.keg.findUnique({
             where: { breweryId_code: { breweryId, code } },
           });
@@ -194,6 +237,7 @@ export async function POST(req: NextRequest) {
                 kegType: kegType || existing.kegType,
                 status: status || existing.status,
                 currentBeerName: currentBeerName || existing.currentBeerName,
+                currentBatchId: currentBatchId || existing.currentBatchId,
                 notes: notes ? (existing.notes ? `${existing.notes} | ${notes}` : notes) : existing.notes,
               },
             });
@@ -208,6 +252,7 @@ export async function POST(req: NextRequest) {
                 kegType,
                 status,
                 currentBeerName,
+                currentBatchId,
                 notes,
               },
             });

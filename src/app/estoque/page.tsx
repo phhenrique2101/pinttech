@@ -18,6 +18,10 @@ import {
   Sparkles,
   Lock,
   CheckCircle2,
+  X,
+  Tag,
+  Calendar,
+  Info,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
@@ -30,6 +34,7 @@ export default function EstoquePage() {
   const [search, setSearch] = useState('');
   const [expandedBeer, setExpandedBeer] = useState<string | null>(null);
   const [selectedKegForBarcode, setSelectedKegForBarcode] = useState<any>(null);
+  const [selectedKegDetails, setSelectedKegDetails] = useState<any | null>(null);
 
   // Raw Materials state
   const [items, setItems] = useState<any[]>([
@@ -461,38 +466,59 @@ export default function EstoquePage() {
                     {/* Expanded Individual Kegs List */}
                     {isExpanded && (
                       <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                          Barris Físicos na Câmara Fria ({beer.kegs.length}):
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                            Barris Físicos na Câmara Fria ({beer.kegs.length}) — Clique em um barril para inspecionar o lote:
+                          </span>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
                           {beer.kegs.map((keg: any, kIdx: number) => {
                             const isKegReserved = kIdx < beer.reservedKegsCount;
                             const matchedResOrder = isKegReserved ? beer.reservedOrders[kIdx % beer.reservedOrders.length] : null;
                             const realVolume = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined ? keg.currentVolumeLiters : keg.capacity;
                             const isPartial = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined && keg.currentVolumeLiters < keg.capacity;
+                            const batchNum = keg.currentBatch?.batchNumber || (keg.notes?.match(/Lote:?\s*([^\s|]+)/i)?.[1] || 'Lote Inicial');
 
                             return (
                               <div
                                 key={keg.id}
-                                className={`p-3 bg-white rounded-xl border flex items-start justify-between shadow-xs transition-all ${
+                                onClick={() => setSelectedKegDetails({
+                                  ...keg,
+                                  beerName: beer.beerName,
+                                  style: beer.style,
+                                  salePricePerLiter: beer.salePricePerLiter,
+                                  costPerLiter: beer.costPerLiter,
+                                  isKegReserved,
+                                  matchedResOrder,
+                                  batchNum,
+                                })}
+                                className={`p-3.5 bg-white rounded-2xl border flex flex-col justify-between gap-2.5 shadow-xs transition-all cursor-pointer group hover:shadow-md hover:border-amber-400 active:scale-[0.99] ${
                                   isKegReserved
                                     ? 'border-amber-300 bg-amber-50/40'
-                                    : 'border-slate-200 hover:border-slate-300'
+                                    : 'border-slate-200'
                                 }`}
                               >
-                                <div className="space-y-1.5 min-w-0 flex-1 pr-2">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="font-mono font-black text-xs text-slate-900 block">
+                                <div className="space-y-2 min-w-0">
+                                  {/* Top Header of Card */}
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <span className="font-mono font-black text-xs text-slate-900 group-hover:text-amber-700 transition-colors">
                                       {keg.code}
                                     </span>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded" title="Capacidade total do barril">
-                                      Capacidade: {keg.capacity}L
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded" title="Capacidade nominal">
+                                      {keg.capacity}L
                                     </span>
+                                  </div>
+
+                                  {/* LOTE DESTA CERVEJA (PROMINENTE) */}
+                                  <div className="flex items-center gap-1.5 bg-purple-50 text-purple-900 border border-purple-200/80 px-2 py-1 rounded-xl text-[11px] font-black">
+                                    <Layers className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
+                                    <span className="truncate">Lote: #{batchNum}</span>
                                   </div>
 
                                   {/* Real Chopp Volume Badge */}
                                   <div className="flex items-center gap-1">
-                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border w-full text-center ${
                                       isPartial
                                         ? 'bg-amber-100 text-amber-900 border-amber-300'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -503,33 +529,35 @@ export default function EstoquePage() {
 
                                   {/* Status indicator on keg */}
                                   {isKegReserved && matchedResOrder ? (
-                                    <div className="text-[10px] text-amber-900 font-bold bg-amber-100/90 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                                    <div className="text-[10px] text-amber-900 font-bold bg-amber-100/90 px-1.5 py-0.5 rounded-lg border border-amber-200 flex items-center gap-1">
                                       <Lock className="w-3 h-3 text-amber-600 flex-shrink-0" />
                                       <span className="truncate">
-                                        Reservado: #{matchedResOrder.orderNumber} ({matchedResOrder.clientName})
+                                        Reservado: #{matchedResOrder.orderNumber}
                                       </span>
                                     </div>
                                   ) : (
-                                    <div className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                                    <div className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-lg border border-emerald-200 flex items-center justify-center gap-1">
                                       <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
                                       <span>Livre em Estoque</span>
                                     </div>
                                   )}
-
-                                  {keg.currentBatch && (
-                                    <span className="text-[9px] text-purple-700 block font-bold">
-                                      Lote: {keg.currentBatch.batchNumber}
-                                    </span>
-                                  )}
                                 </div>
 
-                                <button
-                                  onClick={() => setSelectedKegForBarcode(keg)}
-                                  className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex-shrink-0"
-                                  title="Ver Etiqueta / QR Code"
-                                >
-                                  <QrCode className="w-4 h-4" />
-                                </button>
+                                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                                  <span className="text-amber-700 font-bold group-hover:underline">
+                                    Ver lote completo →
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedKegForBarcode(keg);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                    title="Ver QR Code / Etiqueta"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             );
                           })}
@@ -581,6 +609,160 @@ export default function EstoquePage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal: DETALHES DO BARRIL & RASTREABILIDADE DO LOTE */}
+      {selectedKegDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center">
+                  <Beer className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                    <span>{selectedKegDetails.beerName}</span>
+                    <span className="font-mono text-xs px-2 py-0.5 bg-slate-100 text-slate-700 rounded-lg">
+                      {selectedKegDetails.code}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-purple-700 font-bold">{selectedKegDetails.style}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedKegDetails(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Card 1: DADOS ESPECÍFICOS DO LOTE */}
+            <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-purple-700" />
+                  Rastreabilidade do Lote de Produção
+                </span>
+                <span className="px-2.5 py-0.5 bg-purple-600 text-white font-black text-xs rounded-full">
+                  #{selectedKegDetails.batchNum}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 bg-white rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Número do Lote</span>
+                  <span className="font-mono font-black text-purple-900 text-sm">
+                    #{selectedKegDetails.batchNum}
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Data de Envase / Produção</span>
+                  <span className="font-bold text-slate-800">
+                    {formatDate(selectedKegDetails.lastFilledAt || selectedKegDetails.currentBatch?.brewDate || selectedKegDetails.updatedAt)}
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Tanque de Origem</span>
+                  <span className="font-bold text-slate-800">
+                    {selectedKegDetails.currentBatch?.tank?.name || 'Fermentador da Cervejaria'}
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Status do Lote</span>
+                  <span className="font-bold text-emerald-700">
+                    {selectedKegDetails.currentBatch?.status || 'PRONTO / ENVASADO'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: DADOS FÍSICOS DO BARRIL */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Cylinder className="w-4 h-4 text-slate-600" />
+                Especificações do Barril no Estoque
+              </span>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-bold">Volume Real de Chopp</span>
+                  <span className="font-black text-emerald-700 text-sm">
+                    {selectedKegDetails.currentVolumeLiters ?? selectedKegDetails.capacity} Litros
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    (Capacidade do vasilhame: {selectedKegDetails.capacity}L)
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-bold">Tipo de Barril / Válvula</span>
+                  <span className="font-black text-slate-800">
+                    {selectedKegDetails.kegType || 'INOX_EURO'}
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-bold">Disponibilidade</span>
+                  {selectedKegDetails.isKegReserved && selectedKegDetails.matchedResOrder ? (
+                    <span className="font-bold text-amber-800 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-amber-600" />
+                      Reservado (Ped #{selectedKegDetails.matchedResOrder.orderNumber})
+                    </span>
+                  ) : (
+                    <span className="font-bold text-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Livre na Câmara Fria
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-bold">Valor Estimado em Chopp</span>
+                  <span className="font-black text-slate-900">
+                    {formatCurrency(((selectedKegDetails.currentVolumeLiters ?? selectedKegDetails.capacity) * (selectedKegDetails.salePricePerLiter || 20)))}
+                  </span>
+                </div>
+              </div>
+
+              {selectedKegDetails.notes && (
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-xs">
+                  <span className="text-[10px] text-slate-400 block font-bold">Observações do Barril</span>
+                  <p className="text-slate-700">{selectedKegDetails.notes}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetKeg = selectedKegDetails;
+                  setSelectedKegDetails(null);
+                  setSelectedKegForBarcode(targetKeg);
+                }}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
+              >
+                <QrCode className="w-4 h-4 text-amber-700" />
+                <span>Imprimir Etiqueta / QR Code</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedKegDetails(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
