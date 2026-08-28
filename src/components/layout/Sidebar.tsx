@@ -19,6 +19,7 @@ import {
   Key,
   CreditCard,
   FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 import { CurrentUser } from './Navbar';
 
@@ -32,6 +33,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Usuários & Reset Senha', href: '/master/usuarios', icon: Key },
     { label: 'Faturamento & MRR', href: '/master/financeiro', icon: CreditCard },
     { label: 'Importar / Migrar Dados', href: '/master/importacao', icon: FileSpreadsheet },
+    { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download },
   ];
 
   const breweryNavItems = [
@@ -44,6 +46,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Pedidos & Comodato', href: '/pedidos', icon: ShoppingCart, roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Financeiro Cervejaria', href: '/financeiro', icon: DollarSign, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
+    { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES'] },
     { label: 'Importar Planilha (Excel)', href: '/importacao', icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'Usuários da Cervejaria', href: '/usuarios', icon: UserCheck, roles: ['ADMIN'] },
   ];

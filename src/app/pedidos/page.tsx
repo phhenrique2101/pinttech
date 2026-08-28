@@ -37,8 +37,10 @@ import {
   ChevronRight,
   ShieldAlert,
   AlertTriangle,
+  Download,
 } from 'lucide-react';
 import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMENT_TYPE_MAP } from '@/lib/utils';
+import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 
 export default function PedidosPage() {
@@ -588,18 +590,45 @@ export default function PedidosPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            if (clients.length > 0 && !clientId) {
-              handleClientSelectForNewOrder(clients[0].id);
-            }
-            setNewModalOpen(true);
-          }}
-          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Pedido de Chopp</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = filteredOrders.map((o) => ({
+                'Nº Pedido': `#${o.orderNumber}`,
+                'Data Pedido': formatDate(o.createdAt),
+                'Data Entrega': o.deliveryDate ? formatDate(o.deliveryDate) : '—',
+                'Cliente': o.client?.tradeName || o.client?.name || '—',
+                'Cidade': o.client?.city || '—',
+                'Telefone': o.client?.phone || '—',
+                'Chopp / Itens': (o.items || []).map((i: any) => `${i.quantity}x ${i.recipe?.name || i.description || 'Barril'} (${i.kegCapacity || 50}L)`).join(', '),
+                'Litros Totais': (o.items || []).reduce((acc: number, it: any) => acc + (it.quantity || 1) * (it.kegCapacity || 50), 0),
+                'Valor Total (R$)': o.totalAmount,
+                'Valor Pago (R$)': o.paidAmount || 0,
+                'Saldo Restante (R$)': Math.max(0, o.totalAmount - (o.paidAmount || 0)),
+                'Status': o.status,
+              }));
+              exportJsonToExcel(rows, `Pedidos_PintTech_${new Date().toISOString().slice(0, 10)}.xlsx`, 'Pedidos');
+            }}
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all shadow-xs"
+            title="Exportar pedidos filtrados para Excel"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>Exportar Excel ({filteredOrders.length})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (clients.length > 0 && !clientId) {
+                handleClientSelectForNewOrder(clients[0].id);
+              }
+              setNewModalOpen(true);
+            }}
+            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Pedido de Chopp</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters & Search */}

@@ -25,8 +25,10 @@ import {
   Volume2,
   ArrowRight,
   Lock,
+  Download,
 } from 'lucide-react';
 import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
+import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
 import KegTimelineModal from '@/components/kegs/KegTimelineModal';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
@@ -424,6 +426,37 @@ export default function BarrisPage() {
             title="Recarregar"
           >
             <RefreshCw className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => {
+              const filtered = kegs.filter((k) => (statusFilter === 'RESERVADO' ? getKegReservation(k) !== null : true));
+              const rows = filtered.map((k) => {
+                const res = getKegReservation(k);
+                return {
+                  'Código': k.code,
+                  'Capacidade': `${k.capacity}L`,
+                  'Tipo': k.kegType?.replace('_', ' ') || 'INOX EURO',
+                  'Status': res ? 'RESERVADO' : k.status,
+                  'Chopp Envasado': k.currentBeerName || '—',
+                  'Lote': k.currentBatch?.batchNumber || '—',
+                  'Localização / Cliente': res
+                    ? `Reservado p/ ${res.clientName} (#${res.orderNumber})`
+                    : k.currentClient
+                    ? k.currentClient.tradeName || k.currentClient.name
+                    : k.status === 'EM_ESTOQUE'
+                    ? 'Câmara Fria'
+                    : 'Pátio Cervejaria',
+                  'Data Entrega': res?.deliveryDate ? formatDate(res.deliveryDate) : k.lastDeliveredAt ? formatDate(k.lastDeliveredAt) : '—',
+                };
+              });
+              exportJsonToExcel(rows, `Barris_PintTech_${new Date().toISOString().slice(0, 10)}.xlsx`, 'Barris');
+            }}
+            className="px-3 py-2 text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200"
+            title="Exportar barris visíveis para Excel"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>Exportar Excel</span>
           </button>
         </div>
       </div>

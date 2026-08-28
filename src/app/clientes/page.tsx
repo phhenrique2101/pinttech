@@ -12,7 +12,9 @@ import {
   Wrench,
   AlertTriangle,
   FileText,
+  Download,
 } from 'lucide-react';
+import { exportJsonToExcel } from '@/lib/exportUtils';
 
 export default function ClientesPage() {
   const [clients, setClients] = useState<any[]>([]);
@@ -82,13 +84,39 @@ export default function ClientesPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setNewClientModal(true)}
-          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Cliente</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = clients.map((c) => ({
+                'Nome / Razão Social': c.name,
+                'Nome Fantasia': c.tradeName || c.name,
+                'CNPJ / CPF': c.document || '—',
+                'Telefone / WhatsApp': c.phone || '—',
+                'E-mail': c.email || '—',
+                'Cidade': c.city || '—',
+                'Estado': c.state || '—',
+                'Endereço': c.address || '—',
+                'Barris Retidos': c.retainedKegsCount || (c.kegs || []).length || 0,
+                'Chopeiras Retidas': (c.equipment || []).length || 0,
+                'Total Pedidos': c._count?.orders || (c.orders || []).length || 0,
+              }));
+              exportJsonToExcel(rows, `Clientes_PintTech_${new Date().toISOString().slice(0, 10)}.xlsx`, 'Clientes');
+            }}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all shadow-xs"
+            title="Exportar clientes para Excel"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>Exportar Excel ({clients.length})</span>
+          </button>
+
+          <button
+            onClick={() => setNewClientModal(true)}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Cliente</span>
+          </button>
+        </div>
       </div>
 
       {/* Clients Cards Grid */}
