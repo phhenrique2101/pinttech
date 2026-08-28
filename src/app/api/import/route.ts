@@ -395,6 +395,130 @@ export async function POST(req: NextRequest) {
           errors.push(`Linha ${i + 1} (${code}): ${err.message}`);
         }
       }
+    } else if (entityType === 'ORDERS') {
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const clientName = cleanStr(row.clientName || row.client || row.cliente || row.name || row.customer);
+        if (!clientName) {
+          errors.push(`Linha ${i + 1}: Nome do cliente é obrigatório para o pedido.`);
+          continue;
+        }
+
+        try {
+          // Find or create Client
+          let client = await prisma.client.findFirst({
+            where: {
+              breweryId,
+              OR: [
+                { name: { equals: clientName, mode: 'insensitive' } },
+                { tradeName: { equals: clientName, mode: 'insensitive' } },
+              ],
+            },
+          });
+
+          if (!client) {
+            client = await prisma.client.create({
+              data: {
+                breweryId,
+                name: clientName,
+                tradeName: clientName,
+              },
+            });
+          }
+
+          const orderNumber = cleanStr(row.orderNumber || row.order || row.pedido || row.numero) || `PED-${new Date().getFullYear()}-${String(1000 + i + 1)}`;
+          
+          const rawStatus = cleanStr(row.status)?.toUpperCase() || 'CONFIRMADO';
+          let status = 'CONFIRMADO';
+          if (rawStatus.includes('ORCA') || rawStatus.includes('ORÇA')) status = 'ORCAMENTO';
+          else if (rawStatus.includes('SEPAR')) status = 'EM_SEPARACAO';
+          else if (rawStatus.includes('ROTA') || rawStatus.includes('TRANSIT')) status = 'EM_ROTA';
+          else if (rawStatus.includes('ENTREG') || rawStatus.includes('CONCLU')) status = 'ENTREGUE';
+          else if (rawStatus.includes('CANCEL')) status = 'CANCELADO';
+
+          const rawPayment = cleanStr(row.paymentStatus || row.payment || row.pagamento)?.toUpperCase() || 'PENDENTE';
+          let paymentStatus = 'PENDENTE';
+          if (rawPayment.includes('PAGO') || rawPayment.includes('RECEBIDO') || rawPayment.includes('LIQUIDAD')) paymentStatus = 'PAGO';
+          else if (rawPayment.includes('PARC')) paymentStatus = 'PARCIAL';
+
+          const beerName = cleanStr(row.beerName || row.item || row.cerveja || row.chopp || row.product) || 'Chopp Artesanal';
+          const quantity = cleanNumber(row.quantity, 1);
+          let unitPrice = cleanNumber(row.unitPrice, 0);
+          let totalAmount = cleanNumber(row.totalAmount || row.total || row.valor, unitPrice * quantity);
+          if (unitPrice === 0 && totalAmount > 0 && quantity > 0) {
+            unitPrice = totalAmount / quantity;
+          }
+          if (totalAmount === 0 && unitPrice > 0 && quantity > 0) {
+            totalAmount = unitPrice * quantity;
+          }
+
+          const paidAmount = paymentStatus === 'PAGO' ? totalAmount : (paymentStatus === 'PARCIAL' ? totalAmount / 2 : 0);
+          const remainingAmount = Math.max(0, totalAmount - paidAmount);
+          const paymentMethod = cleanStr(row.paymentMethod)?.toUpperCase() || 'PIX';
+          const notes = cleanStr(row.notes);
+
+          let deliveryDate: Date | null = null;
+          if (row.deliveryDate) {
+            const parsedD = new Date(row.deliveryDate);
+            if (!isNaN(parsedD.getTime())) {
+              deliveryDate = parsedD;
+            }
+          }
+
+          const existing = await prisma.order.findUnique({
+            where: { breweryId_orderNumber: { breweryId, orderNumber } },
+          });
+
+          if (existing) {
+            await prisma.order.update({
+              where: { id: existing.id },
+              data: {
+                clientId: client.id,
+                status,
+                paymentStatus,
+                paymentMethod,
+                totalAmount: totalAmount > 0 ? totalAmount : existing.totalAmount,
+                subtotal: totalAmount > 0 ? totalAmount : existing.subtotal,
+                paidAmount,
+                remainingAmount,
+                deliveryDate: deliveryDate || existing.deliveryDate,
+                notes: notes ? (existing.notes ? `${existing.notes} | ${notes}` : notes) : existing.notes,
+              },
+            });
+            updatedCount++;
+          } else {
+            await prisma.order.create({
+              data: {
+                breweryId,
+                orderNumber,
+                clientId: client.id,
+                status,
+                paymentStatus,
+                paymentMethod,
+                totalAmount,
+                subtotal: totalAmount,
+                paidAmount,
+                remainingAmount,
+                deliveryDate: deliveryDate || new Date(),
+                notes,
+                items: {
+                  create: [
+                    {
+                      description: beerName,
+                      quantity,
+                      unitPrice,
+                      totalPrice: totalAmount,
+                    },
+                  ],
+                },
+              },
+            });
+            createdCount++;
+          }
+        } catch (err: any) {
+          errors.push(`Linha ${i + 1} (${clientName}): ${err.message}`);
+        }
+      }
     } else if (entityType === 'RECIPES') {
       for (let i = 0; i < data.length; i++) {
         const row = data[i];

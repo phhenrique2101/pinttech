@@ -22,11 +22,12 @@ import {
   HelpCircle,
   Building2,
   Trash2,
+  ShoppingBag,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 
-type EntityType = 'CLIENTS' | 'KEGS' | 'EQUIPMENT' | 'RECIPES' | 'TANKS';
+type EntityType = 'CLIENTS' | 'KEGS' | 'EQUIPMENT' | 'ORDERS' | 'RECIPES' | 'TANKS';
 
 interface EntityDefinition {
   type: EntityType;
@@ -131,6 +132,35 @@ const ENTITY_CONFIGS: Record<EntityType, EntityDefinition> = {
     sampleData: [
       { 'Código do Equipamento': 'CHOP-01', 'Nome / Modelo': 'Chopeira Elétrica 2 Vias 60L/h', 'Tipo de Equipamento': 'CHOPEIRA_ELETRICA', 'Cliente Atual (Se no Cliente)': 'Bar do Zé & Petiscos', 'Voltagem': '220V', 'Número de Série': 'MEMO-4421', 'Status': 'EM_USO_CLIENTE', 'Observações': 'Torneiras Italianas' },
       { 'Código do Equipamento': 'CIL-CO2-05', 'Nome / Modelo': 'Cilindro CO2 6kg Válvula Top', 'Tipo de Equipamento': 'CILINDRO_CO2', 'Cliente Atual (Se no Cliente)': '', 'Voltagem': '', 'Número de Série': 'CIL-6K-09', 'Status': 'DISPONIVEL', 'Observações': 'Cheio de gás' },
+    ],
+  },
+  ORDERS: {
+    type: 'ORDERS',
+    title: 'Pedidos em Aberto & Entregas',
+    description: 'Pedidos de vendas de chopp, entregas agendadas, valores e status.',
+    icon: ShoppingBag,
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-50',
+    borderColor: 'border-emerald-200',
+    redirectUrl: '/pedidos',
+    redirectLabel: 'Ver Pedidos de Venda',
+    fields: [
+      { key: 'orderNumber', label: 'Número do Pedido (Opcional)', synonyms: ['pedido', 'numero do pedido', 'número do pedido', 'num pedido', 'n pedido', 'ordem', 'codigo pedido'], example: 'PED-101' },
+      { key: 'clientName', label: 'Nome do Cliente / Ponto de Venda', required: true, synonyms: ['cliente', 'nome do cliente', 'razao social', 'nome fantasia', 'ponto', 'comprador'], example: 'Bar e Restaurante Estrela' },
+      { key: 'beerName', label: 'Cerveja / Chopp do Pedido', synonyms: ['cerveja', 'item', 'chopp', 'produto', 'estilo', 'descricao', 'descrição'], example: 'German Pilsen 50L' },
+      { key: 'quantity', label: 'Quantidade de Barris / Itens', synonyms: ['quantidade', 'qtd', 'quant', 'barris', 'unidades', 'un'], example: '2' },
+      { key: 'unitPrice', label: 'Valor Unitário (R$)', synonyms: ['unitario', 'unitário', 'preco', 'preço', 'valor unitario', 'preco unitario'], example: '550.00' },
+      { key: 'totalAmount', label: 'Valor Total do Pedido (R$)', synonyms: ['total', 'valor total', 'subtotal', 'valor'], example: '1100.00' },
+      { key: 'status', label: 'Status do Pedido (CONFIRMADO, EM_ROTA, ENTREGUE)', synonyms: ['status', 'situacao', 'situação', 'estado', 'status entrega'], example: 'CONFIRMADO' },
+      { key: 'paymentStatus', label: 'Status do Pagamento (PENDENTE, PAGO, PARCIAL)', synonyms: ['pagamento', 'status pagamento', 'status pago', 'financeiro'], example: 'PENDENTE' },
+      { key: 'deliveryDate', label: 'Data Prevista de Entrega', synonyms: ['data entrega', 'entrega', 'data', 'previsao', 'previsão', 'data de entrega'], example: '2026-08-30' },
+      { key: 'paymentMethod', label: 'Forma de Pagamento (PIX, BOLETO, CARTAO, DINHEIRO)', synonyms: ['forma de pagamento', 'meio de pagamento', 'pagamento via', 'forma pagto'], example: 'PIX' },
+      { key: 'notes', label: 'Observações do Pedido', synonyms: ['observacoes', 'observações', 'obs', 'notas', 'detalhes'], example: 'Entregar com chopeira 2 vias' },
+    ],
+    sampleData: [
+      { 'Número do Pedido': 'PED-101', 'Nome do Cliente': 'Bar e Restaurante Estrela', 'Cerveja / Chopp': 'German Pilsen 50L', 'Quantidade': 2, 'Valor Unitário (R$)': 550.0, 'Valor Total (R$)': 1100.0, 'Status do Pedido': 'CONFIRMADO', 'Status Pagamento': 'PENDENTE', 'Data de Entrega': '2026-08-30', 'Forma de Pagamento': 'PIX', 'Observações': 'Pedido em aberto para o fim de semana' },
+      { 'Número do Pedido': 'PED-102', 'Nome do Cliente': 'Empório da Serra', 'Cerveja / Chopp': 'Hop Storm IPA 30L', 'Quantidade': 3, 'Valor Unitário (R$)': 450.0, 'Valor Total (R$)': 1350.0, 'Status do Pedido': 'CONFIRMADO', 'Status Pagamento': 'PENDENTE', 'Data de Entrega': '2026-08-31', 'Forma de Pagamento': 'BOLETO', 'Observações': 'Entregar no período da manhã' },
+      { 'Número do Pedido': 'PED-103', 'Nome do Cliente': 'Boteco do Zé', 'Cerveja / Chopp': 'Weissbier 50L', 'Quantidade': 1, 'Valor Unitário (R$)': 580.0, 'Valor Total (R$)': 580.0, 'Status do Pedido': 'ENTREGUE', 'Status Pagamento': 'PAGO', 'Data de Entrega': '2026-08-25', 'Forma de Pagamento': 'CARTAO', 'Observações': 'Entregue com 1 chopeira' },
     ],
   },
   RECIPES: {
@@ -469,7 +499,7 @@ export default function ImportacaoPage() {
         <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-2 px-1">
           Passo 1: O que você deseja cadastrar ou migrar?
         </span>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {(Object.keys(ENTITY_CONFIGS) as EntityType[]).map((type) => {
             const ent = ENTITY_CONFIGS[type];
             const isSelected = selectedEntity === type;
