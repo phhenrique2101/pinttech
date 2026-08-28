@@ -280,6 +280,40 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
                         <DollarSign className="w-4 h-4 text-slate-400" />
                         Faturamento SaaS & MRR
                       </Link>
+
+                      {/* Brewery switcher inside profile dropdown */}
+                      {breweries.length > 0 && (
+                        <div className="pt-2 mt-1 border-t border-slate-100 px-3 py-1 space-y-1">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                            Alternar Cervejaria:
+                          </span>
+                          <div className="max-h-36 overflow-y-auto space-y-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchBrewery('')}
+                              className={`w-full text-left px-2 py-1 rounded-lg text-[11px] font-bold flex items-center justify-between transition-colors ${
+                                !user?.breweryId ? 'bg-amber-100 text-amber-950 font-black' : 'text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span>👑 Visão Master Global</span>
+                              {!user?.breweryId && <span>✓</span>}
+                            </button>
+                            {breweries.map((b) => (
+                              <button
+                                key={b.id}
+                                type="button"
+                                onClick={() => handleSwitchBrewery(b.id)}
+                                className={`w-full text-left px-2 py-1 rounded-lg text-[11px] font-bold flex items-center justify-between transition-colors ${
+                                  user?.breweryId === b.id ? 'bg-amber-100 text-amber-950 font-black' : 'text-slate-700 hover:bg-slate-100'
+                                }`}
+                              >
+                                <span className="truncate">🏢 {b.name}</span>
+                                {user?.breweryId === b.id && <span>✓</span>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <Link

@@ -9,10 +9,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Acesso não autorizado' }, { status: 403 });
     }
 
-    const { breweryId } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { breweryId } = body;
 
-    let breweryName = undefined;
-    let brewerySlug = undefined;
+    let breweryName: string | undefined = undefined;
+    let brewerySlug: string | undefined = undefined;
 
     if (breweryId) {
       const brewery = await prisma.brewery.findUnique({ where: { id: breweryId } });
@@ -25,16 +26,18 @@ export async function POST(req: NextRequest) {
     const newPayload = {
       ...session,
       breweryId: breweryId || null,
-      breweryName,
-      brewerySlug,
+      breweryName: breweryName || undefined,
+      brewerySlug: brewerySlug || undefined,
     };
 
     const token = signJwtToken(newPayload);
 
+    const isHttps = req.nextUrl.protocol === 'https:' || req.headers.get('x-forwarded-proto') === 'https';
+
     const res = NextResponse.json({ success: true, user: newPayload });
     res.cookies.set('pinttech_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest) {
 
     return res;
   } catch (error: any) {
+    console.error('Error switching brewery:', error);
     return NextResponse.json({ error: 'Erro ao trocar organização' }, { status: 500 });
   }
 }
