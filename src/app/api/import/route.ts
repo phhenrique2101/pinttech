@@ -172,6 +172,7 @@ export async function POST(req: NextRequest) {
         const currentBeerName = cleanStr(row.currentBeerName || row.beerName || row.cerveja);
         const beerStyle = cleanStr(row.style || row.beerStyle || row.estilo);
         const batchNumber = cleanStr(row.batchNumber || row.lote || row.batch);
+        const clientName = cleanStr(row.clientName || row.client || row.cliente || row.currentClient || row.pdv || row.posse || row.comodato);
 
         let currentVolumeLiters: number | null = null;
         if (row.currentVolumeLiters !== undefined && row.currentVolumeLiters !== null && row.currentVolumeLiters !== '') {
@@ -183,6 +184,32 @@ export async function POST(req: NextRequest) {
         }
 
         try {
+          let currentClientId: string | null = null;
+          if (clientName) {
+            let client = await prisma.client.findFirst({
+              where: {
+                breweryId,
+                OR: [
+                  { name: { equals: clientName, mode: 'insensitive' } },
+                  { tradeName: { equals: clientName, mode: 'insensitive' } },
+                ],
+              },
+            });
+
+            if (!client) {
+              client = await prisma.client.create({
+                data: {
+                  breweryId,
+                  name: clientName,
+                  tradeName: clientName,
+                },
+              });
+            }
+
+            currentClientId = client.id;
+            status = 'NO_CLIENTE';
+          }
+
           let currentBatchId: string | null = null;
           if (batchNumber || currentBeerName) {
             const batchCode = batchNumber || `LOT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -245,6 +272,8 @@ export async function POST(req: NextRequest) {
                 status: status || existing.status,
                 currentBeerName: currentBeerName || existing.currentBeerName,
                 currentBatchId: currentBatchId || existing.currentBatchId,
+                currentClientId: currentClientId !== null ? currentClientId : existing.currentClientId,
+                lastDeliveredAt: currentClientId ? new Date() : existing.lastDeliveredAt,
                 notes: notes ? (existing.notes ? `${existing.notes} | ${notes}` : notes) : existing.notes,
               },
             });
@@ -260,6 +289,8 @@ export async function POST(req: NextRequest) {
                 status,
                 currentBeerName,
                 currentBatchId,
+                currentClientId,
+                lastDeliveredAt: currentClientId ? new Date() : null,
                 notes,
               },
             });
@@ -294,11 +325,38 @@ export async function POST(req: NextRequest) {
         else if (rawStatus.includes('MANUT')) status = 'MANUTENCAO';
         else if (rawStatus.includes('INATIV')) status = 'INATIVO';
 
+        const clientName = cleanStr(row.clientName || row.client || row.cliente || row.currentClient || row.pdv);
         const serialNumber = cleanStr(row.serialNumber);
         const voltage = cleanStr(row.voltage);
         const notes = cleanStr(row.notes);
 
         try {
+          let currentClientId: string | null = null;
+          if (clientName) {
+            let client = await prisma.client.findFirst({
+              where: {
+                breweryId,
+                OR: [
+                  { name: { equals: clientName, mode: 'insensitive' } },
+                  { tradeName: { equals: clientName, mode: 'insensitive' } },
+                ],
+              },
+            });
+
+            if (!client) {
+              client = await prisma.client.create({
+                data: {
+                  breweryId,
+                  name: clientName,
+                  tradeName: clientName,
+                },
+              });
+            }
+
+            currentClientId = client.id;
+            status = 'EM_USO_CLIENTE';
+          }
+
           const existing = await prisma.equipment.findUnique({
             where: { breweryId_code: { breweryId, code } },
           });
@@ -312,6 +370,7 @@ export async function POST(req: NextRequest) {
                 status: status || existing.status,
                 serialNumber: serialNumber || existing.serialNumber,
                 voltage: voltage || existing.voltage,
+                currentClientId: currentClientId !== null ? currentClientId : existing.currentClientId,
                 notes: notes ? (existing.notes ? `${existing.notes} | ${notes}` : notes) : existing.notes,
               },
             });
@@ -326,6 +385,7 @@ export async function POST(req: NextRequest) {
                 status,
                 serialNumber,
                 voltage,
+                currentClientId,
                 notes,
               },
             });
