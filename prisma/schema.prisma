@@ -1,0 +1,422 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// MULTI-TENANT: Organização / Cervejaria
+// ----------------------------------------------------
+model Brewery {
+  id                    String                    @id @default(uuid())
+  name                  String
+  slug                  String                    @unique
+  document              String?
+  email                 String
+  phone                 String?
+  address               String?
+  city                  String?
+  state                 String?
+  logoUrl               String?
+  plan                  String                    @default("PRO") // STARTER, PRO, ENTERPRISE
+  monthlyPrice          Float                     @default(299.0)
+  billingStatus         String                    @default("EM_DIA") // EM_DIA, PENDENTE, ATRASADO, CANCELADO, TRIAL
+  nextBillingDate       DateTime?
+  active                Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  users                 User[]
+  kegs                  Keg[]
+  equipment             Equipment[]
+  kegMovements          KegMovement[]
+  recipes               BeerRecipe[]
+  batches               ProductionBatch[]
+  tanks                 Tank[]
+  inventory             InventoryItem[]
+  clients               Client[]
+  suppliers             Supplier[]
+  orders                Order[]
+  financialTransactions FinancialTransaction[]
+  saasPayments          SaasSubscriptionPayment[]
+}
+
+// ----------------------------------------------------
+// ASSINATURAS E PAGAMENTOS DO SAAS (Área do Proprietário)
+// ----------------------------------------------------
+model SaasSubscriptionPayment {
+  id             String    @id @default(uuid())
+  breweryId      String
+  brewery        Brewery   @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  amount         Float
+  referenceMonth String    // ex: "02/2026"
+  dueDate        DateTime
+  paidDate       DateTime?
+  status         String    @default("PAGO") // PAGO, PENDENTE, ATRASADO, CANCELADO
+  paymentMethod  String?   @default("PIX")
+  notes          String?
+  createdAt      DateTime  @default(now())
+}
+
+// ----------------------------------------------------
+// USUÁRIOS E PERMISSÕES (RBAC)
+// ----------------------------------------------------
+// Roles: SUPER_ADMIN, ADMIN, BREWER, LOGISTICS, SALES, FINANCE
+model User {
+  id           String    @id @default(uuid())
+  breweryId    String?
+  brewery      Brewery?  @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name         String
+  email        String    @unique
+  password     String
+  role         String    @default("LOGISTICS")
+  phone        String?
+  avatarUrl    String?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignedOrders Order[] @relation("DriverOrders")
+}
+
+// ----------------------------------------------------
+// GESTÃO DE BARRIS
+// Status: VAZIO_SUJO, HIGIENIZADO, ENVASADO, EM_ESTOQUE, EM_TRANSITO, NO_CLIENTE, MANUTENCAO, INATIVO
+// KegType: INOX_EURO, INOX_DIN, INOX_SLIM, PET_ONEWAY, GROWLER
+// ----------------------------------------------------
+model Keg {
+  id                  String          @id @default(uuid())
+  breweryId           String
+  brewery             Brewery         @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  code                String
+  capacity            Int             // 10, 20, 30, 50 (Litros)
+  currentVolumeLiters Float?          // Litros reais envasados (ex: 50.0 ou 32.5 se parcial)
+  kegType             String          @default("INOX_EURO")
+  status              String          @default("VAZIO_SUJO")
+  currentBatchId      String?
+  currentBatch        ProductionBatch? @relation(fields: [currentBatchId], references: [id], onDelete: SetNull)
+  currentBeerName     String?
+  currentClientId     String?
+  currentClient       Client?         @relation(fields: [currentClientId], references: [id], onDelete: SetNull)
+  lastSanitizedAt     DateTime?
+  lastFilledAt        DateTime?
+  lastDeliveredAt     DateTime?
+  lastReturnedAt      DateTime?
+  purchaseDate        DateTime?
+  notes               String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  movements        KegMovement[]
+  orderItems       OrderItem[]
+
+  @@unique([breweryId, code])
+}
+
+// ----------------------------------------------------
+// EQUIPAMENTOS (Chopeiras, Cilindros CO2, Extratoras)
+// Types: CHOPEIRA_ELETRICA, CHOPEIRA_GELO, CILINDRO_CO2, EXTRATORA, MANOMETRO, OUTRO
+// Status: DISPONIVEL, EM_USO_CLIENTE, EM_TRANSITO, MANUTENCAO, INATIVO
+// ----------------------------------------------------
+model Equipment {
+  id                String            @id @default(uuid())
+  breweryId         String
+  brewery           Brewery           @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  code              String
+  name              String
+  type              String            @default("CHOPEIRA_ELETRICA")
+  status            String            @default("DISPONIVEL")
+  currentClientId   String?
+  currentClient     Client?           @relation(fields: [currentClientId], references: [id], onDelete: SetNull)
+  serialNumber      String?
+  voltage           String?           // 110V, 220V, Bivolt
+  lastMaintenanceAt DateTime?
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  movements         KegMovement[]
+  orderEquipments   OrderEquipment[]
+
+  @@unique([breweryId, code])
+}
+
+// ----------------------------------------------------
+// RASTREABILIDADE / HISTÓRICO DE MOVIMENTAÇÕES
+// Actions: HIGIENIZACAO, ENVASE, EXPEDICAO, ENTREGA, RECOLHA, MANUTENCAO, AJUSTE
+// ----------------------------------------------------
+model KegMovement {
+  id           String      @id @default(uuid())
+  breweryId    String
+  brewery      Brewery     @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  kegId        String?
+  keg          Keg?        @relation(fields: [kegId], references: [id], onDelete: Cascade)
+  equipmentId  String?
+  equipment    Equipment?  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  action       String
+  fromStatus   String?
+  toStatus     String
+  fromClientId String?
+  toClientId   String?
+  toClient     Client?     @relation(fields: [toClientId], references: [id], onDelete: SetNull)
+  batchId      String?
+  batch        ProductionBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  volumeLiters Float?      // Volume registrado na ação (ex: 35L envasados ou 20L retornados)
+  userId       String?
+  userName     String?
+  driverName   String?
+  latitude     Float?
+  longitude    Float?
+  signatureUrl String?
+  notes        String?
+  createdAt    DateTime    @default(now())
+}
+
+// ----------------------------------------------------
+// TANQUES / FERMENTADORES
+// Types: FERMENTADOR_ISOTERMICO, MATURADOR, BBT_BRITE_TANK, PANELA_BRASSAGEM
+// Status: LIVRE, OCUPADO, HIGIENIZANDO, MANUTENCAO
+// ----------------------------------------------------
+model Tank {
+  id             String            @id @default(uuid())
+  breweryId      String
+  brewery        Brewery           @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name           String
+  capacityLiters Float
+  type           String            @default("FERMENTADOR_ISOTERMICO")
+  status         String            @default("LIVRE")
+  currentBatchId String?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  batches        ProductionBatch[]
+
+  @@unique([breweryId, name])
+}
+
+// ----------------------------------------------------
+// RECEITAS DE CERVEJA
+// ----------------------------------------------------
+model BeerRecipe {
+  id                    String            @id @default(uuid())
+  breweryId             String
+  brewery               Brewery           @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name                  String
+  style                 String
+  og                    Float?
+  fg                    Float?
+  abv                   Float?
+  ibu                   Int?
+  ebc                   Float?
+  description           String?
+  suggestedPricePerLiter Float?           @default(18.0)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  batches               ProductionBatch[]
+  orderItems            OrderItem[]
+}
+
+// ----------------------------------------------------
+// LOTES DE PRODUÇÃO (Brassagens)
+// Status: PLANEJADO, BRASSAGEM, FERMENTANDO, MATURANDO, PRONTO_ENVASE, ENVASADO, FINALIZADO
+// ----------------------------------------------------
+model ProductionBatch {
+  id                    String         @id @default(uuid())
+  breweryId             String
+  brewery               Brewery        @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  recipeId              String
+  recipe                BeerRecipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  batchNumber           String
+  tankId                String?
+  tank                  Tank?          @relation(fields: [tankId], references: [id], onDelete: SetNull)
+  status                String         @default("BRASSAGEM")
+  volumePlannedLiters   Float
+  volumeProducedLiters  Float?
+  brewDate              DateTime       @default(now())
+  fermentationStartDate DateTime?
+  maturationStartDate   DateTime?
+  packagingDate         DateTime?
+  measuredOg            Float?
+  measuredFg            Float?
+  measuredAbv           Float?
+  notes                 String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  kegs                  Keg[]
+  movements             KegMovement[]
+  orderItems            OrderItem[]
+
+  @@unique([breweryId, batchNumber])
+}
+
+// ----------------------------------------------------
+// ESTOQUE (Insumos & Embalagens)
+// Categories: MALTE, LUPULO, LEVEDURA, ADJUNTO, QUIMICO_LIMPEZA, EMBALAGEM, PRODUTO_FINAL
+// ----------------------------------------------------
+model InventoryItem {
+  id              String    @id @default(uuid())
+  breweryId       String
+  brewery         Brewery   @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name            String
+  category        String    @default("MALTE")
+  unit            String    @default("KG")
+  currentQuantity Float     @default(0)
+  minimumQuantity Float     @default(0)
+  costPerUnit     Float     @default(0)
+  supplierId      String?
+  supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ----------------------------------------------------
+// CLIENTES
+// ----------------------------------------------------
+model Client {
+  id                String                 @id @default(uuid())
+  breweryId         String
+  brewery           Brewery                @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name              String
+  tradeName         String?
+  document          String?
+  email             String?
+  phone             String?
+  address           String?
+  number            String?
+  complement        String?
+  neighborhood      String?
+  city              String?
+  state             String?
+  zipCode           String?
+  creditLimit       Float?
+  retainedKegsCount Int                    @default(0)
+  notes             String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  kegs              Keg[]
+  equipment         Equipment[]
+  orders            Order[]
+  movements         KegMovement[]
+}
+
+// ----------------------------------------------------
+// FORNECEDORES
+// ----------------------------------------------------
+model Supplier {
+  id             String          @id @default(uuid())
+  breweryId      String
+  brewery        Brewery         @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name           String
+  tradeName      String?
+  document       String?
+  email          String?
+  phone          String?
+  category       String?
+  address        String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  inventoryItems InventoryItem[]
+}
+
+// ----------------------------------------------------
+// PEDIDOS & VENDAS
+// Status: ORCAMENTO, CONFIRMADO, EM_SEPARACAO, EM_ROTA, ENTREGUE, CANCELADO, CONCLUIDO
+// PaymentStatus: PENDENTE, PARCIAL, PAGO, CANCELADO
+// ----------------------------------------------------
+model Order {
+  id                  String                 @id @default(uuid())
+  breweryId           String
+  brewery             Brewery                @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  orderNumber         String
+  clientId            String
+  client              Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status              String                 @default("CONFIRMADO")
+  deliveryDate        DateTime?
+  estimatedReturnDate DateTime?
+  actualReturnDate    DateTime?
+  deliveryAddress     String?
+  subtotal            Float                  @default(0)
+  discount            Float                  @default(0)
+  deliveryFee         Float                  @default(0)
+  cautionDeposit      Float                  @default(0)
+  totalAmount         Float                  @default(0)
+  paymentMethod       String?                @default("PIX")
+  paymentStatus       String                 @default("PENDENTE")
+  driverUserId        String?
+  driverUser          User?                  @relation("DriverOrders", fields: [driverUserId], references: [id], onDelete: SetNull)
+  notes               String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  items               OrderItem[]
+  orderEquipments     OrderEquipment[]
+  transactions        FinancialTransaction[]
+
+  @@unique([breweryId, orderNumber])
+}
+
+// ----------------------------------------------------
+// ITENS DO PEDIDO (Barris / Bebidas)
+// ----------------------------------------------------
+model OrderItem {
+  id           String           @id @default(uuid())
+  orderId      String
+  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  recipeId     String?
+  recipe       BeerRecipe?      @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  batchId      String?
+  batch        ProductionBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  kegId        String?
+  keg          Keg?             @relation(fields: [kegId], references: [id], onDelete: SetNull)
+  description  String
+  quantity     Float            @default(1)
+  unitPrice    Float            @default(0)
+  totalPrice   Float            @default(0)
+}
+
+// ----------------------------------------------------
+// EQUIPAMENTOS NO PEDIDO (Comodato)
+// ----------------------------------------------------
+model OrderEquipment {
+  id             String     @id @default(uuid())
+  orderId        String
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  equipmentId    String
+  equipment      Equipment  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  returned       Boolean    @default(false)
+  returnDate     DateTime?
+  conditionNotes String?
+}
+
+// ----------------------------------------------------
+// FINANCEIRO (Contas a Receber, Pagar, Caução)
+// Types: RECEITA, DESPESA
+// Status: PENDENTE, PAGO, VENCIDO, CANCELADO
+// ----------------------------------------------------
+model FinancialTransaction {
+  id             String    @id @default(uuid())
+  breweryId      String
+  brewery        Brewery   @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  orderId        String?
+  order          Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  type           String    // RECEITA, DESPESA
+  category       String    // VENDA_CERVEJA, ALUGUEL_CHOPEIRA, CAUCAO, COMPRA_INSUMO, MANUTENCAO, FIXO, OUTROS
+  description    String
+  amount         Float
+  dueDate        DateTime
+  paymentDate    DateTime?
+  status         String    @default("PENDENTE")
+  paymentMethod  String?
+  documentNumber String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
