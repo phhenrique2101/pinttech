@@ -19,6 +19,8 @@ import {
   RefreshCw,
   Sliders,
   FileSpreadsheet,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -46,6 +48,15 @@ export default function MasterDashboardPage() {
   });
 
   const [loading, setLoading] = useState(true);
+
+  // Reset brewery states
+  const [resetModal, setResetModal] = useState<any | null>(null);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetUsers, setResetUsers] = useState(false);
+  const [resetTanks, setResetTanks] = useState(true);
+  const [resetRecipes, setResetRecipes] = useState(true);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -76,6 +87,33 @@ export default function MasterDashboardPage() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleResetBreweryData = async () => {
+    if (!resetModal) return;
+    setResetLoading(true);
+    setResetError('');
+    try {
+      const res = await fetch(`/api/master/breweries/${resetModal.id}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resetUsers, resetTanks, resetRecipes }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResetModal(null);
+        setResetConfirmText('');
+        loadData();
+        alert(data.message || 'Dados zerados com sucesso!');
+      } else {
+        setResetError(data.error || 'Erro ao zerar dados da cervejaria');
+      }
+    } catch (e: any) {
+      console.error(e);
+      setResetError('Erro de conexão ao processar requisição');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -334,14 +372,21 @@ export default function MasterDashboardPage() {
                             <span>Acessar</span>
                           </a>
 
-                          <Link
-                            href={`/master/usuarios?breweryId=${brewery.id}`}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 flex items-center gap-1 transition-colors"
-                            title="Ver e resetar senhas dos usuários"
+                          <button
+                            onClick={() => {
+                              setResetModal(brewery);
+                              setResetConfirmText('');
+                              setResetUsers(false);
+                              setResetTanks(true);
+                              setResetRecipes(true);
+                              setResetError('');
+                            }}
+                            className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200 flex items-center gap-1 transition-colors"
+                            title="Zerar todos os dados desta cervejaria (Barris, Pedidos, Produção, Estoque)"
                           >
-                            <Key className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Senhas</span>
-                          </Link>
+                            <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Zerar</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -352,6 +397,136 @@ export default function MasterDashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal: ZERAR DADOS DA CERVEJARIA */}
+      {resetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-300 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900">Zerar Dados da Cervejaria</h3>
+                  <p className="text-[11px] text-slate-500 font-bold">{resetModal.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setResetModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Warning Box */}
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl space-y-1.5 text-rose-900 text-xs">
+              <div className="flex items-center gap-2 font-black text-rose-700">
+                <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>ATENÇÃO: AÇÃO IRREVERSÍVEL!</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-rose-800/90">
+                Esta ação vai <strong>apagar permanentemente</strong> todos os barris, movimentações de rastreamento, pedidos de vendas, comodatos, clientes, produção e financeiro desta fábrica.
+              </p>
+            </div>
+
+            {/* Checklist of what will be reset */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs">
+              <span className="font-black text-slate-700 text-[11px] uppercase tracking-wider block">
+                O que será zerado / excluído:
+              </span>
+              <ul className="space-y-1 text-slate-600 text-[11px]">
+                <li className="flex items-center gap-1.5 font-bold text-rose-600">
+                  <span>✓</span> Todos os Barris ({resetModal._count?.kegs || 0} un.) e histórico de bipagens
+                </li>
+                <li className="flex items-center gap-1.5 font-bold text-rose-600">
+                  <span>✓</span> Todos os Pedidos ({resetModal._count?.orders || 0} un.) e comodatos de chopeiras
+                </li>
+                <li className="flex items-center gap-1.5 font-bold text-rose-600">
+                  <span>✓</span> Todos os Clientes e Transações Financeiras
+                </li>
+                <li className="flex items-center gap-1.5 font-bold text-rose-600">
+                  <span>✓</span> Estoque de Insumos e Lotes de Produção
+                </li>
+              </ul>
+            </div>
+
+            {/* Options */}
+            <div className="space-y-2 pt-1 border-t border-slate-100 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={resetTanks}
+                  onChange={(e) => setResetTanks(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-400"
+                />
+                <span>Zerar também os Tanques e Fermentadores</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={resetRecipes}
+                  onChange={(e) => setResetRecipes(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-400"
+                />
+                <span>Zerar também as Receitas de Cerveja cadastradas</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={resetUsers}
+                  onChange={(e) => setResetUsers(e.target.checked)}
+                  className="rounded text-rose-500 focus:ring-rose-400"
+                />
+                <span className="text-rose-700">Excluir também os Usuários da cervejaria (exceto Proprietário)</span>
+              </label>
+            </div>
+
+            {/* Confirmation Safety Input */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+              <label className="block text-[11px] font-bold text-slate-700">
+                Digite <strong className="text-rose-600 font-black">ZERAR</strong> para confirmar:
+              </label>
+              <input
+                type="text"
+                placeholder="ZERAR"
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-black uppercase text-rose-700 focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            {resetError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl">
+                {resetError}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setResetModal(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResetBreweryData}
+                disabled={resetLoading || resetConfirmText.trim().toUpperCase() !== 'ZERAR'}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-md shadow-rose-600/20 transition-all flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{resetLoading ? 'Zerando Dados...' : 'Confirmar e Zerar Tudo'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
