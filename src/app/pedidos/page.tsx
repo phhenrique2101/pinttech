@@ -110,7 +110,7 @@ export default function PedidosPage() {
 
   const getStockAvailability = (recipeId: string, capacity: number, editingOrderId?: string) => {
     const recipe = recipes.find((r) => r.id === recipeId);
-    if (!recipe) return { available: 0, matchingTotal: 0, reserved: 0, recipeName: 'Chopp' };
+    if (!recipe) return { available: 0, matchingTotal: 0, reserved: 0, reservedOrders: [], recipeName: 'Chopp' };
 
     // Find filled kegs in stock matching this recipe and capacity
     const matchingKegs = kegs.filter(
@@ -123,18 +123,36 @@ export default function PedidosPage() {
 
     // Calculate quantity already committed in active unfulfilled orders
     let reservedCount = 0;
+    const reservedOrders: { orderNumber: string; clientName: string; quantity: number; deliveryDate?: string }[] = [];
+
     orders.forEach((o) => {
       if (o.id !== editingOrderId && ['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
+        let qtyInOrder = 0;
         (o.items || []).forEach((it: any) => {
           if (it.recipeId === recipeId && (it.kegCapacity || 50) === capacity) {
-            reservedCount += (it.quantity || 1);
+            qtyInOrder += (it.quantity || 1);
           }
         });
+        if (qtyInOrder > 0) {
+          reservedCount += qtyInOrder;
+          reservedOrders.push({
+            orderNumber: o.orderNumber,
+            clientName: o.client?.tradeName || o.client?.name || 'Cliente',
+            quantity: qtyInOrder,
+            deliveryDate: o.deliveryDate,
+          });
+        }
       }
     });
 
     const available = Math.max(0, matchingKegs.length - reservedCount);
-    return { available, matchingTotal: matchingKegs.length, reserved: reservedCount, recipeName: recipe.name };
+    return {
+      available,
+      matchingTotal: matchingKegs.length,
+      reserved: reservedCount,
+      reservedOrders,
+      recipeName: recipe.name,
+    };
   };
 
   const getEquipmentReservationConflict = (equipmentId: string, currentOrderId?: string) => {
@@ -1384,22 +1402,54 @@ export default function PedidosPage() {
                         </div>
 
                         {/* Stock indicator in edit tab */}
-                        <div className="flex items-center justify-between text-[10px] pt-1 border-t border-purple-50">
-                          <div>
-                            {isOutOfStock ? (
-                              <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
-                                ⛔ Sem estoque na câmara fria (0 disponíveis)
-                              </span>
-                            ) : isInsufficient ? (
-                              <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
-                                ⚠️ Quantidade solicitada ({item.quantity}) maior que o estoque ({stock.available} disponíveis)
-                              </span>
-                            ) : (
-                              <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
-                                ✓ {stock.available} barril(is) disponíveis em estoque
-                              </span>
-                            )}
+                        <div className="flex flex-col gap-1 text-[10px] pt-1 border-t border-purple-50">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              {isOutOfStock ? (
+                                stock.matchingTotal > 0 && stock.reserved > 0 ? (
+                                  <span className="font-black text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300 inline-flex items-center gap-1">
+                                    🔒 {stock.matchingTotal} barril(is) na câmara fria, porém 100% reservado(s)
+                                  </span>
+                                ) : (
+                                  <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
+                                    ⛔ Sem estoque na câmara fria (0 disponíveis)
+                                  </span>
+                                )
+                              ) : isInsufficient ? (
+                                <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
+                                  ⚠️ Quantidade solicitada ({item.quantity}) maior que o saldo livre ({stock.available} disponíveis)
+                                </span>
+                              ) : (
+                                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
+                                  ✓ {stock.available} barril(is) disponíveis em estoque
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-slate-400 font-medium">
+                              {stock.matchingTotal} cheios na câmara • {stock.reserved} reservados
+                            </span>
                           </div>
+
+                          {/* List of Orders Reserving This Barrel in Edit */}
+                          {stock.reserved > 0 && stock.reservedOrders.length > 0 && (
+                            <div className="p-1.5 bg-amber-50/90 rounded-lg border border-amber-200 text-amber-950 font-medium space-y-0.5">
+                              <span className="font-black text-[9px] uppercase tracking-wider text-amber-800 block">
+                                📋 Reservas ativas deste barril em outros pedidos:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {stock.reservedOrders.map((ro, rIdx) => (
+                                  <span
+                                    key={rIdx}
+                                    className="bg-white px-2 py-0.5 rounded border border-amber-200 text-[10px] text-amber-900 font-semibold inline-flex items-center gap-1"
+                                  >
+                                    <span>🔒 {ro.quantity}x no Pedido</span>
+                                    <strong className="text-slate-900 font-bold">#{ro.orderNumber}</strong>
+                                    <span className="text-slate-600">({ro.clientName})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1923,25 +1973,54 @@ export default function PedidosPage() {
                       </div>
 
                       {/* Real-Time Stock Status Badge */}
-                      <div className="flex items-center justify-between text-[10px] pt-1 border-t border-purple-50">
-                        <div>
-                          {isOutOfStock ? (
-                            <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
-                              ⛔ Sem estoque deste barril (0 disponíveis na câmara fria)
-                            </span>
-                          ) : isInsufficient ? (
-                            <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
-                              ⚠️ Quantidade solicitada ({item.quantity}) maior que o estoque ({stock.available} disponíveis)
-                            </span>
-                          ) : (
-                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
-                              ✓ {stock.available} barril(is) de {item.kegCapacity || 50}L disponíveis em estoque
-                            </span>
-                          )}
+                      <div className="flex flex-col gap-1 text-[10px] pt-1 border-t border-purple-50">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            {isOutOfStock ? (
+                              stock.matchingTotal > 0 && stock.reserved > 0 ? (
+                                <span className="font-black text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300 inline-flex items-center gap-1">
+                                  🔒 {stock.matchingTotal} barril(is) na câmara fria, porém 100% reservado(s)
+                                </span>
+                              ) : (
+                                <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
+                                  ⛔ Sem estoque na câmara fria (0 barris de {item.kegCapacity || 50}L envasados)
+                                </span>
+                              )
+                            ) : isInsufficient ? (
+                              <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
+                                ⚠️ Quantidade solicitada ({item.quantity}) maior que o saldo livre ({stock.available} disponíveis)
+                              </span>
+                            ) : (
+                              <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
+                                ✓ {stock.available} barril(is) de {item.kegCapacity || 50}L livres para venda
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-slate-400 font-medium">
+                            {stock.matchingTotal} cheios na câmara • {stock.reserved} reservados
+                          </span>
                         </div>
-                        <span className="text-slate-400 font-medium">
-                          {stock.matchingTotal} cheios / {stock.reserved} reservados
-                        </span>
+
+                        {/* List of Orders Reserving This Barrel */}
+                        {stock.reserved > 0 && stock.reservedOrders.length > 0 && (
+                          <div className="p-1.5 bg-amber-50/90 rounded-lg border border-amber-200 text-amber-950 font-medium space-y-0.5">
+                            <span className="font-black text-[9px] uppercase tracking-wider text-amber-800 block">
+                              📋 Reservas ativas deste barril em outros pedidos:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {stock.reservedOrders.map((ro, rIdx) => (
+                                <span
+                                  key={rIdx}
+                                  className="bg-white px-2 py-0.5 rounded border border-amber-200 text-[10px] text-amber-900 font-semibold inline-flex items-center gap-1"
+                                >
+                                  <span>🔒 {ro.quantity}x no Pedido</span>
+                                  <strong className="text-slate-900 font-bold">#{ro.orderNumber}</strong>
+                                  <span className="text-slate-600">({ro.clientName})</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
