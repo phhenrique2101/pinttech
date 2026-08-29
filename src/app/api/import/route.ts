@@ -156,12 +156,14 @@ export async function POST(req: NextRequest) {
         const rawStatus = cleanStr(row.status)?.toUpperCase() || 'HIGIENIZADO';
         
         let status = 'HIGIENIZADO';
-        if (rawStatus.includes('CHEIO') || rawStatus.includes('ENVASADO') || rawStatus.includes('ESTOQUE')) {
+        if (rawStatus.includes('CHEIO') || rawStatus.includes('ENVASADO') || rawStatus.includes('ESTOQUE') || rawStatus.includes('CAMARA') || rawStatus.includes('CÂMARA')) {
           status = 'EM_ESTOQUE';
-        } else if (rawStatus.includes('CLIENTE') || rawStatus.includes('COMODATO')) {
+        } else if (rawStatus.includes('CLIENTE') || rawStatus.includes('COMODATO') || rawStatus.includes('EMPRESTADO') || rawStatus.includes('NO_CLIENTE') || rawStatus.includes('ENTREGUE')) {
           status = 'NO_CLIENTE';
-        } else if (rawStatus.includes('SUJO') || rawStatus.includes('VAZIO')) {
+        } else if (rawStatus.includes('SUJO') || rawStatus.includes('VAZIO_SUJO') || rawStatus.includes('RECOLHIDO') || rawStatus.includes('LAVAR')) {
           status = 'VAZIO_SUJO';
+        } else if (rawStatus.includes('DISPONIVEL') || rawStatus.includes('DISPONÍVEL') || rawStatus.includes('LIMPO') || rawStatus.includes('HIGIENIZADO') || rawStatus.includes('LIVRE') || rawStatus.includes('PRONTO')) {
+          status = 'HIGIENIZADO';
         } else if (rawStatus.includes('MANUT')) {
           status = 'MANUTENCAO';
         } else if (rawStatus.includes('INATIV')) {
