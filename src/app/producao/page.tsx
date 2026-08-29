@@ -43,7 +43,7 @@ export default function ProducaoPage() {
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'CERVEJAS' | 'TANKS'>('CERVEJAS');
+  const [activeTab, setActiveTab] = useState<'TANKS' | 'CERVEJAS'>('TANKS');
   const [batchViewMode, setBatchViewMode] = useState<'BY_RECIPE' | 'ALL_BATCHES'>('BY_RECIPE');
   const [batchStatusFilter, setBatchStatusFilter] = useState<string>('ALL');
 
@@ -1033,17 +1033,8 @@ export default function ProducaoPage() {
         </div>
       </div>
 
-      {/* Tabs Principais (Simplificado em 2 Abas Claras e Diretas) */}
+      {/* Tabs Principais (Tanques & Fermentadores como Primeira Aba Principal) */}
       <div className="flex gap-2 p-1 bg-slate-200/80 rounded-xl w-fit">
-        <button
-          onClick={() => setActiveTab('CERVEJAS')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeTab === 'CERVEJAS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Beer className="w-4 h-4 text-purple-600" />
-          <span>Cervejas & Produção ({recipes.length} cervejas • {batches.length} lotes)</span>
-        </button>
         <button
           onClick={() => setActiveTab('TANKS')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -1052,6 +1043,15 @@ export default function ProducaoPage() {
         >
           <Cylinder className="w-4 h-4 text-blue-600" />
           <span>Tanques & Fermentadores ({tanks.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('CERVEJAS')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+            activeTab === 'CERVEJAS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Beer className="w-4 h-4 text-purple-600" />
+          <span>Cervejas & Produção ({recipes.length} cervejas • {batches.length} lotes)</span>
         </button>
       </div>
 
