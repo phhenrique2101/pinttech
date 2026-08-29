@@ -1,13 +1,32 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { getSessionFromCookies } from '@/lib/auth';
 import Navbar from '@/components/layout/Navbar';
 import Sidebar from '@/components/layout/Sidebar';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
+import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 
 export const metadata: Metadata = {
   title: 'PintTech — Gestão Inteligente para Cervejarias',
   description: 'Controle de barris por código de barras, rastreabilidade, lotes, estoque, pedidos e financeiro.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'PintTech',
+  },
+  icons: {
+    icon: '/icons/icon-192x192.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0f172a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -19,6 +38,14 @@ export default function RootLayout({
 
   return (
     <html lang="pt-BR">
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="PintTech" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+      </head>
       <body className="bg-slate-50 text-slate-900 min-h-screen flex flex-col antialiased">
         {session ? (
           <div className="flex flex-col min-h-screen">
@@ -36,6 +63,7 @@ export default function RootLayout({
             {children}
           </main>
         )}
+        <PwaInstallPrompt />
       </body>
     </html>
   );

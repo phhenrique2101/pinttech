@@ -59,6 +59,34 @@ export default function MobileMenuPage() {
           );
         })}
       </div>
+
+      {/* Card PWA / Instalação no Celular */}
+      <div className="p-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl shadow-md border border-slate-700 space-y-2.5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 font-black shadow flex-shrink-0 text-lg">
+            📱
+          </div>
+          <div>
+            <h3 className="font-bold text-xs flex items-center gap-1.5">
+              PintTech no seu Celular
+              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded">
+                App
+              </span>
+            </h3>
+            <p className="text-[11px] text-slate-300 leading-tight">
+              Instale para acessar em tela cheia com alta velocidade e leitor de QR Code.
+            </p>
+          </div>
+        </div>
+        <div className="text-[10px] text-slate-300 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700 space-y-1">
+          <p>
+            🤖 <strong>Android:</strong> Toque no menu (3 pontinhos) e em <em>&quot;Instalar Aplicativo&quot;</em>.
+          </p>
+          <p>
+            🍏 <strong>iPhone:</strong> Toque em Compartilhar (⎋) e em <em>&quot;Adicionar à Tela de Início&quot; (+)</em>.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

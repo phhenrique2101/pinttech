@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="beerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- Fundo Circular / Quadrado Arredondado -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  
+  <!-- Caneco PintTech -->
+  <g transform="translate(40, 20)" filter="url(#shadow)">
+    <!-- Asa do Caneco -->
+    <path d="M 290 180 C 370 180, 370 330, 290 330" fill="none" stroke="#f59e0b" stroke-width="36" stroke-linecap="round" />
+    
+    <!-- Corpo do Copo -->
+    <path d="M 120 160 L 140 390 C 142 415, 160 430, 185 430 L 265 430 C 290 430, 308 415, 310 390 L 330 160 Z" fill="url(#beerGrad)" stroke="#f59e0b" stroke-width="12" stroke-linejoin="round" />
+    
+    <!-- Detalhes do Copo (Faixas de Vidro) -->
+    <line x1="180" y1="180" x2="190" y2="390" stroke="#fef3c7" stroke-width="8" stroke-opacity="0.3" stroke-linecap="round" />
+    <line x1="225" y1="180" x2="225" y2="390" stroke="#fef3c7" stroke-width="8" stroke-opacity="0.3" stroke-linecap="round" />
+    <line x1="270" y1="180" x2="260" y2="390" stroke="#fef3c7" stroke-width="8" stroke-opacity="0.3" stroke-linecap="round" />
+
+    <!-- Espuma Cremosa no Topo -->
+    <path d="M 105 160 C 105 130, 135 125, 150 145 C 165 115, 210 115, 225 140 C 245 110, 295 115, 305 145 C 325 125, 345 135, 345 160 C 345 175, 335 180, 320 180 L 130 180 C 115 180, 105 175, 105 160 Z" fill="#ffffff" />
+    
+    <!-- Bolhas e Brilhos da Cerveja -->
+    <circle cx="160" cy="320" r="8" fill="#ffffff" opacity="0.6" />
+    <circle cx="250" cy="350" r="6" fill="#ffffff" opacity="0.5" />
+    <circle cx="210" cy="260" r="10" fill="#ffffff" opacity="0.7" />
+    <circle cx="270" cy="220" r="7" fill="#ffffff" opacity="0.6" />
+  </g>
+</svg>
