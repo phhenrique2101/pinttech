@@ -62,6 +62,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       measuredOg,
       measuredFg,
       measuredAbv,
+      measuredIbu,
+      measuredEbc,
+      attenuationPercent,
+      phMash,
+      phBoil,
+      phFermentationStart,
+      phFinal,
+      tempMash,
+      tempFermentation,
+      tempMaturation,
+      yeastStrain,
+      yeastGeneration,
+      yeastLot,
+      mapaRegistration,
+      commercialDenomination,
+      technicalResponsible,
+      sensoryNotes,
       packagingDate,
       fermentationStartDate,
       maturationStartDate,
@@ -76,6 +93,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       : (numCostPerLiter !== null && numCostPerLiter !== undefined && (volProd || volPlanned))
       ? numCostPerLiter * (volProd || volPlanned)
       : existing.totalCost;
+
+    const numOg = measuredOg !== undefined ? (measuredOg ? parseFloat(measuredOg) : null) : existing.measuredOg;
+    const numFg = measuredFg !== undefined ? (measuredFg ? parseFloat(measuredFg) : null) : existing.measuredFg;
+    let calcAbv = measuredAbv !== undefined ? (measuredAbv ? parseFloat(measuredAbv) : null) : existing.measuredAbv;
+    let calcAtt = attenuationPercent !== undefined ? (attenuationPercent ? parseFloat(attenuationPercent) : null) : existing.attenuationPercent;
+
+    if (numOg && numFg && numOg > 1.0 && numFg >= 0.99) {
+      if (measuredAbv === undefined && !calcAbv) calcAbv = Math.round(((numOg - numFg) * 131.25) * 10) / 10;
+      if (attenuationPercent === undefined && !calcAtt && numOg > 1.0) calcAtt = Math.round(((numOg - numFg) / (numOg - 1.0)) * 1000) / 10;
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       // If ingredients array is explicitly provided, sync them
@@ -119,9 +146,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           totalCost: numTotalCost,
           tankId: tankId !== undefined ? tankId : existing.tankId,
           notes: notes !== undefined ? notes : existing.notes,
-          measuredOg: measuredOg !== undefined ? (measuredOg ? parseFloat(measuredOg) : null) : existing.measuredOg,
-          measuredFg: measuredFg !== undefined ? (measuredFg ? parseFloat(measuredFg) : null) : existing.measuredFg,
-          measuredAbv: measuredAbv !== undefined ? (measuredAbv ? parseFloat(measuredAbv) : null) : existing.measuredAbv,
+          measuredOg: numOg,
+          measuredFg: numFg,
+          measuredAbv: calcAbv,
+          measuredIbu: measuredIbu !== undefined ? (measuredIbu ? parseInt(measuredIbu, 10) : null) : existing.measuredIbu,
+          measuredEbc: measuredEbc !== undefined ? (measuredEbc ? parseFloat(measuredEbc) : null) : existing.measuredEbc,
+          attenuationPercent: calcAtt,
+          phMash: phMash !== undefined ? (phMash ? parseFloat(phMash) : null) : existing.phMash,
+          phBoil: phBoil !== undefined ? (phBoil ? parseFloat(phBoil) : null) : existing.phBoil,
+          phFermentationStart: phFermentationStart !== undefined ? (phFermentationStart ? parseFloat(phFermentationStart) : null) : existing.phFermentationStart,
+          phFinal: phFinal !== undefined ? (phFinal ? parseFloat(phFinal) : null) : existing.phFinal,
+          tempMash: tempMash !== undefined ? (tempMash ? parseFloat(tempMash) : null) : existing.tempMash,
+          tempFermentation: tempFermentation !== undefined ? (tempFermentation ? parseFloat(tempFermentation) : null) : existing.tempFermentation,
+          tempMaturation: tempMaturation !== undefined ? (tempMaturation ? parseFloat(tempMaturation) : null) : existing.tempMaturation,
+          yeastStrain: yeastStrain !== undefined ? (yeastStrain?.trim() || null) : existing.yeastStrain,
+          yeastGeneration: yeastGeneration !== undefined ? (yeastGeneration ? parseInt(yeastGeneration, 10) : null) : existing.yeastGeneration,
+          yeastLot: yeastLot !== undefined ? (yeastLot?.trim() || null) : existing.yeastLot,
+          mapaRegistration: mapaRegistration !== undefined ? (mapaRegistration?.trim() || null) : existing.mapaRegistration,
+          commercialDenomination: commercialDenomination !== undefined ? (commercialDenomination?.trim() || null) : existing.commercialDenomination,
+          technicalResponsible: technicalResponsible !== undefined ? (technicalResponsible?.trim() || null) : existing.technicalResponsible,
+          sensoryNotes: sensoryNotes !== undefined ? (sensoryNotes?.trim() || null) : existing.sensoryNotes,
           packagingDate: packagingDate !== undefined ? (packagingDate ? new Date(packagingDate) : null) : existing.packagingDate,
           fermentationStartDate: fermentationStartDate !== undefined ? (fermentationStartDate ? new Date(fermentationStartDate) : null) : existing.fermentationStartDate,
           maturationStartDate: maturationStartDate !== undefined ? (maturationStartDate ? new Date(maturationStartDate) : null) : existing.maturationStartDate,

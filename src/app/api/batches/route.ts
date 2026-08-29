@@ -55,10 +55,29 @@ export async function POST(req: NextRequest) {
       volumePlannedLiters,
       volumeProducedLiters,
       status,
-      measuredOg,
       costPerLiter,
       totalCost,
       notes,
+      measuredOg,
+      measuredFg,
+      measuredAbv,
+      measuredIbu,
+      measuredEbc,
+      attenuationPercent,
+      phMash,
+      phBoil,
+      phFermentationStart,
+      phFinal,
+      tempMash,
+      tempFermentation,
+      tempMaturation,
+      yeastStrain,
+      yeastGeneration,
+      yeastLot,
+      mapaRegistration,
+      commercialDenomination,
+      technicalResponsible,
+      sensoryNotes,
       ingredients,
       deductStock,
     } = body;
@@ -87,6 +106,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Já existe um lote com o número ${cleanBatchNumber}` }, { status: 400 });
     }
 
+    // Auto-calculate attenuation and ABV if OG and FG are provided
+    const numOg = measuredOg ? parseFloat(measuredOg) : null;
+    const numFg = measuredFg ? parseFloat(measuredFg) : null;
+    let calcAbv = measuredAbv ? parseFloat(measuredAbv) : null;
+    let calcAtt = attenuationPercent ? parseFloat(attenuationPercent) : null;
+    if (numOg && numFg && numOg > 1.0 && numFg >= 0.99) {
+      if (!calcAbv) calcAbv = Math.round(((numOg - numFg) * 131.25) * 10) / 10;
+      if (!calcAtt && numOg > 1.0) calcAtt = Math.round(((numOg - numFg) / (numOg - 1.0)) * 1000) / 10;
+    }
+
     const batch: any = await prisma.$transaction(async (tx) => {
       const createdBatch = await tx.productionBatch.create({
         data: {
@@ -99,7 +128,26 @@ export async function POST(req: NextRequest) {
           volumeProducedLiters: volProd,
           costPerLiter: numCostPerLiter,
           totalCost: numTotalCost,
-          measuredOg: measuredOg ? parseFloat(measuredOg) : null,
+          measuredOg: numOg,
+          measuredFg: numFg,
+          measuredAbv: calcAbv,
+          measuredIbu: measuredIbu ? parseInt(measuredIbu, 10) : null,
+          measuredEbc: measuredEbc ? parseFloat(measuredEbc) : null,
+          attenuationPercent: calcAtt,
+          phMash: phMash ? parseFloat(phMash) : null,
+          phBoil: phBoil ? parseFloat(phBoil) : null,
+          phFermentationStart: phFermentationStart ? parseFloat(phFermentationStart) : null,
+          phFinal: phFinal ? parseFloat(phFinal) : null,
+          tempMash: tempMash ? parseFloat(tempMash) : null,
+          tempFermentation: tempFermentation ? parseFloat(tempFermentation) : null,
+          tempMaturation: tempMaturation ? parseFloat(tempMaturation) : null,
+          yeastStrain: yeastStrain?.trim() || null,
+          yeastGeneration: yeastGeneration ? parseInt(yeastGeneration, 10) : null,
+          yeastLot: yeastLot?.trim() || null,
+          mapaRegistration: mapaRegistration?.trim() || null,
+          commercialDenomination: commercialDenomination?.trim() || null,
+          technicalResponsible: technicalResponsible?.trim() || null,
+          sensoryNotes: sensoryNotes?.trim() || null,
           notes: notes ? String(notes).trim() : null,
           ingredients: Array.isArray(ingredients) && ingredients.length > 0
             ? {

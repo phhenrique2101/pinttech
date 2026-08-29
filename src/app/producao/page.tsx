@@ -53,6 +53,38 @@ export default function ProducaoPage() {
   const [newTankModal, setNewTankModal] = useState(false);
   const [batchTraceabilityModal, setBatchTraceabilityModal] = useState<any | null>(null);
 
+  // Batch Quality & Tank Traceability Modal State (MAPA & Acompanhamento)
+  const [batchQualityModal, setBatchQualityModal] = useState<any | null>(null);
+  const [qStatus, setQStatus] = useState('FERMENTANDO');
+  const [qVolumeProduced, setQVolumeProduced] = useState('');
+  const [qTankId, setQTankId] = useState('');
+  const [qMeasuredOg, setQMeasuredOg] = useState('');
+  const [qMeasuredFg, setQMeasuredFg] = useState('');
+  const [qMeasuredAbv, setQMeasuredAbv] = useState('');
+  const [qMeasuredIbu, setQMeasuredIbu] = useState('');
+  const [qMeasuredEbc, setQMeasuredEbc] = useState('');
+  const [qAttenuation, setQAttenuation] = useState('');
+  const [qPhMash, setQPhMash] = useState('');
+  const [qPhBoil, setQPhBoil] = useState('');
+  const [qPhFermentationStart, setQPhFermentationStart] = useState('');
+  const [qPhFinal, setQPhFinal] = useState('');
+  const [qTempMash, setQTempMash] = useState('');
+  const [qTempFermentation, setQTempFermentation] = useState('');
+  const [qTempMaturation, setQTempMaturation] = useState('');
+  const [qYeastStrain, setQYeastStrain] = useState('');
+  const [qYeastGeneration, setQYeastGeneration] = useState('1');
+  const [qYeastLot, setQYeastLot] = useState('');
+  const [qMapaRegistration, setQMapaRegistration] = useState('');
+  const [qCommercialDenomination, setQCommercialDenomination] = useState('');
+  const [qTechnicalResponsible, setQTechnicalResponsible] = useState('');
+  const [qBrewDate, setQBrewDate] = useState('');
+  const [qFermentationStartDate, setQFermentationStartDate] = useState('');
+  const [qMaturationStartDate, setQMaturationStartDate] = useState('');
+  const [qPackagingDate, setQPackagingDate] = useState('');
+  const [qSensoryNotes, setQSensoryNotes] = useState('');
+  const [qNotes, setQNotes] = useState('');
+  const [savingBatchQuality, setSavingBatchQuality] = useState(false);
+
   // Edit Tank Modal State
   const [editTankModal, setEditTankModal] = useState<any>(null);
   const [editTankName, setEditTankName] = useState('');
@@ -70,9 +102,10 @@ export default function ProducaoPage() {
   const [editTankMeasuredAbv, setEditTankMeasuredAbv] = useState('');
   const [savingTank, setSavingTank] = useState(false);
 
-  // Filters for Tanks Tab
+  // Filters for Tanks Tab & Recipes Tab
   const [tankStatusFilter, setTankStatusFilter] = useState('ALL');
   const [tankSearch, setTankSearch] = useState('');
+  const [recipeSearch, setRecipeSearch] = useState('');
 
   // New batch form
   const [recipeId, setRecipeId] = useState('');
@@ -96,6 +129,14 @@ export default function ProducaoPage() {
   const [recipeStyle, setRecipeStyle] = useState('American IPA');
   const [abv, setAbv] = useState('6.5');
   const [ibu, setIbu] = useState('55');
+  const [recipeYieldLiters, setRecipeYieldLiters] = useState('500');
+  const [recipeOg, setRecipeOg] = useState('1.054');
+  const [recipeFg, setRecipeFg] = useState('1.010');
+  const [recipeEbc, setRecipeEbc] = useState('12');
+  const [recipeTargetPhMash, setRecipeTargetPhMash] = useState('5.2');
+  const [recipeTargetPhFinal, setRecipeTargetPhFinal] = useState('4.2');
+  const [recipeMapaRegistration, setRecipeMapaRegistration] = useState('');
+  const [recipeCommercialDenomination, setRecipeCommercialDenomination] = useState('');
   const [recipeCostPerLiter, setRecipeCostPerLiter] = useState('4.80');
   const [pricingModel, setPricingModel] = useState('MANUAL'); // MANUAL, AT_COST, MARKUP, BY_STYLE
   const [profitMargin, setProfitMargin] = useState('150');
@@ -348,6 +389,66 @@ export default function ProducaoPage() {
     setRecipeCostPerLiter(costL.toFixed(2));
   };
 
+  const openNewRecipeModal = () => {
+    setEditRecipeModal(null);
+    setRecipeName('');
+    setRecipeStyle('American IPA');
+    setAbv('6.5');
+    setIbu('55');
+    setRecipeYieldLiters('500');
+    setRecipeOg('1.054');
+    setRecipeFg('1.010');
+    setRecipeEbc('12');
+    setRecipeTargetPhMash('5.2');
+    setRecipeTargetPhFinal('4.2');
+    setRecipeMapaRegistration('');
+    setRecipeCommercialDenomination('Cerveja Puro Malte Clara tipo IPA');
+    setRecipeCostPerLiter('4.80');
+    setPricingModel('MANUAL');
+    setProfitMargin('150');
+    setStyleCategory('PREMIUM');
+    setSalePricePerLiter('22.00');
+    setDescription('');
+    setRecipeIngredients([]);
+    setNewRecipeModal(true);
+  };
+
+  const openEditRecipeModal = (r: any) => {
+    setEditRecipeModal(r);
+    setRecipeName(r.name || '');
+    setRecipeStyle(r.style || '');
+    setAbv(String(r.abv || '5.0'));
+    setIbu(String(r.ibu || '20'));
+    setRecipeYieldLiters(String(r.batchYieldLiters || '500'));
+    setRecipeOg(String(r.og || '1.050'));
+    setRecipeFg(String(r.fg || '1.010'));
+    setRecipeEbc(String(r.ebc || '12'));
+    setRecipeTargetPhMash(String(r.targetPhMash || '5.2'));
+    setRecipeTargetPhFinal(String(r.targetPhFinal || '4.2'));
+    setRecipeMapaRegistration(r.mapaRegistration || '');
+    setRecipeCommercialDenomination(r.commercialDenomination || '');
+    setRecipeCostPerLiter(String(r.costPerLiter || '4.50'));
+    setPricingModel(r.pricingModel || 'MANUAL');
+    setProfitMargin(String(r.profitMarginPercent || '100'));
+    setStyleCategory(r.styleCategory || 'STANDARD');
+    setSalePricePerLiter(String(r.salePricePerLiter || r.suggestedPricePerLiter || '18.00'));
+    setDescription(r.description || '');
+    setRecipeIngredients(
+      (r.ingredients || []).map((ing: any) => ({
+        id: ing.id,
+        inventoryItemId: ing.inventoryItemId || '',
+        name: ing.name,
+        category: ing.category,
+        amount: ing.amount,
+        unit: ing.unit,
+        stage: ing.stage || 'MOSTURA',
+        costPerUnit: ing.costPerUnit || 0,
+        notes: ing.notes || '',
+      }))
+    );
+    setNewRecipeModal(false);
+  };
+
   const handleCreateRecipe = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -357,8 +458,16 @@ export default function ProducaoPage() {
         body: JSON.stringify({
           name: recipeName,
           style: recipeStyle,
-          abv,
-          ibu,
+          abv: abv ? parseFloat(abv) : null,
+          ibu: ibu ? parseInt(ibu, 10) : null,
+          og: recipeOg ? parseFloat(recipeOg) : null,
+          fg: recipeFg ? parseFloat(recipeFg) : null,
+          ebc: recipeEbc ? parseFloat(recipeEbc) : null,
+          batchYieldLiters: recipeYieldLiters ? parseFloat(recipeYieldLiters) : 500,
+          targetPhMash: recipeTargetPhMash ? parseFloat(recipeTargetPhMash) : null,
+          targetPhFinal: recipeTargetPhFinal ? parseFloat(recipeTargetPhFinal) : null,
+          mapaRegistration: recipeMapaRegistration,
+          commercialDenomination: recipeCommercialDenomination,
           costPerLiter: recipeCostPerLiter,
           salePricePerLiter,
           pricingModel,
@@ -393,8 +502,16 @@ export default function ProducaoPage() {
         body: JSON.stringify({
           name: recipeName,
           style: recipeStyle,
-          abv,
-          ibu,
+          abv: abv ? parseFloat(abv) : null,
+          ibu: ibu ? parseInt(ibu, 10) : null,
+          og: recipeOg ? parseFloat(recipeOg) : null,
+          fg: recipeFg ? parseFloat(recipeFg) : null,
+          ebc: recipeEbc ? parseFloat(recipeEbc) : null,
+          batchYieldLiters: recipeYieldLiters ? parseFloat(recipeYieldLiters) : 500,
+          targetPhMash: recipeTargetPhMash ? parseFloat(recipeTargetPhMash) : null,
+          targetPhFinal: recipeTargetPhFinal ? parseFloat(recipeTargetPhFinal) : null,
+          mapaRegistration: recipeMapaRegistration,
+          commercialDenomination: recipeCommercialDenomination,
           costPerLiter: recipeCostPerLiter,
           salePricePerLiter,
           pricingModel,
@@ -417,31 +534,114 @@ export default function ProducaoPage() {
     }
   };
 
-  const openEditRecipeModal = (r: any) => {
-    setEditRecipeModal(r);
-    setRecipeName(r.name || '');
-    setRecipeStyle(r.style || '');
-    setAbv(String(r.abv || '5.0'));
-    setIbu(String(r.ibu || '20'));
-    setRecipeCostPerLiter(String(r.costPerLiter || '4.50'));
-    setPricingModel(r.pricingModel || 'MANUAL');
-    setProfitMargin(String(r.profitMarginPercent || '100'));
-    setStyleCategory(r.styleCategory || 'STANDARD');
-    setSalePricePerLiter(String(r.salePricePerLiter || r.suggestedPricePerLiter || '18.00'));
-    setDescription(r.description || '');
-    setRecipeIngredients(
-      (r.ingredients || []).map((ing: any) => ({
-        id: ing.id,
-        inventoryItemId: ing.inventoryItemId || '',
-        name: ing.name,
-        category: ing.category,
-        amount: ing.amount,
-        unit: ing.unit,
-        stage: ing.stage || 'MOSTURA',
-        costPerUnit: ing.costPerUnit || 0,
-        notes: ing.notes || '',
-      }))
-    );
+  const handleDeleteRecipe = async (id: string, name: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a receita "${name}"?`)) return;
+    try {
+      const res = await fetch(`/api/recipes/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadData();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao excluir receita');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const openBatchQualityModal = (batch: any) => {
+    if (!batch) return;
+    setBatchQualityModal(batch);
+    setQStatus(batch.status || 'FERMENTANDO');
+    setQVolumeProduced(String(batch.volumeProducedLiters || batch.volumePlannedLiters || ''));
+    setQTankId(batch.tankId || '');
+    setQMeasuredOg(batch.measuredOg ? String(batch.measuredOg) : (batch.recipe?.og ? String(batch.recipe.og) : ''));
+    setQMeasuredFg(batch.measuredFg ? String(batch.measuredFg) : (batch.recipe?.fg ? String(batch.recipe.fg) : ''));
+    setQMeasuredAbv(batch.measuredAbv ? String(batch.measuredAbv) : (batch.recipe?.abv ? String(batch.recipe.abv) : ''));
+    setQMeasuredIbu(batch.measuredIbu ? String(batch.measuredIbu) : (batch.recipe?.ibu ? String(batch.recipe.ibu) : ''));
+    setQMeasuredEbc(batch.measuredEbc ? String(batch.measuredEbc) : (batch.recipe?.ebc ? String(batch.recipe.ebc) : ''));
+    setQAttenuation(batch.attenuationPercent ? String(batch.attenuationPercent) : '');
+    setQPhMash(batch.phMash ? String(batch.phMash) : (batch.recipe?.targetPhMash ? String(batch.recipe.targetPhMash) : '5.2'));
+    setQPhBoil(batch.phBoil ? String(batch.phBoil) : '5.1');
+    setQPhFermentationStart(batch.phFermentationStart ? String(batch.phFermentationStart) : '5.0');
+    setQPhFinal(batch.phFinal ? String(batch.phFinal) : (batch.recipe?.targetPhFinal ? String(batch.recipe.targetPhFinal) : '4.2'));
+    setQTempMash(batch.tempMash ? String(batch.tempMash) : '66.0');
+    setQTempFermentation(batch.tempFermentation ? String(batch.tempFermentation) : '18.0');
+    setQTempMaturation(batch.tempMaturation ? String(batch.tempMaturation) : '0.0');
+    setQYeastStrain(batch.yeastStrain || '');
+    setQYeastGeneration(batch.yeastGeneration ? String(batch.yeastGeneration) : '1');
+    setQYeastLot(batch.yeastLot || '');
+    setQMapaRegistration(batch.mapaRegistration || batch.recipe?.mapaRegistration || '');
+    setQCommercialDenomination(batch.commercialDenomination || batch.recipe?.commercialDenomination || '');
+    setQTechnicalResponsible(batch.technicalResponsible || '');
+    setQBrewDate(batch.brewDate ? new Date(batch.brewDate).toISOString().split('T')[0] : '');
+    setQFermentationStartDate(batch.fermentationStartDate ? new Date(batch.fermentationStartDate).toISOString().split('T')[0] : '');
+    setQMaturationStartDate(batch.maturationStartDate ? new Date(batch.maturationStartDate).toISOString().split('T')[0] : '');
+    setQPackagingDate(batch.packagingDate ? new Date(batch.packagingDate).toISOString().split('T')[0] : '');
+    setQSensoryNotes(batch.sensoryNotes || '');
+    setQNotes(batch.notes || '');
+  };
+
+  const handleOgFgChange = (newOg: string, newFg: string) => {
+    setQMeasuredOg(newOg);
+    setQMeasuredFg(newFg);
+    const ogNum = parseFloat(newOg);
+    const fgNum = parseFloat(newFg);
+    if (ogNum && fgNum && ogNum > 1.0 && fgNum >= 0.99) {
+      const calcAbv = Math.round(((ogNum - fgNum) * 131.25) * 10) / 10;
+      const calcAtt = Math.round(((ogNum - fgNum) / (ogNum - 1.0)) * 1000) / 10;
+      setQMeasuredAbv(String(calcAbv));
+      setQAttenuation(String(calcAtt));
+    }
+  };
+
+  const handleSaveBatchQuality = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!batchQualityModal) return;
+    setSavingBatchQuality(true);
+    try {
+      const res = await fetch(`/api/batches/${batchQualityModal.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: qStatus,
+          volumeProducedLiters: qVolumeProduced ? parseFloat(qVolumeProduced) : undefined,
+          tankId: qTankId || null,
+          measuredOg: qMeasuredOg ? parseFloat(qMeasuredOg) : null,
+          measuredFg: qMeasuredFg ? parseFloat(qMeasuredFg) : null,
+          measuredAbv: qMeasuredAbv ? parseFloat(qMeasuredAbv) : null,
+          measuredIbu: qMeasuredIbu ? parseInt(qMeasuredIbu, 10) : null,
+          measuredEbc: qMeasuredEbc ? parseFloat(qMeasuredEbc) : null,
+          attenuationPercent: qAttenuation ? parseFloat(qAttenuation) : null,
+          phMash: qPhMash ? parseFloat(qPhMash) : null,
+          phBoil: qPhBoil ? parseFloat(qPhBoil) : null,
+          phFermentationStart: qPhFermentationStart ? parseFloat(qPhFermentationStart) : null,
+          phFinal: qPhFinal ? parseFloat(qPhFinal) : null,
+          tempMash: qTempMash ? parseFloat(qTempMash) : null,
+          tempFermentation: qTempFermentation ? parseFloat(qTempFermentation) : null,
+          tempMaturation: qTempMaturation ? parseFloat(qTempMaturation) : null,
+          yeastStrain: qYeastStrain,
+          yeastGeneration: qYeastGeneration ? parseInt(qYeastGeneration, 10) : null,
+          yeastLot: qYeastLot,
+          mapaRegistration: qMapaRegistration,
+          commercialDenomination: qCommercialDenomination,
+          technicalResponsible: qTechnicalResponsible,
+          sensoryNotes: qSensoryNotes,
+          notes: qNotes,
+          fermentationStartDate: qFermentationStartDate || null,
+          maturationStartDate: qMaturationStartDate || null,
+          packagingDate: qPackagingDate || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar ficha de controle');
+      setBatchQualityModal(null);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar acompanhamento');
+    } finally {
+      setSavingBatchQuality(false);
+    }
   };
 
   const handleCreateTank = async (e: React.FormEvent) => {
@@ -763,15 +963,23 @@ export default function ProducaoPage() {
                         </span>
                       </div>
 
-                      {/* Botão Ficha de Rastreabilidade */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      {/* Botões Ficha de Rastreabilidade e Ficha MAPA */}
+                      <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openBatchQualityModal(batch)}
+                          className="w-full py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                        >
+                          <Activity className="w-4 h-4" />
+                          <span>Ficha de Acompanhamento & MAPA</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setBatchTraceabilityModal(batch)}
-                          className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                          className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
                         >
                           <ShieldCheck className="w-4 h-4 text-purple-600" />
-                          <span>Ficha de Rastreabilidade ({batch.ingredients?.length || 0} Insumos)</span>
+                          <span>Rastreabilidade de Insumos ({batch.ingredients?.length || 0})</span>
                         </button>
                       </div>
                     </div>
@@ -1135,14 +1343,39 @@ export default function ProducaoPage() {
                               </div>
                             </div>
 
-                            {/* Measured Parameters */}
-                            {(activeBatch.measuredOg || activeBatch.measuredFg || activeBatch.measuredAbv) && (
-                              <div className="flex items-center gap-2 pt-2 border-t border-purple-200/60 text-[10px] font-bold text-purple-900 flex-wrap">
-                                {activeBatch.measuredOg && <span>OG: {activeBatch.measuredOg}</span>}
-                                {activeBatch.measuredFg && <span>• FG: {activeBatch.measuredFg}</span>}
-                                {activeBatch.measuredAbv && <span>• {activeBatch.measuredAbv}% ABV</span>}
+                            {/* Parâmetros Físico-Químicos & Qualidade */}
+                            <div className="pt-2 border-t border-purple-200/60 space-y-1 text-[10px] font-bold text-purple-900">
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <span>OG: <strong>{activeBatch.measuredOg || '-'}</strong></span>
+                                <span>FG: <strong>{activeBatch.measuredFg || '-'}</strong></span>
+                                <span>ABV: <strong>{activeBatch.measuredAbv ? `${activeBatch.measuredAbv}%` : '-'}</strong></span>
+                                {activeBatch.attenuationPercent && (
+                                  <span>Aten: <strong>{activeBatch.attenuationPercent}%</strong></span>
+                                )}
+                                {activeBatch.measuredIbu && (
+                                  <span>IBU: <strong>{activeBatch.measuredIbu}</strong></span>
+                                )}
                               </div>
-                            )}
+
+                              {/* Indicadores de pH */}
+                              {(activeBatch.phMash || activeBatch.phFermentationStart || activeBatch.phFinal) && (
+                                <div className="flex items-center gap-1.5 pt-1 border-t border-purple-200/40 text-[9px] text-purple-800 flex-wrap">
+                                  {activeBatch.phMash && <span className="bg-white/80 px-1 py-0.5 rounded border border-purple-200">pH Mostura: {activeBatch.phMash}</span>}
+                                  {activeBatch.phFermentationStart && <span className="bg-white/80 px-1 py-0.5 rounded border border-purple-200">pH Início: {activeBatch.phFermentationStart}</span>}
+                                  {activeBatch.phFinal && <span className="bg-emerald-100 text-emerald-900 px-1 py-0.5 rounded border border-emerald-300 font-black">pH Pronto: {activeBatch.phFinal}</span>}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Botão Ficha de Acompanhamento & MAPA */}
+                            <button
+                              type="button"
+                              onClick={() => openBatchQualityModal(activeBatch)}
+                              className="w-full py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[11px] font-black flex items-center justify-center gap-1 shadow-2xs transition-all"
+                            >
+                              <Activity className="w-3.5 h-3.5" />
+                              <span>Ficha MAPA & Acompanhamento</span>
+                            </button>
                           </div>
                         ) : isCleaning ? (
                           <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs space-y-1 text-blue-900">
@@ -1269,138 +1502,246 @@ export default function ProducaoPage() {
       })()}
 
       {/* Tab: Recipes & Pricing Table */}
-      {activeTab === 'RECIPES' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {recipes.map((recipe) => {
-            const saleL = recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 18.0;
-            const costL = recipe.costPerLiter || 0;
-            const modelLabel =
-              recipe.pricingModel === 'AT_COST'
-                ? 'Preço de Custo'
-                : recipe.pricingModel === 'MARKUP'
-                ? `Custo + ${recipe.profitMarginPercent || 100}%`
-                : recipe.pricingModel === 'BY_STYLE'
-                ? `Tabela (${recipe.styleCategory || 'Estilo'})`
-                : 'Preço Manual';
+      {activeTab === 'RECIPES' && (() => {
+        const filteredRecipes = recipes.filter((r) => {
+          if (!recipeSearch) return true;
+          const s = recipeSearch.toLowerCase();
+          return (
+            r.name.toLowerCase().includes(s) ||
+            r.style.toLowerCase().includes(s) ||
+            (r.mapaRegistration && r.mapaRegistration.toLowerCase().includes(s)) ||
+            (r.commercialDenomination && r.commercialDenomination.toLowerCase().includes(s))
+          );
+        });
 
-            const maltCount = (recipe.ingredients || []).filter((i: any) => i.category === 'MALTE').length;
-            const hopCount = (recipe.ingredients || []).filter((i: any) => i.category === 'LUPULO').length;
-            const yeastCount = (recipe.ingredients || []).filter((i: any) => i.category === 'LEVEDURA').length;
-            const otherCount = (recipe.ingredients || []).filter((i: any) => !['MALTE', 'LUPULO', 'LEVEDURA'].includes(i.category)).length;
-
-            return (
-              <div
-                key={recipe.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-black text-slate-900 text-base">{recipe.name}</h3>
-                      <p className="text-xs font-bold text-purple-700">{recipe.style}</p>
-                    </div>
-                    <button
-                      onClick={() => openEditRecipeModal(recipe)}
-                      className="p-1.5 text-slate-400 hover:text-purple-600 rounded-lg hover:bg-purple-50"
-                      title="Editar Receita & Insumos"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Pricing Badges */}
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200">
-                      {modelLabel}
-                    </span>
-                    {costL > 0 && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                        Custo: {formatCurrency(costL)}/L
-                      </span>
-                    )}
-                    <span className="text-[11px] font-black px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      Venda: {formatCurrency(saleL)}/L
-                    </span>
-                  </div>
-
-                  {/* Insumos da Receita Badge & Summary */}
-                  <div className="mt-3 p-3 bg-purple-50/50 border border-purple-200 rounded-xl space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5 text-purple-700" />
-                        Insumos da Receita:
-                      </span>
-                      <span className="text-[10px] font-bold text-purple-700 bg-white px-2 py-0.5 rounded-md border border-purple-200">
-                        {recipe.ingredients?.length || 0} cadastrados
-                      </span>
-                    </div>
-
-                    {(recipe.ingredients && recipe.ingredients.length > 0) ? (
-                      <div className="space-y-1 pt-1 border-t border-purple-100 text-[11px]">
-                        {recipe.ingredients.slice(0, 3).map((ing: any, iIdx: number) => (
-                          <div key={iIdx} className="flex items-center justify-between text-slate-700">
-                            <span className="truncate font-semibold">• {ing.name} ({ing.stage})</span>
-                            <span className="font-bold text-slate-900">{ing.amount} {ing.unit}</span>
-                          </div>
-                        ))}
-                        {recipe.ingredients.length > 3 && (
-                          <span className="text-[10px] text-purple-700 font-bold block text-right">
-                            + {recipe.ingredients.length - 3} outros insumos
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 italic block">
-                        Clique em editar para cadastrar os insumos desta receita.
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Calculated Keg Pricing Table */}
-                  <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                      Tabela de Preços por Barril:
-                    </span>
-                    <div className="grid grid-cols-4 gap-1.5 text-center">
-                      <div className="p-1.5 bg-white rounded-lg border border-slate-200">
-                        <span className="text-[9px] font-bold text-slate-400 block">10 Litros</span>
-                        <span className="text-xs font-black text-slate-900">{formatCurrency(saleL * 10)}</span>
-                      </div>
-                      <div className="p-1.5 bg-white rounded-lg border border-slate-200">
-                        <span className="text-[9px] font-bold text-slate-400 block">20 Litros</span>
-                        <span className="text-xs font-black text-slate-900">{formatCurrency(saleL * 20)}</span>
-                      </div>
-                      <div className="p-1.5 bg-white rounded-lg border border-slate-200">
-                        <span className="text-[9px] font-bold text-slate-400 block">30 Litros</span>
-                        <span className="text-xs font-black text-slate-900">{formatCurrency(saleL * 30)}</span>
-                      </div>
-                      <div className="p-1.5 bg-amber-50 rounded-lg border border-amber-300">
-                        <span className="text-[9px] font-bold text-amber-700 block">50 Litros</span>
-                        <span className="text-xs font-black text-amber-900">{formatCurrency(saleL * 50)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100 text-center text-xs">
-                    <div className="p-2 bg-slate-50 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold">ABV</span>
-                      <span className="font-black text-slate-800">{recipe.abv || '-'}%</span>
-                    </div>
-                    <div className="p-2 bg-slate-50 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold">IBU</span>
-                      <span className="font-black text-slate-800">{recipe.ibu || '-'}</span>
-                    </div>
-                    <div className="p-2 bg-slate-50 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold">Lotes</span>
-                      <span className="font-black text-purple-700">{recipe._count?.batches || 0}</span>
-                    </div>
-                  </div>
-                </div>
+        return (
+          <div className="space-y-6">
+            {/* Toolbar de Receitas */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs">
+              <div className="flex items-center gap-2 flex-1 max-w-md bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Buscar receita por nome, estilo ou registro MAPA..."
+                  value={recipeSearch}
+                  onChange={(e) => setRecipeSearch(e.target.value)}
+                  className="bg-transparent w-full text-xs font-bold text-slate-800 focus:outline-none"
+                />
+                {recipeSearch && (
+                  <button onClick={() => setRecipeSearch('')} className="text-slate-400 hover:text-slate-600">
+                    ✕
+                  </button>
+                )}
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-900 font-bold rounded-xl flex items-center gap-1.5">
+                  <Beer className="w-4 h-4 text-purple-700" />
+                  <span>{recipes.length} Receitas Ativas</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={openNewRecipeModal}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nova Receita</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Grid de Receitas */}
+            {filteredRecipes.length === 0 ? (
+              <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
+                <Beer className="w-12 h-12 mx-auto text-slate-300" />
+                <p className="font-bold">Nenhuma receita encontrada.</p>
+                <button
+                  onClick={openNewRecipeModal}
+                  className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-sm"
+                >
+                  + Criar Primeira Receita
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredRecipes.map((recipe) => {
+                  const saleL = recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 18.0;
+                  const costL = recipe.costPerLiter || 0;
+                  const modelLabel =
+                    recipe.pricingModel === 'AT_COST'
+                      ? 'Preço de Custo'
+                      : recipe.pricingModel === 'MARKUP'
+                      ? `Custo + ${recipe.profitMarginPercent || 100}%`
+                      : recipe.pricingModel === 'BY_STYLE'
+                      ? `Tabela (${recipe.styleCategory || 'Estilo'})`
+                      : 'Preço Manual';
+
+                  return (
+                    <div
+                      key={recipe.id}
+                      className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all flex flex-col justify-between gap-4"
+                    >
+                      <div className="space-y-3">
+                        {/* Header da Receita */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                                {recipe.styleCategory || 'STANDARD'}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                Rendimento: {recipe.batchYieldLiters || 500}L
+                              </span>
+                            </div>
+                            <h3 className="font-black text-slate-900 text-lg mt-1 leading-tight">{recipe.name}</h3>
+                            <p className="text-xs font-bold text-purple-700">{recipe.style}</p>
+                            {recipe.commercialDenomination && (
+                              <span className="text-[11px] text-slate-500 italic block mt-0.5">
+                                &quot;{recipe.commercialDenomination}&quot;
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => openEditRecipeModal(recipe)}
+                              className="p-1.5 text-slate-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
+                              title="Editar Receita & Insumos"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRecipe(recipe.id, recipe.name)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                              title="Excluir Receita"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Badges de Registro MAPA */}
+                        {recipe.mapaRegistration ? (
+                          <div className="p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-emerald-900 flex items-center gap-1">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                              Registro MAPA:
+                            </span>
+                            <span className="font-mono font-black text-emerald-950">{recipe.mapaRegistration}</span>
+                          </div>
+                        ) : (
+                          <div className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-[10px] text-slate-400">
+                            <span>Registro MAPA não preenchido</span>
+                            <button
+                              onClick={() => openEditRecipeModal(recipe)}
+                              className="text-purple-700 font-bold hover:underline"
+                            >
+                              + Adicionar
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Metas Físico-Químicas da Receita */}
+                        <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
+                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[9px] text-slate-400 block font-bold uppercase">ABV Alvo</span>
+                            <span className="font-black text-slate-900">{recipe.abv ? `${recipe.abv}%` : '-'}</span>
+                          </div>
+                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[9px] text-slate-400 block font-bold uppercase">IBU</span>
+                            <span className="font-black text-slate-900">{recipe.ibu || '-'}</span>
+                          </div>
+                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[9px] text-slate-400 block font-bold uppercase">OG Alvo</span>
+                            <span className="font-black text-purple-900">{recipe.og || '-'}</span>
+                          </div>
+                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[9px] text-slate-400 block font-bold uppercase">FG Alvo</span>
+                            <span className="font-black text-purple-900">{recipe.fg || '-'}</span>
+                          </div>
+                        </div>
+
+                        {/* Parâmetros de pH Alvo */}
+                        {(recipe.targetPhMash || recipe.targetPhFinal) && (
+                          <div className="p-2 bg-purple-50/50 border border-purple-200 rounded-xl flex items-center justify-between text-[11px] text-purple-900">
+                            <span>pH Mostura Alvo: <strong>{recipe.targetPhMash || '-'}</strong></span>
+                            <span>•</span>
+                            <span>pH Cerveja Pronta: <strong>{recipe.targetPhFinal || '-'}</strong></span>
+                          </div>
+                        )}
+
+                        {/* Insumos da Receita */}
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                              <Layers className="w-3.5 h-3.5 text-purple-600" />
+                              Insumos da Receita ({recipe.ingredients?.length || 0}):
+                            </span>
+                            <button
+                              onClick={() => openEditRecipeModal(recipe)}
+                              className="text-[10px] text-purple-700 font-bold hover:underline"
+                            >
+                              Editar Insumos
+                            </button>
+                          </div>
+
+                          {(recipe.ingredients && recipe.ingredients.length > 0) ? (
+                            <div className="space-y-1 pt-1 border-t border-slate-200 text-[11px] max-h-32 overflow-y-auto">
+                              {recipe.ingredients.map((ing: any, iIdx: number) => (
+                                <div key={iIdx} className="flex items-center justify-between text-slate-700 bg-white p-1 rounded border border-slate-100">
+                                  <span className="truncate font-semibold">• {ing.name} <span className="text-[10px] text-slate-400">({ing.stage})</span></span>
+                                  <span className="font-bold text-slate-900 flex-shrink-0 ml-1">{ing.amount} {ing.unit}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic block">
+                              Nenhum insumo configurado. Clique em &quot;Editar Insumos&quot; para adicionar.
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Tabela de Preços e Margens */}
+                        <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-xl space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase text-purple-900">{modelLabel}</span>
+                            <span className="text-xs font-black text-emerald-800">
+                              Venda: {formatCurrency(saleL)}/L
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-purple-100">
+                            <span>Custo Estimado: <strong>{formatCurrency(costL)}/L</strong></span>
+                            <span className="text-emerald-700 font-black">
+                              Lucro: +{formatCurrency(Math.max(0, saleL - costL))}/L
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Footer Actions */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecipeId(recipe.id);
+                            populateBatchIngredientsFromRecipe(recipe, 500);
+                            setNewBatchModal(true);
+                          }}
+                          className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Iniciar Brassagem desta Receita</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Modal: Nova Brassagem com Rastreabilidade de Insumos */}
       {newBatchModal && (
@@ -1792,9 +2133,9 @@ export default function ProducaoPage() {
             </div>
 
             <form onSubmit={editRecipeModal ? handleUpdateRecipe : handleCreateRecipe} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nome da Cerveja</label>
+                  <label className="block font-bold text-slate-700 mb-1">Nome da Cerveja *</label>
                   <input
                     type="text"
                     required
@@ -1806,15 +2147,151 @@ export default function ProducaoPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Estilo Cervejeiro</label>
+                  <label className="block font-bold text-slate-700 mb-1">Estilo Cervejeiro *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ex: American IPA"
                     value={recipeStyle}
                     onChange={(e) => setRecipeStyle(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
                   />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Rendimento Padrão (L)</label>
+                  <input
+                    type="number"
+                    value={recipeYieldLiters}
+                    onChange={(e) => setRecipeYieldLiters(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-purple-900"
+                    placeholder="Ex: 500"
+                  />
+                </div>
+              </div>
+
+              {/* Seção MAPA & Denominação Legal */}
+              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2.5">
+                <div className="flex items-center gap-1.5 text-emerald-950 font-black text-xs">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                  <span>Conformidade & Registro MAPA do Produto</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Nº Registro MAPA do Rótulo</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: MAPA RS 001234-5.000001"
+                      value={recipeMapaRegistration}
+                      onChange={(e) => setRecipeMapaRegistration(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl font-mono font-bold text-emerald-950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Denominação Comercial MAPA</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Cerveja Puro Malte Clara tipo IPA"
+                      value={recipeCommercialDenomination}
+                      onChange={(e) => setRecipeCommercialDenomination(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Metas Físico-Químicas & pH Alvo */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">
+                  Metas Físico-Químicas & pH Alvo da Receita:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">OG Alvo (Dens. Inicial)</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      placeholder="1.054"
+                      value={recipeOg}
+                      onChange={(e) => setRecipeOg(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">FG Alvo (Dens. Final)</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      placeholder="1.010"
+                      value={recipeFg}
+                      onChange={(e) => setRecipeFg(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">ABV Alvo (% Álcool)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="6.5"
+                      value={abv}
+                      onChange={(e) => setAbv(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-emerald-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">IBU (Amargor)</label>
+                    <input
+                      type="number"
+                      placeholder="55"
+                      value={ibu}
+                      onChange={(e) => setIbu(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-200">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Cor Alvo (EBC / SRM)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="12.0"
+                      value={recipeEbc}
+                      onChange={(e) => setRecipeEbc(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">pH Alvo Mostura (Inicial)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      placeholder="5.20"
+                      value={recipeTargetPhMash}
+                      onChange={(e) => setRecipeTargetPhMash(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-purple-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">pH Alvo Cerveja Pronta</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      placeholder="4.20"
+                      value={recipeTargetPhFinal}
+                      onChange={(e) => setRecipeTargetPhFinal(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-purple-900"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1830,7 +2307,7 @@ export default function ProducaoPage() {
                       type="button"
                       onClick={autoCalculateRecipeCostFromIngredients}
                       className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs"
-                      title="Calcular custo por litro considerando brassagem de 500L padrão"
+                      title="Calcular custo por litro considerando o rendimento padrão"
                     >
                       <Zap className="w-3 h-3" />
                       <span>Calcular Custo/L</span>
@@ -1871,7 +2348,7 @@ export default function ProducaoPage() {
                           </div>
 
                           <div>
-                            <span className="text-[10px] text-slate-400 block font-bold">Qtd na Brassagem (500L)</span>
+                            <span className="text-[10px] text-slate-400 block font-bold">Qtd na Brassagem ({recipeYieldLiters}L)</span>
                             <div className="flex gap-1">
                               <input
                                 type="number"
@@ -2033,27 +2510,15 @@ export default function ProducaoPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">ABV (% Álcool)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={abv}
-                    onChange={(e) => setAbv(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">IBU (Amargor)</label>
-                  <input
-                    type="number"
-                    value={ibu}
-                    onChange={(e) => setIbu(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                  />
-                </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Notas do Cervejeiro / Perfil Sensorial</label>
+                <textarea
+                  rows={2}
+                  placeholder="Instruções de brassagem, perfil de água, maltes especiais..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -2069,9 +2534,9 @@ export default function ProducaoPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-sm"
                 >
-                  {editRecipeModal ? 'Salvar Alterações' : 'Salvar Receita & Insumos'}
+                  {editRecipeModal ? 'Salvar Alterações da Receita' : 'Cadastrar Receita'}
                 </button>
               </div>
             </form>
@@ -2516,6 +2981,516 @@ export default function ProducaoPage() {
                   )}
                   <span>Salvar Alterações</span>
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: FICHA DE ACOMPANHAMENTO DE PROCESSO, QUALIDADE & MAPA */}
+      {batchQualityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-5 print:p-0 print:border-none print:shadow-none">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 print:border-slate-300">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 border border-purple-200 text-purple-800 flex items-center justify-center print:hidden">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                    <span>Ficha de Acompanhamento & MAPA</span>
+                    <span className="font-mono text-xs px-2.5 py-0.5 bg-purple-100 text-purple-900 rounded-full font-black">
+                      Lote #{batchQualityModal.batchNumber}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 font-bold">
+                    🍺 {batchQualityModal.recipe?.name} ({batchQualityModal.recipe?.style}) • Tanque {batchQualityModal.tank?.name || 'Não alocado'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 print:hidden">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
+                >
+                  <Printer className="w-4 h-4 text-purple-700" />
+                  <span>Imprimir Ficha MAPA</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchQualityModal(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveBatchQuality} className="space-y-4 text-xs">
+              {/* Seção 1: Status & Dados Gerais MAPA */}
+              <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-purple-700" />
+                  1. Dados Gerais da Brassagem & Registro MAPA
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Status da Produção *</label>
+                    <select
+                      value={qStatus}
+                      onChange={(e) => setQStatus(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold text-purple-950"
+                    >
+                      <option value="BRASSAGEM">BRASSAGEM</option>
+                      <option value="FERMENTANDO">FERMENTANDO</option>
+                      <option value="MATURANDO">MATURANDO</option>
+                      <option value="PRONTO_ENVASE">PRONTO P/ ENVASE</option>
+                      <option value="ENVASADO">ENVASADO</option>
+                      <option value="FINALIZADO">FINALIZADO (Liberar Tanque)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Tanque / Fermentador</label>
+                    <select
+                      value={qTankId}
+                      onChange={(e) => setQTankId(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold text-slate-800"
+                    >
+                      <option value="">-- Sem Tanque --</option>
+                      {tanks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} ({t.capacityLiters}L - {t.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Volume Real Produzido (L)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={qVolumeProduced}
+                      onChange={(e) => setQVolumeProduced(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-black text-slate-900"
+                      placeholder="Ex: 500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-purple-100">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Nº Registro MAPA do Rótulo</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: RS 001234-5.000001"
+                      value={qMapaRegistration}
+                      onChange={(e) => setQMapaRegistration(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-mono font-bold text-purple-950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Denominação Comercial MAPA</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Cerveja Puro Malte Clara tipo IPA"
+                      value={qCommercialDenomination}
+                      onChange={(e) => setQCommercialDenomination(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Responsável Técnico (CRQ / Nome)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Pedro Cardoso - CRQ 05102938"
+                      value={qTechnicalResponsible}
+                      onChange={(e) => setQTechnicalResponsible(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-medium text-slate-800"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 2: Parâmetros Físico-Químicos & Cálculo de ABV / Atenuação */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-purple-600" />
+                    2. Parâmetros Físico-Químicos & Densidades
+                  </span>
+                  <span className="text-[10px] text-purple-800 font-bold bg-purple-100 px-2 py-0.5 rounded-md">
+                    Cálculo Automático de ABV & Atenuação
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">OG Medida (Dens. Inicial)</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      placeholder="1.054"
+                      value={qMeasuredOg}
+                      onChange={(e) => handleOgFgChange(e.target.value, qMeasuredFg)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-purple-950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">FG Medida (Dens. Final)</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      placeholder="1.010"
+                      value={qMeasuredFg}
+                      onChange={(e) => handleOgFgChange(qMeasuredOg, e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-purple-950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Teor Alcoólico Real (ABV % v/v)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="5.8"
+                      value={qMeasuredAbv}
+                      onChange={(e) => setQMeasuredAbv(e.target.value)}
+                      className="w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-xl font-black text-emerald-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Atenuação Aparente (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="81.5"
+                      value={qAttenuation}
+                      onChange={(e) => setQAttenuation(e.target.value)}
+                      className="w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-xl font-black text-emerald-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-200">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">IBU Real Medido (Amargor)</label>
+                    <input
+                      type="number"
+                      placeholder="55"
+                      value={qMeasuredIbu}
+                      onChange={(e) => setQMeasuredIbu(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">EBC Real Medido (Cor SRM/EBC)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="12.0"
+                      value={qMeasuredEbc}
+                      onChange={(e) => setQMeasuredEbc(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 3: Controle Completo de pH do Processo */}
+              <div className="p-4 bg-purple-50/40 border border-purple-200 rounded-2xl space-y-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-700" />
+                  3. Curva de Controle de pH por Etapa de Fabricação
+                </span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-2.5 bg-white rounded-xl border border-purple-200">
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">pH Mostura (Inicial)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="5.20 - 5.40"
+                      value={qPhMash}
+                      onChange={(e) => setQPhMash(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-purple-900"
+                    />
+                    <span className="text-[9px] text-slate-400 block mt-1">Alvo ideal: 5.2 - 5.4</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-purple-200">
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">pH Pós-Fervura / Whirlpool</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="5.00 - 5.20"
+                      value={qPhBoil}
+                      onChange={(e) => setQPhBoil(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-purple-900"
+                    />
+                    <span className="text-[9px] text-slate-400 block mt-1">Alvo ideal: 5.0 - 5.2</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-purple-200">
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">pH Início Fermentação</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="4.90 - 5.10"
+                      value={qPhFermentationStart}
+                      onChange={(e) => setQPhFermentationStart(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-purple-900"
+                    />
+                    <span className="text-[9px] text-slate-400 block mt-1">Momento do pitch</span>
+                  </div>
+
+                  <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-300">
+                    <label className="block text-[10px] font-black text-emerald-950 mb-1">pH Cerveja Pronta (Envase)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="4.10 - 4.40"
+                      value={qPhFinal}
+                      onChange={(e) => setQPhFinal(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-emerald-400 rounded-lg font-black text-emerald-900"
+                    />
+                    <span className="text-[9px] text-emerald-700 block mt-1 font-bold">Alvo: 4.1 - 4.4 (Sour &lt; 3.8)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 4: Temperaturas de Processo & Controle da Levedura */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Thermometer className="w-4 h-4 text-purple-600" />
+                  4. Controle Térmico (°C) & Rastreabilidade de Levedura
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Temp. Mostura (°C)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      placeholder="66.0"
+                      value={qTempMash}
+                      onChange={(e) => setQTempMash(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Temp. Fermentação (°C)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      placeholder="18.0"
+                      value={qTempFermentation}
+                      onChange={(e) => setQTempFermentation(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Temp. Maturação / Cold Crash (°C)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      placeholder="0.0"
+                      value={qTempMaturation}
+                      onChange={(e) => setQTempMaturation(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Cepa da Levedura (Strain)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: US-05 / W-34/70 / Verdant"
+                      value={qYeastStrain}
+                      onChange={(e) => setQYeastStrain(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Geração da Levedura</label>
+                    <input
+                      type="number"
+                      placeholder="1"
+                      value={qYeastGeneration}
+                      onChange={(e) => setQYeastGeneration(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Lote da Levedura</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: LEV-2026-081"
+                      value={qYeastLot}
+                      onChange={(e) => setQYeastLot(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 5: Datas de Produção */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-purple-600" />
+                  5. Cronograma & Datas de Etapas
+                </span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Data Brassagem</label>
+                    <input
+                      type="date"
+                      value={qBrewDate}
+                      onChange={(e) => setQBrewDate(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Início Fermentação</label>
+                    <input
+                      type="date"
+                      value={qFermentationStartDate}
+                      onChange={(e) => setQFermentationStartDate(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Início Maturação</label>
+                    <input
+                      type="date"
+                      value={qMaturationStartDate}
+                      onChange={(e) => setQMaturationStartDate(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Previsão / Data Envase</label>
+                    <input
+                      type="date"
+                      value={qPackagingDate}
+                      onChange={(e) => setQPackagingDate(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-purple-300 rounded-xl font-bold text-purple-950"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 6: Avaliação Sensorial & Notas */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 block">
+                  6. Análise Sensorial & Liberação do Lote (MAPA / Qualidade)
+                </span>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-1">Perfil Sensorial / Análise de Conformidade</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Aroma limpo, perfil cítrico/floral evidente, amargor redondo sem adstringência, turbidez adequada, ausência de off-flavors..."
+                    value={qSensoryNotes}
+                    onChange={(e) => setQSensoryNotes(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-1">Observações Técnicas Gerais do Tanque</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Dry hopping realizado no dia X, purga de levedura concluída, clarificação OK..."
+                    value={qNotes}
+                    onChange={(e) => setQNotes(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {/* Seção 7: Matérias-Primas Rastreáveis Cadastradas no Lote */}
+              {batchQualityModal.ingredients && batchQualityModal.ingredients.length > 0 && (
+                <div className="p-4 bg-purple-50/30 border border-purple-200 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5 text-purple-700" />
+                      Insumos & Lotes de Fornecedores Rastreáveis ({batchQualityModal.ingredients.length}):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setBatchTraceabilityModal(batchQualityModal)}
+                      className="text-[10px] text-purple-700 font-bold hover:underline"
+                    >
+                      Ver Tabela Completa
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto">
+                    {batchQualityModal.ingredients.map((ing: any, iIdx: number) => (
+                      <div key={iIdx} className="bg-white p-2 rounded-xl border border-purple-100 flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-800 truncate">• {ing.name} ({ing.quantityUsed} {ing.unit})</span>
+                        <span className="font-mono font-black text-purple-900 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                          {ing.supplierLot || 'S/ Lote'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 print:hidden">
+                <button
+                  type="button"
+                  onClick={() => setBatchQualityModal(null)}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Imprimir</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={savingBatchQuality}
+                    className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-md shadow-purple-600/20 flex items-center gap-1.5 disabled:opacity-50 transition-all"
+                  >
+                    {savingBatchQuality ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    <span>Salvar Ficha de Acompanhamento & MAPA</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

@@ -211,11 +211,16 @@ model BeerRecipe {
   brewery               Brewery           @relation(fields: [breweryId], references: [id], onDelete: Cascade)
   name                  String
   style                 String
-  og                    Float?
-  fg                    Float?
-  abv                   Float?
-  ibu                   Int?
-  ebc                   Float?
+  og                    Float?            // OG Alvo / Densidade Inicial Esperada
+  fg                    Float?            // FG Alvo / Densidade Final Esperada
+  abv                   Float?            // ABV Alvo (% v/v)
+  ibu                   Int?              // IBU Alvo
+  ebc                   Float?            // Cor EBC / SRM Alvo
+  batchYieldLiters      Float?            @default(500) // Rendimento padrão da receita em litros
+  targetPhMash          Float?            // pH Alvo da Mostura
+  targetPhFinal         Float?            // pH Alvo da Cerveja Pronta
+  mapaRegistration      String?           // Registro MAPA do Produto / Rótulo
+  commercialDenomination String?          // Denominação Legal / Comercial MAPA
   description           String?
   costPerLiter          Float?            @default(0)
   salePricePerLiter     Float?            @default(18.0)
@@ -252,7 +257,7 @@ model RecipeIngredient {
 }
 
 // ----------------------------------------------------
-// LOTES DE PRODUÇÃO (Brassagens)
+// LOTES DE PRODUÇÃO (Brassagens & Acompanhamento no Tanque)
 // Status: PLANEJADO, BRASSAGEM, FERMENTANDO, MATURANDO, PRONTO_ENVASE, ENVASADO, FINALIZADO
 // ----------------------------------------------------
 model ProductionBatch {
@@ -273,9 +278,37 @@ model ProductionBatch {
   fermentationStartDate DateTime?
   maturationStartDate   DateTime?
   packagingDate         DateTime?
-  measuredOg            Float?
-  measuredFg            Float?
-  measuredAbv           Float?
+
+  // Parâmetros Físico-Químicos e Controle de Qualidade
+  measuredOg            Float?         // Densidade Inicial Medida (OG)
+  measuredFg            Float?         // Densidade Final Medida (FG)
+  measuredAbv           Float?         // Teor Alcoólico Real Medido (% v/v)
+  measuredIbu           Int?           // Amargor Real / Estimado (IBU)
+  measuredEbc           Float?         // Cor Real / Estimada (EBC)
+  attenuationPercent    Float?         // Atenuação Aparente (%)
+  
+  // Controle de pH ao longo do processo cervejeiro
+  phMash                Float?         // pH da Mostura (Inicial)
+  phBoil                Float?         // pH do Mosto Pós-Fervura / Whirlpool
+  phFermentationStart   Float?         // pH no Início da Fermentação / Inoculação
+  phFinal               Float?         // pH Final da Cerveja Pronta / Envase
+
+  // Controle Térmico (°C)
+  tempMash              Float?         // Temperatura de Mostura (°C)
+  tempFermentation      Float?         // Temperatura de Fermentação (°C)
+  tempMaturation        Float?         // Temperatura de Maturação / Cold Crash (°C)
+
+  // Controle de Levedura & Inóculo
+  yeastStrain           String?        // Cepa de Levedura (ex: US-05, W-34/70)
+  yeastGeneration       Int?           // Geração da Levedura (1, 2, 3...)
+  yeastLot              String?        // Lote do Insumo Levedura
+
+  // Informações e Conformidade MAPA
+  mapaRegistration      String?        // Nº de Registro MAPA do Produto/Rótulo
+  commercialDenomination String?       // Denominação Legal / Comercial MAPA
+  technicalResponsible  String?        // Responsável Técnico / Cervejeiro (CRQ/Nome)
+  sensoryNotes          String?        // Análise Sensorial / Degustação / Liberação
+
   notes                 String?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
