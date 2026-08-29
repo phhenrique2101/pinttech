@@ -554,6 +554,7 @@ export default function EstoquePage() {
     ADJUNTO: '🍯 Adjuntos & Frutas',
     QUIMICO_LIMPEZA: '🧪 Químicos & CIP',
     EMBALAGEM: '📦 Embalagens & Tampas',
+    PRODUTO_FINAL: '🍾 Garrafas & Latas (Produtos Prontos)',
     OUTRO: '📦 Outros Insumos',
   };
 

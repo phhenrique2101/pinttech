@@ -128,6 +128,24 @@ export default function ProducaoPage() {
   const [editBatchNotes, setEditBatchNotes] = useState('');
   const [editBatchIngredients, setEditBatchIngredients] = useState<any[]>([]);
 
+  // Packaging Modal State (Central de Envase: Garrafas, Latas, Barris)
+  const [packagingModal, setPackagingModal] = useState<{ tank?: any; batch?: any } | null>(null);
+  const [packagingLines, setPackagingLines] = useState<Array<{
+    id: string;
+    packageType: 'LATA' | 'GARRAFA' | 'GROWLER' | 'BARRIL';
+    sizeLabel: string;
+    unitVolumeLiters: number;
+    quantityUnits: string;
+    unitPackagingCost: string;
+    salePriceUnit: string;
+    packagingInventoryItemId?: string;
+  }>>([]);
+  const [packagingDate, setPackagingDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [packagingWastage, setPackagingWastage] = useState<string>('0');
+  const [packagingTankAction, setPackagingTankAction] = useState<'LIBERAR' | 'CIP' | 'MANTER_OCUPADO'>('LIBERAR');
+  const [packagingNotes, setPackagingNotes] = useState<string>('');
+  const [packagingSubmitting, setPackagingSubmitting] = useState(false);
+
   // New / Edit recipe form
   const [recipeName, setRecipeName] = useState('');
   const [recipeStyle, setRecipeStyle] = useState('American IPA');
@@ -984,6 +1002,137 @@ export default function ProducaoPage() {
     }
   };
 
+  // Presets de Embalagens (Latas, Garrafas, Growlers, Barris)
+  const PACKAGE_PRESETS = [
+    // Latas
+    { packageType: 'LATA' as const, sizeLabel: 'Lata 269ml', unitVolumeLiters: 0.269, icon: '🥫', defaultCost: '0.90' },
+    { packageType: 'LATA' as const, sizeLabel: 'Lata 350ml', unitVolumeLiters: 0.350, icon: '🥫', defaultCost: '1.00' },
+    { packageType: 'LATA' as const, sizeLabel: 'Lata 355ml Sleek', unitVolumeLiters: 0.355, icon: '🥫', defaultCost: '1.10' },
+    { packageType: 'LATA' as const, sizeLabel: 'Lata 473ml (Latão)', unitVolumeLiters: 0.473, icon: '🥫', defaultCost: '1.20' },
+    { packageType: 'LATA' as const, sizeLabel: 'Lata 500ml', unitVolumeLiters: 0.500, icon: '🥫', defaultCost: '1.30' },
+    { packageType: 'LATA' as const, sizeLabel: 'Lata 710ml', unitVolumeLiters: 0.710, icon: '🥫', defaultCost: '1.80' },
+    // Garrafas
+    { packageType: 'GARRAFA' as const, sizeLabel: 'Garrafa 300ml', unitVolumeLiters: 0.300, icon: '🍾', defaultCost: '1.20' },
+    { packageType: 'GARRAFA' as const, sizeLabel: 'Garrafa 330ml (Long Neck)', unitVolumeLiters: 0.330, icon: '🍾', defaultCost: '1.30' },
+    { packageType: 'GARRAFA' as const, sizeLabel: 'Garrafa 355ml', unitVolumeLiters: 0.355, icon: '🍾', defaultCost: '1.30' },
+    { packageType: 'GARRAFA' as const, sizeLabel: 'Garrafa 500ml', unitVolumeLiters: 0.500, icon: '🍾', defaultCost: '1.60' },
+    { packageType: 'GARRAFA' as const, sizeLabel: 'Garrafa 600ml', unitVolumeLiters: 0.600, icon: '🍾', defaultCost: '1.80' },
+    { packageType: 'GARRAFA' as const, sizeLabel: 'Garrafa 750ml Champenoise', unitVolumeLiters: 0.750, icon: '🍾', defaultCost: '3.50' },
+    // Growlers
+    { packageType: 'GROWLER' as const, sizeLabel: 'Growler Vidro 1L', unitVolumeLiters: 1.000, icon: '🍶', defaultCost: '8.00' },
+    { packageType: 'GROWLER' as const, sizeLabel: 'Growler PET 1L', unitVolumeLiters: 1.000, icon: '🍶', defaultCost: '2.00' },
+    { packageType: 'GROWLER' as const, sizeLabel: 'Growler PET 2L', unitVolumeLiters: 2.000, icon: '🍶', defaultCost: '2.50' },
+    // Barris
+    { packageType: 'BARRIL' as const, sizeLabel: 'Barril 10L', unitVolumeLiters: 10.0, icon: '🛢️', defaultCost: '0.00' },
+    { packageType: 'BARRIL' as const, sizeLabel: 'Barril 20L', unitVolumeLiters: 20.0, icon: '🛢️', defaultCost: '0.00' },
+    { packageType: 'BARRIL' as const, sizeLabel: 'Barril 30L', unitVolumeLiters: 30.0, icon: '🛢️', defaultCost: '0.00' },
+    { packageType: 'BARRIL' as const, sizeLabel: 'Barril 50L', unitVolumeLiters: 50.0, icon: '🛢️', defaultCost: '0.00' },
+  ];
+
+  const openPackagingModal = (tank?: any, batch?: any) => {
+    let targetBatch = batch;
+    if (!targetBatch && tank) {
+      targetBatch = (tank.batches || []).find((b: any) => b.status !== 'FINALIZADO') || tank.batches?.[0];
+    }
+    const saleL = targetBatch?.recipe?.salePricePerLiter || 20;
+    const defaultLines = [
+      {
+        id: Math.random().toString(36).substring(2, 9),
+        packageType: 'LATA' as const,
+        sizeLabel: 'Lata 473ml (Latão)',
+        unitVolumeLiters: 0.473,
+        quantityUnits: '',
+        unitPackagingCost: '1.20',
+        salePriceUnit: (saleL * 0.473 * 1.5).toFixed(2),
+        packagingInventoryItemId: '',
+      },
+    ];
+    setPackagingLines(defaultLines);
+    setPackagingDate(new Date().toISOString().split('T')[0]);
+    setPackagingWastage('0');
+    setPackagingTankAction('LIBERAR');
+    setPackagingNotes('');
+    setPackagingModal({ tank, batch: targetBatch });
+  };
+
+  const addPackagingLine = (preset: typeof PACKAGE_PRESETS[0]) => {
+    const targetBatch = packagingModal?.batch;
+    const saleL = targetBatch?.recipe?.salePricePerLiter || 20;
+    const multiplier = preset.unitVolumeLiters < 1 ? 1.5 : 1.0;
+    const defaultSalePrice = (saleL * preset.unitVolumeLiters * multiplier).toFixed(2);
+
+    setPackagingLines((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(36).substring(2, 9),
+        packageType: preset.packageType,
+        sizeLabel: preset.sizeLabel,
+        unitVolumeLiters: preset.unitVolumeLiters,
+        quantityUnits: '',
+        unitPackagingCost: preset.defaultCost,
+        salePriceUnit: defaultSalePrice,
+        packagingInventoryItemId: '',
+      },
+    ]);
+  };
+
+  const removePackagingLine = (id: string) => {
+    setPackagingLines((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  const updatePackagingLine = (id: string, field: string, value: any) => {
+    setPackagingLines((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, [field]: value } : l))
+    );
+  };
+
+  const handleExecutePackaging = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!packagingModal) return;
+    const targetBatch = packagingModal.batch;
+    const targetTank = packagingModal.tank;
+
+    const validLines = packagingLines.filter(
+      (l) => parseFloat(l.quantityUnits) > 0 && l.unitVolumeLiters > 0
+    );
+
+    if (validLines.length === 0) {
+      alert('Por favor, informe pelo menos uma quantidade válida de garrafas, latas ou barris a envasar.');
+      return;
+    }
+
+    try {
+      setPackagingSubmitting(true);
+      const url = targetTank?.id
+        ? `/api/tanks/${targetTank.id}/package`
+        : `/api/batches/${targetBatch?.id}/package`;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId: targetBatch?.id,
+          packagingDate,
+          lines: validLines,
+          wastageLiters: packagingWastage,
+          tankAction: packagingTankAction,
+          notes: packagingNotes,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao registrar envase');
+
+      alert(data.message || 'Envase registrado com sucesso! Estoque de produtos prontos atualizado.');
+      setPackagingModal(null);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao processar envase');
+    } finally {
+      setPackagingSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -1393,7 +1542,7 @@ export default function ProducaoPage() {
                                         </div>
 
                                         {/* Ações Diretas no Lote */}
-                                        <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-200">
+                                        <div className="grid grid-cols-4 gap-1 pt-1.5 border-t border-slate-200">
                                           <button
                                             type="button"
                                             onClick={() => setBatchTraceabilityModal(b)}
@@ -1410,7 +1559,16 @@ export default function ProducaoPage() {
                                             title="Ver parâmetros MAPA, pHs e sensorial"
                                           >
                                             <Activity className="w-3 h-3 text-purple-600 flex-shrink-0" />
-                                            <span>MAPA & pH</span>
+                                            <span>MAPA</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => openPackagingModal(b.tank, b)}
+                                            className="py-1 px-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
+                                            title="Envasar Garrafas, Latas ou Barris deste lote"
+                                          >
+                                            <Sparkles className="w-3 h-3 flex-shrink-0" />
+                                            <span>Envasar</span>
                                           </button>
                                           <button
                                             type="button"
@@ -1597,13 +1755,14 @@ export default function ProducaoPage() {
                           >
                             Alterar Etapa / Custo
                           </button>
-                          <a
-                            href="/scanner"
-                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl border border-purple-200 flex items-center gap-1 transition-colors shadow-sm"
+                          <button
+                            type="button"
+                            onClick={() => openPackagingModal(batch.tank, batch)}
+                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-colors shadow-sm"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
-                            Envasar Barris
-                          </a>
+                            <span>Envasar</span>
+                          </button>
                         </div>
                       </div>
                     );
@@ -2037,14 +2196,15 @@ export default function ProducaoPage() {
                         <div className="flex items-center gap-1.5">
                           {isOccupied && (
                             <>
-                              <a
-                                href="/scanner"
+                              <button
+                                type="button"
+                                onClick={() => openPackagingModal(tank)}
                                 className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl flex items-center gap-1 transition-colors shadow-2xs text-[11px]"
-                                title="Bipar e Envasar Barris deste Tanque"
+                                title="Envasar Garrafas, Latas ou Barris deste Tanque"
                               >
                                 <Sparkles className="w-3.5 h-3.5" />
                                 <span>Envasar</span>
-                              </a>
+                              </button>
 
                               <button
                                 onClick={() => handleLiberateTank(tank)}
@@ -4304,6 +4464,482 @@ export default function ProducaoPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Central de Envase Multi-Embalagem (Garrafas, Latas, Growlers, Barris) */}
+      {packagingModal && (() => {
+        const batch = packagingModal.batch;
+        const tank = packagingModal.tank;
+        const availableVol = batch?.volumeProducedLiters || batch?.volumePlannedLiters || tank?.capacityLiters || 500;
+        const liquidCostL = batch?.costPerLiter || 0;
+
+        // Cálculos dinâmicos em tempo real
+        const totalPackagedLiters = packagingLines.reduce((acc, line) => {
+          const qty = parseFloat(line.quantityUnits) || 0;
+          const vol = line.unitVolumeLiters || 0;
+          return acc + (qty * vol);
+        }, 0);
+
+        const totalUnitsCount = packagingLines.reduce((acc, line) => {
+          return acc + (parseFloat(line.quantityUnits) || 0);
+        }, 0);
+
+        const wastageNum = parseFloat(packagingWastage) || 0;
+        const remainingTankVol = Math.max(0, availableVol - totalPackagedLiters - wastageNum);
+
+        const totalLiquidCost = totalPackagedLiters * liquidCostL;
+        const totalPackagingCost = packagingLines.reduce((acc, line) => {
+          const qty = parseFloat(line.quantityUnits) || 0;
+          const pkgCost = parseFloat(line.unitPackagingCost) || 0;
+          return acc + (qty * pkgCost);
+        }, 0);
+        const totalBatchPackagingCost = totalLiquidCost + totalPackagingCost;
+
+        const projectedRevenue = packagingLines.reduce((acc, line) => {
+          const qty = parseFloat(line.quantityUnits) || 0;
+          const sale = parseFloat(line.salePriceUnit) || 0;
+          return acc + (qty * sale);
+        }, 0);
+        const projectedProfit = projectedRevenue - totalBatchPackagingCost;
+        const marginPercent = totalBatchPackagingCost > 0 ? ((projectedProfit / totalBatchPackagingCost) * 100) : 0;
+
+        // Insumos de embalagem disponíveis no estoque
+        const packagingInventoryStock = inventoryItems.filter(
+          (i) => i.category === 'EMBALAGEM' || i.category === 'OUTRO'
+        );
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-5">
+              {/* Header do Modal */}
+              <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-amber-500 text-white rounded-2xl shadow-md shadow-amber-500/20">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                      Central de Envase do Tanque
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Envasamento direto em <strong>Latas, Garrafas, Growlers ou Barris</strong> com entrada automática no estoque de produtos acabados
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPackagingModal(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Informações do Tanque & Lote */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tanque</span>
+                  <span className="font-black text-slate-900 text-sm flex items-center gap-1">
+                    <Cylinder className="w-3.5 h-3.5 text-blue-600" />
+                    {tank?.name || 'Sem Tanque'}
+                  </span>
+                  <span className="text-[10px] text-slate-500">{tank?.capacityLiters || 0}L capacidade</span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lote Produção</span>
+                  <span className="font-mono font-black text-amber-800 text-sm">
+                    #{batch?.batchNumber || 'N/A'}
+                  </span>
+                  <span className="text-[10px] text-slate-500 block">{formatDateShort(batch?.brewDate)}</span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cerveja / Rótulo</span>
+                  <span className="font-black text-slate-900 text-sm block truncate">
+                    {batch?.recipe?.name || 'Cerveja'}
+                  </span>
+                  <span className="text-[10px] text-purple-700 font-bold block truncate">
+                    {batch?.recipe?.style || 'Estilo'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Volume no Tanque</span>
+                  <span className="font-black text-blue-700 text-sm block">
+                    {availableVol} Litros
+                  </span>
+                  <span className="text-[10px] text-slate-500 block">Total disponível</span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Custo Chopp / L</span>
+                  <span className="font-black text-rose-700 text-sm block">
+                    {liquidCostL > 0 ? formatCurrency(liquidCostL) + '/L' : 'R$ 0,00/L'}
+                  </span>
+                  <span className="text-[10px] text-emerald-700 font-bold block">
+                    Venda: {formatCurrency(batch?.recipe?.salePricePerLiter || 20)}/L
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleExecutePackaging} className="space-y-5 text-xs">
+                {/* Data do Envase e Ações */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Data do Envase *</label>
+                    <input
+                      type="date"
+                      required
+                      value={packagingDate}
+                      onChange={(e) => setPackagingDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs focus:bg-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Perda / Quebra de Envase (Litros)</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        placeholder="0.0"
+                        value={packagingWastage}
+                        onChange={(e) => setPackagingWastage(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs focus:bg-white focus:outline-none"
+                      />
+                      <span className="absolute right-3 top-2 text-[10px] font-bold text-slate-400">L</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Destino do Tanque pós-envase *</label>
+                    <select
+                      value={packagingTankAction}
+                      onChange={(e) => setPackagingTankAction(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs focus:bg-white focus:outline-none"
+                    >
+                      <option value="LIBERAR">🟢 Liberar Tanque (Status: LIVRE)</option>
+                      <option value="CIP">🔵 Enviar para Limpeza (Status: HIGIENIZANDO)</option>
+                      <option value="MANTER_OCUPADO">🟡 Manter Ocupado (Envase Parcial)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Botões Rápidos de Inclusão de Embalagens */}
+                <div className="p-3.5 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-purple-950 flex items-center gap-1.5 text-xs">
+                      <Plus className="w-4 h-4 text-purple-700" />
+                      Adicionar Tipo de Embalagem para Envase:
+                    </span>
+                    <span className="text-[11px] text-purple-800 italic">
+                      Você pode envasar múltiplos tipos simultaneamente (ex: Latas + Garrafas + Barris)
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {/* Linha de Latas */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        🥫 Latas:
+                      </span>
+                      {PACKAGE_PRESETS.filter((p) => p.packageType === 'LATA').map((preset) => (
+                        <button
+                          key={preset.sizeLabel}
+                          type="button"
+                          onClick={() => addPackagingLine(preset)}
+                          className="px-2.5 py-1 bg-white hover:bg-amber-500 hover:text-white text-slate-800 border border-slate-200 hover:border-amber-500 rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center gap-1"
+                        >
+                          <span>+ {preset.sizeLabel}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Linha de Garrafas */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        🍾 Garrafas:
+                      </span>
+                      {PACKAGE_PRESETS.filter((p) => p.packageType === 'GARRAFA').map((preset) => (
+                        <button
+                          key={preset.sizeLabel}
+                          type="button"
+                          onClick={() => addPackagingLine(preset)}
+                          className="px-2.5 py-1 bg-white hover:bg-emerald-600 hover:text-white text-slate-800 border border-slate-200 hover:border-emerald-600 rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center gap-1"
+                        >
+                          <span>+ {preset.sizeLabel}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Linha de Growlers & Barris */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-blue-900 bg-blue-100/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        🍶 Growlers & Barris:
+                      </span>
+                      {PACKAGE_PRESETS.filter((p) => p.packageType === 'GROWLER' || p.packageType === 'BARRIL').map((preset) => (
+                        <button
+                          key={preset.sizeLabel}
+                          type="button"
+                          onClick={() => addPackagingLine(preset)}
+                          className="px-2.5 py-1 bg-white hover:bg-blue-600 hover:text-white text-slate-800 border border-slate-200 hover:border-blue-600 rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center gap-1"
+                        >
+                          <span>{preset.icon} + {preset.sizeLabel}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tabela de Embalagens Selecionadas */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-slate-900 text-xs">
+                      Itens a Envasar ({packagingLines.length})
+                    </h4>
+                    <span className="text-[11px] text-slate-500">
+                      Informe as quantidades de unidades envasadas
+                    </span>
+                  </div>
+
+                  {packagingLines.length === 0 ? (
+                    <div className="p-6 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-center text-slate-400 space-y-1">
+                      <p className="font-bold text-xs">Nenhuma embalagem adicionada.</p>
+                      <p className="text-[11px]">Clique em um dos botões acima (Latas, Garrafas ou Barris) para adicionar.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                      {packagingLines.map((line) => {
+                        const qty = parseFloat(line.quantityUnits) || 0;
+                        const lineVol = qty * line.unitVolumeLiters;
+                        const pkgCost = parseFloat(line.unitPackagingCost) || 0;
+                        const liquidCostUnit = (liquidCostL * line.unitVolumeLiters);
+                        const unitTotalCost = liquidCostUnit + pkgCost;
+
+                        return (
+                          <div
+                            key={line.id}
+                            className="p-3 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-2.5 hover:border-purple-300 transition-all"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">
+                                  {line.packageType === 'LATA' ? '🥫' : line.packageType === 'GARRAFA' ? '🍾' : line.packageType === 'GROWLER' ? '🍶' : '🛢️'}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={line.sizeLabel}
+                                  onChange={(e) => updatePackagingLine(line.id, 'sizeLabel', e.target.value)}
+                                  className="font-black text-slate-900 text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 focus:bg-white"
+                                />
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                  {line.unitVolumeLiters}L / un
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => removePackagingLine(line.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                title="Remover item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                                  Qtd. Unidades *
+                                </label>
+                                <input
+                                  type="number"
+                                  required
+                                  min="1"
+                                  placeholder="Ex: 500"
+                                  value={line.quantityUnits}
+                                  onChange={(e) => updatePackagingLine(line.id, 'quantityUnits', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-black text-purple-900 text-xs focus:bg-white"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                                  Volume Total (L)
+                                </label>
+                                <div className="px-2.5 py-1.5 bg-slate-100 rounded-xl font-black text-slate-800 text-xs">
+                                  {lineVol.toFixed(1)} L
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                                  Custo Vasilhame (R$)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={line.unitPackagingCost}
+                                  onChange={(e) => updatePackagingLine(line.id, 'unitPackagingCost', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 text-xs focus:bg-white"
+                                  placeholder="0.00"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                                  Custo Final / Un
+                                </label>
+                                <div className="px-2.5 py-1.5 bg-rose-50 border border-rose-200 rounded-xl font-black text-rose-800 text-xs">
+                                  {formatCurrency(unitTotalCost)}
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                                  Preço Venda / Un
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.10"
+                                  min="0"
+                                  value={line.salePriceUnit}
+                                  onChange={(e) => updatePackagingLine(line.id, 'salePriceUnit', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-emerald-50 border border-emerald-300 rounded-xl font-black text-emerald-900 text-xs focus:bg-white"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Opcional: Baixa de estoque de vasilhames vazios */}
+                            {packagingInventoryStock.length > 0 && (
+                              <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                                <span className="text-slate-500 font-medium">
+                                  Dar baixa em embalagem vazia do estoque:
+                                </span>
+                                <select
+                                  value={line.packagingInventoryItemId || ''}
+                                  onChange={(e) => updatePackagingLine(line.id, 'packagingInventoryItemId', e.target.value)}
+                                  className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-bold focus:bg-white"
+                                >
+                                  <option value="">(Não abater embalagens)</option>
+                                  {packagingInventoryStock.map((pkg) => (
+                                    <option key={pkg.id} value={pkg.id}>
+                                      {pkg.name} (Saldo: {pkg.currentQuantity} {pkg.unit})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Balanço Geral do Envase */}
+                <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-3 shadow-md">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                    <div className="p-2 bg-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Envasado</span>
+                      <span className="text-base font-black text-amber-400">
+                        {totalPackagedLiters.toFixed(1)} Litros
+                      </span>
+                      <span className="text-[10px] text-slate-400 block">({totalUnitsCount} unidades)</span>
+                    </div>
+
+                    <div className="p-2 bg-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Perda Informada</span>
+                      <span className="text-base font-black text-rose-400">
+                        {wastageNum.toFixed(1)} Litros
+                      </span>
+                      <span className="text-[10px] text-slate-400 block">
+                        ({availableVol > 0 ? ((wastageNum / availableVol) * 100).toFixed(1) : 0}%)
+                      </span>
+                    </div>
+
+                    <div className="p-2 bg-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Restante Tanque</span>
+                      <span className="text-base font-black text-blue-400">
+                        {remainingTankVol.toFixed(1)} Litros
+                      </span>
+                      <span className="text-[10px] text-slate-400 block">
+                        {remainingTankVol === 0 ? 'Tanque Esvaziado' : 'Envase Parcial'}
+                      </span>
+                    </div>
+
+                    <div className="p-2 bg-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Faturamento Proj.</span>
+                      <span className="text-base font-black text-emerald-400">
+                        {formatCurrency(projectedRevenue)}
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-bold block">
+                        Lucro: +{formatCurrency(projectedProfit)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Observações */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Observações do Envase</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Ex: Lote envasado sem oxidação, pressão de contrapressão 1.2 bar, 500 latas geradas e armazenadas na câmara fria."
+                    value={packagingNotes}
+                    onChange={(e) => setPackagingNotes(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 text-xs focus:bg-white focus:outline-none"
+                  />
+                </div>
+
+                {/* Link para Leitor de Barris se necessário */}
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between text-xs text-purple-900">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                    <span>Deseja bipar barris individuais por QR Code com número de série?</span>
+                  </div>
+                  <a
+                    href="/scanner"
+                    className="font-bold text-purple-700 hover:underline flex items-center gap-1"
+                  >
+                    <span>Abrir Scanner ↗</span>
+                  </a>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPackagingModal(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={packagingSubmitting || totalPackagedLiters <= 0}
+                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all"
+                  >
+                    {packagingSubmitting ? (
+                      <span>Processando Envase...</span>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Confirmar Envase & Atualizar Estoque ({totalUnitsCount} un)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
