@@ -37,6 +37,7 @@ model Brewery {
   batches               ProductionBatch[]
   tanks                 Tank[]
   inventory             InventoryItem[]
+  inventoryLots         InventoryLot[]
   clients               Client[]
   suppliers             Supplier[]
   orders                Order[]
@@ -297,6 +298,8 @@ model BatchIngredient {
   batch           ProductionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   inventoryItemId String?
   inventoryItem   InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  inventoryLotId  String?
+  inventoryLot    InventoryLot?   @relation(fields: [inventoryLotId], references: [id], onDelete: SetNull)
   supplierId      String?
   supplier        Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   name            String
@@ -316,7 +319,7 @@ model BatchIngredient {
 }
 
 // ----------------------------------------------------
-// ESTOQUE (Insumos & Embalagens)
+// ESTOQUE (Insumos & Embalagens - Catálogo Geral)
 // Categories: MALTE, LUPULO, LEVEDURA, ADJUNTO, QUIMICO_LIMPEZA, EMBALAGEM, PRODUTO_FINAL
 // ----------------------------------------------------
 model InventoryItem {
@@ -331,7 +334,7 @@ model InventoryItem {
   costPerUnit     Float     @default(0)
   supplierId      String?
   supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  supplierLot     String?   // Lote do fornecedor
+  supplierLot     String?   // Lote mais recente (atalho/compatibilidade)
   expirationDate  DateTime? // Data de validade
   harvestYear     String?   // Safra / Ano
   brand           String?   // Marca / Fabricante
@@ -340,9 +343,41 @@ model InventoryItem {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  lots              InventoryLot[]
   recipeIngredients RecipeIngredient[]
   batchIngredients  BatchIngredient[]
   movements         InventoryMovement[]
+}
+
+// ----------------------------------------------------
+// LOTES INDIVIDUAIS DE ESTOQUE (Multi-lote com saldos segregados)
+// ----------------------------------------------------
+model InventoryLot {
+  id              String         @id @default(uuid())
+  breweryId       String
+  brewery         Brewery        @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  lotNumber       String         // Código/Lote do fornecedor ou lote interno (ex: AGR-2026-001)
+  initialQuantity Float          @default(0) // Quantidade original recebida
+  currentQuantity Float          @default(0) // Saldo atual deste lote específico
+  costPerUnit     Float          @default(0)
+  supplierId      String?
+  supplier        Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierName    String?        // Cache do nome do fornecedor
+  expirationDate  DateTime?      // Data de validade
+  harvestYear     String?        // Safra / Ano
+  brand           String?        // Marca / Fabricante
+  location        String?        // Localização física / Galpão / Palete
+  status          String         @default("ATIVO") // ATIVO, ESGOTADO, VENCIDO, BLOQUEADO
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  batchIngredients BatchIngredient[]
+  movements        InventoryMovement[]
+
+  @@unique([breweryId, inventoryItemId, lotNumber])
 }
 
 // ----------------------------------------------------
@@ -354,6 +389,8 @@ model InventoryMovement {
   breweryId       String
   inventoryItemId String
   inventoryItem   InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  inventoryLotId  String?
+  inventoryLot    InventoryLot?    @relation(fields: [inventoryLotId], references: [id], onDelete: SetNull)
   type            String           // ENTRADA, SAIDA_BRASSAGEM, AJUSTE_PERDA, INVENTARIO
   quantity        Float            // Quantidade movimentada (+ para entrada, - para saída)
   costPerUnit     Float?
@@ -415,6 +452,7 @@ model Supplier {
   updatedAt      DateTime        @updatedAt
 
   inventoryItems   InventoryItem[]
+  inventoryLots    InventoryLot[]
   batchIngredients BatchIngredient[]
 }
 

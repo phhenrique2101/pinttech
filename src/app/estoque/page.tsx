@@ -950,42 +950,65 @@ export default function EstoquePage() {
                         </span>
                       </div>
 
-                      {/* LOTE E FORNECEDOR (DESTAQUE RASTREABILIDADE) */}
-                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+                      {/* LOTES ATIVOS EM ESTOQUE (SEGREGAÇÃO MULTI-LOTE) */}
+                      <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2 text-xs">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
-                            <Layers className="w-3.5 h-3.5 text-purple-600" />
-                            Lote Insumo:
+                          <span className="text-[10px] font-black uppercase text-purple-950 tracking-wider flex items-center gap-1">
+                            <Layers className="w-3.5 h-3.5 text-purple-700" />
+                            Lotes em Estoque ({(item.lots || []).filter((l: any) => (l.currentQuantity || 0) > 0).length}):
                           </span>
-                          <span className="font-mono font-black text-purple-900 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                            {item.supplierLot || 'S/ Lote Registrado'}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openMovementModal(item)}
+                            className="text-[10px] text-purple-700 font-bold hover:underline"
+                          >
+                            + Novo Lote
+                          </button>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
-                            <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                            Fornecedor:
-                          </span>
-                          <span className="font-bold text-slate-800 truncate max-w-[140px]">
-                            {item.supplier?.name || 'Não vinculado'}
-                          </span>
-                        </div>
-
-                        {item.expirationDate && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                              Validade:
+                        {(!item.lots || item.lots.filter((l: any) => (l.currentQuantity || 0) > 0).length === 0) ? (
+                          <div className="p-2 bg-white rounded-lg border border-purple-100 flex items-center justify-between text-[11px]">
+                            <span className="font-mono font-bold text-purple-900">
+                              Lote: {item.supplierLot || 'LOTE-001'}
                             </span>
-                            <span className="font-bold text-slate-800">{formatDate(item.expirationDate)}</span>
+                            <span className="font-bold text-slate-700">
+                              {item.currentQuantity} {item.unit}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                            {item.lots.filter((l: any) => (l.currentQuantity || 0) > 0).map((lot: any, lIdx: number) => (
+                              <div key={lot.id || lIdx} className="p-2 bg-white rounded-lg border border-purple-200/90 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono font-black text-purple-900 bg-purple-100 px-1.5 py-0.2 rounded text-[11px]">
+                                      {lot.lotNumber}
+                                    </span>
+                                    <span className="font-black text-slate-900 text-xs">
+                                      {lot.currentQuantity} {item.unit}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                    {lot.expirationDate ? `Venc: ${formatDate(lot.expirationDate)}` : (lot.harvestYear ? `Safra ${lot.harvestYear}` : (lot.supplier?.name || lot.supplierName || ''))}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <span className="text-[10px] font-bold text-slate-700 block">
+                                    R$ {(lot.costPerUnit || item.costPerUnit || 0).toFixed(2)}/{item.unit}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )}
 
-                        {item.harvestYear && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-slate-400 font-bold uppercase">Safra:</span>
-                            <span className="font-bold text-slate-700">{item.harvestYear}</span>
+                        {item.supplier && (
+                          <div className="pt-1 border-t border-purple-100 flex items-center justify-between text-[10px] text-slate-500">
+                            <span className="flex items-center gap-1 font-semibold">
+                              <Building2 className="w-3 h-3 text-blue-500" />
+                              Fornecedor:
+                            </span>
+                            <span className="font-bold text-slate-800 truncate max-w-[150px]">{item.supplier.name}</span>
                           </div>
                         )}
                       </div>
@@ -993,6 +1016,7 @@ export default function EstoquePage() {
                       {/* Quantidades e Custos */}
                       <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
                         <div>
+                          <span className="text-[10px] font-black uppercase text-slate-400 block">Saldo Total em Estoque:</span>
                           <span className={`text-2xl font-black ${isLow ? 'text-rose-700' : 'text-slate-900'}`}>
                             {item.currentQuantity}
                           </span>
@@ -1310,24 +1334,56 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {/* Modal: ENTRADA DE NOVO LOTE NO ESTOQUE */}
+      {/* Modal: ENTRADA DE ESTOQUE (NOVO LOTE OU REPOSIÇÃO) */}
       {movementModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="font-black text-lg text-slate-900">Dar Entrada de Insumo</h3>
-                <p className="text-xs text-slate-500 font-bold">{movementModal.name}</p>
+                <h3 className="font-black text-lg text-slate-900">Entrada de Estoque • {movementModal.name}</h3>
+                <p className="text-xs text-slate-500">
+                  Cadastre um novo lote ou reponha um lote existente. Cada lote mantém seu saldo individual.
+                </p>
               </div>
               <button onClick={() => setMovementModal(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Saldos atuais por lote */}
+            {movementModal.lots && movementModal.lots.length > 0 && (
+              <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-1 text-xs">
+                <span className="text-[10px] font-black uppercase text-purple-950 block">Lotes Atualmente em Estoque:</span>
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {movementModal.lots.map((l: any) => (
+                    <div key={l.id} className="flex items-center justify-between bg-white px-2 py-1 rounded-lg border border-purple-200 text-[11px]">
+                      <span className="font-mono font-bold text-purple-900">Lote #{l.lotNumber}</span>
+                      <span className="font-black text-slate-900">{l.currentQuantity} {movementModal.unit}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSaveMovement} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Código / Lote do Fornecedor *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: AGR-2026-992 ou LOTE-002"
+                  value={movLot}
+                  onChange={(e) => setMovLot(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 bg-purple-50/50 border border-purple-300 rounded-xl font-mono font-black text-purple-950 text-xs"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  Se o lote já existir, a quantidade será somada a ele; se for novo, um novo lote será criado.
+                </span>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Quantidade ({movementModal.unit})</label>
+                  <label className="block font-bold text-slate-700 mb-1">Quantidade a Adicionar ({movementModal.unit}) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1340,7 +1396,7 @@ export default function EstoquePage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Custo Unitário (R$)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Custo Unitário (R$/{movementModal.unit})</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1352,25 +1408,30 @@ export default function EstoquePage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Lote do Fornecedor / Novo Lote</label>
-                <input
-                  type="text"
-                  placeholder="Ex: AGR-2026-992"
-                  value={movLot}
-                  onChange={(e) => setMovLot(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 bg-slate-50 border border-purple-300 rounded-xl font-mono font-bold text-purple-950"
-                />
-              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Data de Validade</label>
+                  <input
+                    type="date"
+                    value={movExpDate}
+                    onChange={(e) => setMovExpDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Data de Validade</label>
-                <input
-                  type="date"
-                  value={movExpDate}
-                  onChange={(e) => setMovExpDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                />
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Fornecedor deste Lote</label>
+                  <select
+                    value={movSupplierId}
+                    onChange={(e) => setMovSupplierId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  >
+                    <option value="">-- Padrão do Insumo --</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -1423,27 +1484,39 @@ export default function EstoquePage() {
               </button>
             </div>
 
-            {/* Origem e Dados do Lote */}
-            <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-2 text-xs">
-              <span className="font-black text-purple-950 uppercase tracking-wider block">Dados da Matéria-Prima:</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-white p-2 rounded-xl border border-purple-100">
-                  <span className="text-[10px] text-slate-400 block font-bold">Lote do Insumo:</span>
-                  <span className="font-mono font-black text-purple-900">{traceItemModal.supplierLot || 'N/A'}</span>
-                </div>
-                <div className="bg-white p-2 rounded-xl border border-purple-100">
-                  <span className="text-[10px] text-slate-400 block font-bold">Fornecedor:</span>
-                  <span className="font-bold text-slate-800">{traceItemModal.supplier?.name || 'N/A'}</span>
-                </div>
-                <div className="bg-white p-2 rounded-xl border border-purple-100">
-                  <span className="text-[10px] text-slate-400 block font-bold">Validade:</span>
-                  <span className="font-bold text-slate-800">{traceItemModal.expirationDate ? formatDate(traceItemModal.expirationDate) : 'N/A'}</span>
-                </div>
-                <div className="bg-white p-2 rounded-xl border border-purple-100">
-                  <span className="text-[10px] text-slate-400 block font-bold">Saldo Atual:</span>
-                  <span className="font-black text-emerald-800">{traceItemModal.currentQuantity} {traceItemModal.unit}</span>
-                </div>
+            {/* Origem e Dados dos Lotes */}
+            <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-purple-950 uppercase tracking-wider block">Lotes Físicos em Estoque:</span>
+                <span className="font-black text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-purple-200">
+                  Saldo Total: {traceItemModal.currentQuantity} {traceItemModal.unit}
+                </span>
               </div>
+
+              {(!traceItemModal.lots || traceItemModal.lots.length === 0) ? (
+                <div className="p-2.5 bg-white rounded-xl border border-purple-100 text-slate-500">
+                  Lote padrão: {traceItemModal.supplierLot || 'N/A'} • {traceItemModal.currentQuantity} {traceItemModal.unit}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                  {traceItemModal.lots.map((lot: any) => (
+                    <div key={lot.id} className="p-2.5 bg-white rounded-xl border border-purple-200 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-black text-purple-900 bg-purple-100 px-1.5 py-0.2 rounded text-[11px]">
+                          Lote #{lot.lotNumber}
+                        </span>
+                        <span className="font-black text-slate-900">
+                          {lot.currentQuantity} {traceItemModal.unit}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 flex items-center justify-between">
+                        <span>{lot.expirationDate ? `Validade: ${formatDate(lot.expirationDate)}` : 'Sem validade'}</span>
+                        <span className="font-bold text-slate-700">R$ {(lot.costPerUnit || 0).toFixed(2)}/{traceItemModal.unit}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Onde foi utilizado: Lotes de Brassagem */}
@@ -1468,7 +1541,7 @@ export default function EstoquePage() {
                           <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 rounded font-bold">{bi.batch?.status}</span>
                         </div>
                         <span className="text-[11px] text-slate-500 block mt-0.5">
-                          Consumido: <strong>{bi.quantityUsed} {bi.unit}</strong> na etapa {bi.stage || 'Mostura'} • {formatDate(bi.createdAt)}
+                          Consumido: <strong>{bi.quantityUsed} {bi.unit}</strong> (Lote: {bi.supplierLot || bi.inventoryLot?.lotNumber || 'N/A'}) na etapa {bi.stage || 'Mostura'} • {formatDate(bi.createdAt)}
                         </span>
                       </div>
                       <div className="text-right">

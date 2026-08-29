@@ -11,6 +11,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       where: { id: params.id },
       include: {
         supplier: true,
+        lots: {
+          include: { supplier: true },
+          orderBy: [{ expirationDate: 'asc' }, { createdAt: 'asc' }],
+        },
         movements: {
           orderBy: { createdAt: 'desc' },
           take: 50,
@@ -20,6 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
                 recipe: true,
               },
             },
+            inventoryLot: true,
           },
         },
         recipeIngredients: {
@@ -29,6 +34,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         },
         batchIngredients: {
           include: {
+            inventoryLot: true,
             batch: {
               include: {
                 recipe: true,

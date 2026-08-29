@@ -179,21 +179,25 @@ export default function ProducaoPage() {
       // Look up current stock for this inventory item or by matching name
       const stock = stockItems.find((s) => (ing.inventoryItemId && s.id === ing.inventoryItemId) || s.name.toLowerCase() === ing.name.toLowerCase());
       const scaledQty = Math.round(ing.amount * ratio * 100) / 100;
-      const unitCost = ing.costPerUnit || stock?.costPerUnit || 0;
+      const activeLots = (stock?.lots || []).filter((l: any) => (l.currentQuantity || 0) > 0);
+      const chosenLot = activeLots.length > 0 ? activeLots[0] : null;
+      const unitCost = chosenLot?.costPerUnit || ing.costPerUnit || stock?.costPerUnit || 0;
 
       return {
         inventoryItemId: stock?.id || ing.inventoryItemId || null,
-        supplierId: stock?.supplierId || null,
+        inventoryLotId: chosenLot?.id || null,
+        availableLots: activeLots,
+        supplierId: chosenLot?.supplierId || stock?.supplierId || null,
         name: ing.name,
         category: ing.category || 'MALTE',
         quantityUsed: scaledQty,
         unit: ing.unit || 'KG',
-        supplierName: stock?.supplier?.name || '',
-        supplierLot: stock?.supplierLot || '',
+        supplierName: chosenLot?.supplier?.name || chosenLot?.supplierName || stock?.supplier?.name || '',
+        supplierLot: chosenLot?.lotNumber || stock?.supplierLot || '',
         costPerUnit: unitCost,
         totalCost: Math.round(scaledQty * unitCost * 100) / 100,
-        expirationDate: stock?.expirationDate ? stock.expirationDate.split('T')[0] : '',
-        harvestYear: stock?.harvestYear || '',
+        expirationDate: chosenLot?.expirationDate ? chosenLot.expirationDate.split('T')[0] : (stock?.expirationDate ? stock.expirationDate.split('T')[0] : ''),
+        harvestYear: chosenLot?.harvestYear || stock?.harvestYear || '',
         stage: ing.stage || 'MOSTURA',
         notes: '',
       };
@@ -1545,18 +1549,49 @@ export default function ProducaoPage() {
                           </div>
 
                           <div>
-                            <span className="text-[10px] text-purple-900 block font-black">Lote do Insumo / Fornecedor *</span>
-                            <input
-                              type="text"
-                              placeholder="Ex: AGR-2026-991"
-                              value={ing.supplierLot || ''}
-                              onChange={(e) => {
-                                const updated = [...batchIngredients];
-                                updated[idx].supplierLot = e.target.value.toUpperCase();
-                                setBatchIngredients(updated);
-                              }}
-                              className="w-full px-2 py-1 bg-purple-50 border border-purple-300 rounded-lg font-mono font-bold text-xs text-purple-950"
-                            />
+                            <span className="text-[10px] text-purple-900 block font-black">Lote do Insumo em Estoque *</span>
+                            {ing.availableLots && ing.availableLots.length > 0 ? (
+                              <select
+                                value={ing.inventoryLotId || ''}
+                                onChange={(e) => {
+                                  const selectedLotId = e.target.value;
+                                  const chosenLot = ing.availableLots.find((l: any) => l.id === selectedLotId);
+                                  const updated = [...batchIngredients];
+                                  if (chosenLot) {
+                                    updated[idx].inventoryLotId = chosenLot.id;
+                                    updated[idx].supplierLot = chosenLot.lotNumber;
+                                    updated[idx].supplierName = chosenLot.supplier?.name || chosenLot.supplierName || updated[idx].supplierName;
+                                    updated[idx].costPerUnit = chosenLot.costPerUnit || updated[idx].costPerUnit;
+                                    updated[idx].expirationDate = chosenLot.expirationDate ? chosenLot.expirationDate.split('T')[0] : '';
+                                    updated[idx].harvestYear = chosenLot.harvestYear || '';
+                                    updated[idx].totalCost = Math.round((updated[idx].quantityUsed || 0) * (updated[idx].costPerUnit || 0) * 100) / 100;
+                                  } else {
+                                    updated[idx].inventoryLotId = null;
+                                  }
+                                  setBatchIngredients(updated);
+                                }}
+                                className="w-full px-2 py-1 bg-purple-50 border border-purple-300 rounded-lg font-mono font-bold text-xs text-purple-950"
+                              >
+                                {ing.availableLots.map((lot: any) => (
+                                  <option key={lot.id} value={lot.id}>
+                                    Lote #{lot.lotNumber} ({lot.currentQuantity} {ing.unit} disp.{lot.expirationDate ? ` - Venc: ${formatDate(lot.expirationDate)}` : ''})
+                                  </option>
+                                ))}
+                                <option value="">-- Digitar Lote Manual --</option>
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder="Ex: AGR-2026-991"
+                                value={ing.supplierLot || ''}
+                                onChange={(e) => {
+                                  const updated = [...batchIngredients];
+                                  updated[idx].supplierLot = e.target.value.toUpperCase();
+                                  setBatchIngredients(updated);
+                                }}
+                                className="w-full px-2 py-1 bg-purple-50 border border-purple-300 rounded-lg font-mono font-bold text-xs text-purple-950"
+                              />
+                            )}
                           </div>
                         </div>
 

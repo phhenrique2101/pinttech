@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
             ? {
                 create: ingredients.map((ing: any) => ({
                   inventoryItemId: ing.inventoryItemId || null,
+                  inventoryLotId: ing.inventoryLotId || null,
                   supplierId: ing.supplierId || null,
                   name: ing.name?.trim() || 'Insumo',
                   category: ing.category || 'MALTE',
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
           recipe: true,
           tank: true,
           ingredients: {
-            include: { supplier: true, inventoryItem: true },
+            include: { supplier: true, inventoryItem: true, inventoryLot: true },
           },
         },
       });
@@ -151,7 +152,42 @@ export async function POST(req: NextRequest) {
             });
 
             if (stockItem) {
-              const newStockQty = Math.max(0, stockItem.currentQuantity - qtyUsed);
+              // Find target lot to deduct from
+              let targetLot: any = null;
+              if (ing.inventoryLotId) {
+                targetLot = await tx.inventoryLot.findUnique({ where: { id: ing.inventoryLotId } });
+              } else if (ing.supplierLot) {
+                targetLot = await tx.inventoryLot.findFirst({
+                  where: { inventoryItemId: stockItem.id, lotNumber: ing.supplierLot.trim() },
+                });
+              }
+
+              if (!targetLot) {
+                targetLot = await tx.inventoryLot.findFirst({
+                  where: { inventoryItemId: stockItem.id, currentQuantity: { gt: 0 } },
+                  orderBy: [{ expirationDate: 'asc' }, { createdAt: 'asc' }],
+                });
+              }
+
+              if (targetLot) {
+                const newLotQty = Math.max(0, targetLot.currentQuantity - qtyUsed);
+                await tx.inventoryLot.update({
+                  where: { id: targetLot.id },
+                  data: {
+                    currentQuantity: newLotQty,
+                    status: newLotQty <= 0 ? 'ESGOTADO' : 'ATIVO',
+                  },
+                });
+              }
+
+              // Recalculate item total current quantity from all lots
+              const allLots = await tx.inventoryLot.findMany({
+                where: { inventoryItemId: stockItem.id },
+              });
+              const newStockQty = allLots.length > 0
+                ? allLots.reduce((sum, l) => sum + Math.max(0, l.currentQuantity), 0)
+                : Math.max(0, stockItem.currentQuantity - qtyUsed);
+
               await tx.inventoryItem.update({
                 where: { id: stockItem.id },
                 data: { currentQuantity: newStockQty },
@@ -161,14 +197,15 @@ export async function POST(req: NextRequest) {
                 data: {
                   breweryId,
                   inventoryItemId: stockItem.id,
+                  inventoryLotId: targetLot?.id || null,
                   type: 'SAIDA_BRASSAGEM',
                   quantity: -qtyUsed,
-                  costPerUnit: ing.costPerUnit ? parseFloat(ing.costPerUnit) : stockItem.costPerUnit,
-                  supplierLot: ing.supplierLot || stockItem.supplierLot || null,
+                  costPerUnit: ing.costPerUnit ? parseFloat(ing.costPerUnit) : (targetLot?.costPerUnit || stockItem.costPerUnit),
+                  supplierLot: ing.supplierLot || targetLot?.lotNumber || stockItem.supplierLot || null,
                   batchId: createdBatch.id,
                   userId: session.userId || null,
                   userName: session.name || null,
-                  notes: `Consumo na brassagem do lote #${createdBatch.batchNumber}`,
+                  notes: `Consumo na brassagem do lote #${createdBatch.batchNumber} (Lote Insumo: ${targetLot?.lotNumber || ing.supplierLot || 'N/A'})`,
                 },
               });
             }

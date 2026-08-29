@@ -22,6 +22,11 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         supplier: true,
+        lots: {
+          where: { currentQuantity: { gt: 0 } },
+          include: { supplier: true },
+          orderBy: [{ expirationDate: 'asc' }, { createdAt: 'asc' }],
+        },
         _count: {
           select: {
             recipeIngredients: true,
@@ -32,6 +37,36 @@ export async function GET(req: NextRequest) {
       },
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
     });
+
+    // Auto-backfill any item that has currentQuantity > 0 but no lots created yet
+    for (const item of items) {
+      if (item.currentQuantity > 0 && (!item.lots || item.lots.length === 0)) {
+        try {
+          const autoLot = await prisma.inventoryLot.create({
+            data: {
+              breweryId: item.breweryId,
+              inventoryItemId: item.id,
+              lotNumber: item.supplierLot || `LOTE-${new Date(item.createdAt).getFullYear()}-001`,
+              initialQuantity: item.currentQuantity,
+              currentQuantity: item.currentQuantity,
+              costPerUnit: item.costPerUnit,
+              supplierId: item.supplierId,
+              supplierName: item.supplier?.name || null,
+              expirationDate: item.expirationDate,
+              harvestYear: item.harvestYear,
+              brand: item.brand,
+              location: item.location,
+              status: 'ATIVO',
+              notes: 'Lote inicial migrado automaticamente',
+            },
+            include: { supplier: true },
+          });
+          (item.lots as any) = [autoLot];
+        } catch (e) {
+          // If lot already exists or conflict, ignore
+        }
+      }
+    }
 
     return NextResponse.json(items);
   } catch (error) {
@@ -69,6 +104,7 @@ export async function POST(req: NextRequest) {
     const qty = currentQuantity !== undefined ? parseFloat(currentQuantity) : 0;
     const minQty = minimumQuantity !== undefined ? parseFloat(minimumQuantity) : 0;
     const cost = costPerUnit !== undefined ? parseFloat(costPerUnit) : 0;
+    const lotNumberClean = supplierLot?.trim() || `LOTE-${new Date().getFullYear()}-001`;
 
     const item = await prisma.inventoryItem.create({
       data: {
@@ -80,7 +116,7 @@ export async function POST(req: NextRequest) {
         minimumQuantity: minQty,
         costPerUnit: cost,
         supplierId: supplierId || null,
-        supplierLot: supplierLot?.trim() || null,
+        supplierLot: lotNumberClean,
         expirationDate: expirationDate ? new Date(expirationDate) : null,
         harvestYear: harvestYear?.trim() || null,
         brand: brand?.trim() || null,
@@ -92,19 +128,39 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // If initial quantity was entered, record an initial InventoryMovement
+    // If initial quantity was entered, create initial InventoryLot and Movement
     if (qty > 0) {
+      const lot = await prisma.inventoryLot.create({
+        data: {
+          breweryId: session.breweryId,
+          inventoryItemId: item.id,
+          lotNumber: lotNumberClean,
+          initialQuantity: qty,
+          currentQuantity: qty,
+          costPerUnit: cost,
+          supplierId: supplierId || null,
+          supplierName: item.supplier?.name || null,
+          expirationDate: expirationDate ? new Date(expirationDate) : null,
+          harvestYear: harvestYear?.trim() || null,
+          brand: brand?.trim() || null,
+          location: location?.trim() || null,
+          status: 'ATIVO',
+          notes: 'Cadastro inicial de estoque',
+        },
+      });
+
       await prisma.inventoryMovement.create({
         data: {
           breweryId: session.breweryId,
           inventoryItemId: item.id,
+          inventoryLotId: lot.id,
           type: 'ENTRADA',
           quantity: qty,
           costPerUnit: cost,
-          supplierLot: supplierLot?.trim() || null,
+          supplierLot: lotNumberClean,
           userId: session.userId,
           userName: session.name,
-          notes: 'Cadastro inicial de estoque',
+          notes: `Entrada inicial do lote ${lotNumberClean}`,
         },
       });
     }
@@ -115,14 +171,23 @@ export async function POST(req: NextRequest) {
         userId: session.userId,
         userName: session.name,
         actionType: 'INVENTORY_CREATE',
-        description: `Cadastrado insumo ${item.name} (${item.category}) - ${qty} ${item.unit} em estoque (Lote: ${supplierLot || 'N/A'})`,
+        description: `Cadastrado insumo ${item.name} (${item.category}) - ${qty} ${item.unit} em estoque (Lote: ${lotNumberClean})`,
         entityType: 'InventoryItem',
         entityId: item.id,
         newData: JSON.stringify(item),
       },
     });
 
-    return NextResponse.json(item);
+    // Return item with lots included
+    const fullItem = await prisma.inventoryItem.findUnique({
+      where: { id: item.id },
+      include: {
+        supplier: true,
+        lots: { include: { supplier: true } },
+      },
+    });
+
+    return NextResponse.json(fullItem || item);
   } catch (error) {
     console.error('Error creating inventory item:', error);
     return NextResponse.json({ error: 'Erro ao cadastrar insumo no estoque' }, { status: 500 });
