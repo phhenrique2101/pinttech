@@ -33,6 +33,9 @@ import {
   RefreshCw,
   SlidersHorizontal,
   FileSpreadsheet,
+  LayoutGrid,
+  List,
+  FlaskConical,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
@@ -53,6 +56,8 @@ export default function EstoquePage() {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryViewMode, setInventoryViewMode] = useState<'ROWS' | 'GRID'>('ROWS');
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   // Modals for Insumos
   const [newItemModal, setNewItemModal] = useState(false);
@@ -922,7 +927,7 @@ export default function EstoquePage() {
               <Search className="w-4 h-4 text-slate-400 ml-2" />
               <input
                 type="text"
-                placeholder="Buscar por nome, marca, lote de fornecedor ou fornecedor..."
+                placeholder="Buscar por insumo, marca, fornecedor ou lote..."
                 value={inventorySearch}
                 onChange={(e) => setInventorySearch(e.target.value)}
                 className="w-full text-xs font-semibold bg-transparent focus:outline-none"
@@ -930,6 +935,36 @@ export default function EstoquePage() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              {/* View Mode Toggle: Linhas vs Grade */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setInventoryViewMode('ROWS')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    inventoryViewMode === 'ROWS'
+                      ? 'bg-white text-slate-900 shadow-xs font-black'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Exibir em Linhas (como Estoque de Barris)"
+                >
+                  <List className="w-4 h-4" />
+                  <span>Linhas</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInventoryViewMode('GRID')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    inventoryViewMode === 'GRID'
+                      ? 'bg-white text-slate-900 shadow-xs font-black'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Exibir em Grade / Cards"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  <span>Grade</span>
+                </button>
+              </div>
+
               <button
                 onClick={() => setSuppliersModal(true)}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all"
@@ -983,7 +1018,7 @@ export default function EstoquePage() {
             })}
           </div>
 
-          {/* Inventory Items Grid */}
+          {/* Inventory Items List / Grid */}
           {inventoryLoading ? (
             <div className="text-center py-12 text-slate-400">Carregando insumos do estoque...</div>
           ) : filteredInventory.length === 0 ? (
@@ -1000,7 +1035,272 @@ export default function EstoquePage() {
                 + Cadastrar Primeiro Insumo
               </button>
             </div>
+          ) : inventoryViewMode === 'ROWS' ? (
+            /* ======================================================== */
+            /* VIEW MODE: LINHAS EXPANSIVAS (IGUAL AO ESTOQUE DE BARRIS) */
+            /* ======================================================== */
+            <div className="space-y-4">
+              {filteredInventory.map((item) => {
+                const isExpanded = expandedItem === item.id;
+                const isLow = (item.currentQuantity || 0) <= (item.minimumQuantity || 0);
+                const totalItemCost = (item.currentQuantity || 0) * (item.costPerUnit || 0);
+                const activeLots = (item.lots || []).filter((l: any) => (l.currentQuantity || 0) > 0);
+
+                let catBg = 'bg-slate-50 border-slate-200 text-slate-700';
+                let CatIcon = Package;
+                if (item.category === 'MALTE') {
+                  catBg = 'bg-amber-50 border-amber-200 text-amber-700';
+                  CatIcon = Package;
+                } else if (item.category === 'LUPULO') {
+                  catBg = 'bg-emerald-50 border-emerald-200 text-emerald-700';
+                  CatIcon = Layers;
+                } else if (item.category === 'LEVEDURA') {
+                  catBg = 'bg-purple-50 border-purple-200 text-purple-700';
+                  CatIcon = FlaskConical;
+                } else if (item.category === 'ADJUNTO') {
+                  catBg = 'bg-orange-50 border-orange-200 text-orange-700';
+                  CatIcon = Package;
+                } else if (item.category === 'QUIMICO_LIMPEZA') {
+                  catBg = 'bg-blue-50 border-blue-200 text-blue-700';
+                  CatIcon = ShieldCheck;
+                } else if (item.category === 'EMBALAGEM') {
+                  catBg = 'bg-slate-100 border-slate-300 text-slate-700';
+                  CatIcon = Cylinder;
+                }
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all hover:border-amber-300 ${
+                      isLow ? 'border-rose-300 ring-1 ring-rose-200' : 'border-slate-200'
+                    }`}
+                  >
+                    {/* Linha Principal */}
+                    <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      {/* Coluna 1: Ícone, Nome, Categoria, Marca, Fornecedor */}
+                      <div className="flex items-center gap-3.5">
+                        <div className={`w-12 h-12 rounded-xl border flex items-center justify-center flex-shrink-0 ${catBg}`}>
+                          <CatIcon className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-base font-black text-slate-900">{item.name}</h3>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">
+                              {item.unit}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs mt-0.5 flex-wrap">
+                            <span className="font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 text-[10px]">
+                              {categoryLabels[item.category] || item.category}
+                            </span>
+                            {item.brand && (
+                              <span className="text-slate-500 font-medium text-[11px]">
+                                Marca: <strong>{item.brand}</strong>
+                              </span>
+                            )}
+                            {item.supplier && (
+                              <span className="text-slate-500 font-medium text-[11px]">
+                                • Fornecedor: <strong>{item.supplier.name}</strong>
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
+                            Custo Médio: {formatCurrency(item.costPerUnit)}/{item.unit} • Estoque Mínimo: {item.minimumQuantity} {item.unit}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Coluna 2: Badges dos Lotes Ativos */}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2 flex-wrap text-xs">
+                          {activeLots.length === 0 ? (
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold">
+                              Sem lotes ativos
+                            </span>
+                          ) : (
+                            activeLots.slice(0, 4).map((lot: any, lIdx: number) => (
+                              <span
+                                key={lot.id || lIdx}
+                                className="px-2.5 py-1 bg-purple-50 text-purple-900 rounded-lg border border-purple-200 font-black text-xs flex items-center gap-1.5 shadow-2xs"
+                              >
+                                <Layers className="w-3.5 h-3.5 text-purple-600" />
+                                <span>Lote #{lot.lotNumber}: {lot.currentQuantity} {item.unit}</span>
+                              </span>
+                            ))
+                          )}
+                          {activeLots.length > 4 && (
+                            <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs">
+                              +{activeLots.length - 4} mais
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                            ✓ {activeLots.length} {activeLots.length === 1 ? 'lote ativo em estoque' : 'lotes ativos em estoque'}
+                          </span>
+                          {isLow && (
+                            <span className="text-rose-700 font-black bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-rose-600" />
+                              Abaixo do mínimo ({item.minimumQuantity} {item.unit})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Coluna 3: Valores, Saldo Total & Ações */}
+                      <div className="flex items-center justify-between lg:justify-end gap-4 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 flex-wrap">
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Valor em Estoque</span>
+                          <span className="text-base font-black text-slate-900">{formatCurrency(totalItemCost)}</span>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase">Saldo Total</span>
+                          <span className={`text-base font-black ${isLow ? 'text-rose-700' : 'text-emerald-700'}`}>
+                            {item.currentQuantity} {item.unit}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => openMovementModal(item)}
+                            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-xs rounded-xl flex items-center gap-1 transition-all"
+                            title="Dar nova entrada de estoque / adicionar lote"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Entrada</span>
+                          </button>
+
+                          <button
+                            onClick={() => openTraceModal(item)}
+                            className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 font-bold text-xs rounded-xl flex items-center gap-1 transition-all"
+                            title="Ver rastreabilidade reversa"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                            <span className="hidden sm:inline">Rastrear</span>
+                          </button>
+
+                          <button
+                            onClick={() => openEditItemModal(item)}
+                            className="p-2 text-slate-400 hover:text-amber-600 rounded-xl hover:bg-amber-50 transition-colors"
+                            title="Editar Insumo"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteItem(item.id, item.name)}
+                            className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors"
+                            title="Excluir Insumo"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => setExpandedItem(isExpanded ? null : item.id)}
+                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors ml-1"
+                          >
+                            <span>{isExpanded ? 'Ocultar' : `Ver ${activeLots.length} ${activeLots.length === 1 ? 'Lote' : 'Lotes'}`}</span>
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sub-painel Expandido: Detalhes e Edição dos Lotes */}
+                    {isExpanded && (
+                      <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                            Lotes Físicos de {item.name} em Estoque ({activeLots.length}) — Clique em "Editar Lote" para alterar dados ou saldo:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openMovementModal(item)}
+                            className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-lg flex items-center gap-1 transition-all"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Novo Lote / Entrada</span>
+                          </button>
+                        </div>
+
+                        {activeLots.length === 0 ? (
+                          <div className="p-4 bg-white rounded-xl border border-slate-200 text-center text-xs text-slate-400">
+                            Nenhum lote com saldo ativo no momento. Clique no botão acima para dar entrada de estoque.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                            {activeLots.map((lot: any, lIdx: number) => {
+                              const lotTotal = (lot.currentQuantity || 0) * (lot.costPerUnit || item.costPerUnit || 0);
+                              return (
+                                <div
+                                  key={lot.id || lIdx}
+                                  className="p-3.5 bg-white rounded-2xl border border-slate-200 flex flex-col justify-between gap-2.5 shadow-xs transition-all hover:shadow-md hover:border-purple-300"
+                                >
+                                  <div className="space-y-2 min-w-0">
+                                    <div className="flex items-center justify-between gap-1.5">
+                                      <span className="font-mono font-black text-xs text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md">
+                                        #{lot.lotNumber}
+                                      </span>
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded">
+                                        {lot.harvestYear ? `Safra ${lot.harvestYear}` : (lot.location || 'Estoque')}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs font-black px-2 py-1 rounded-lg border w-full text-center bg-emerald-50 text-emerald-900 border-emerald-200">
+                                        📦 Saldo: {lot.currentQuantity} {item.unit}
+                                      </span>
+                                    </div>
+
+                                    <div className="text-[11px] text-slate-600 space-y-0.5">
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Custo:</span>
+                                        <span className="font-bold text-slate-800">{formatCurrency(lot.costPerUnit || item.costPerUnit || 0)}/{item.unit}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Total Lote:</span>
+                                        <span className="font-bold text-slate-900">{formatCurrency(lotTotal)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Validade:</span>
+                                        <span className="font-bold text-slate-800">{lot.expirationDate ? formatDate(lot.expirationDate) : 'Sem validade'}</span>
+                                      </div>
+                                      {(lot.supplier || lot.supplierName) && (
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-400">Fornecedor:</span>
+                                          <span className="font-bold text-slate-800 truncate max-w-[110px]">{lot.supplier?.name || lot.supplierName}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditLotModal(lot, item)}
+                                      className="w-full py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold rounded-xl flex items-center justify-center gap-1 transition-all"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                      <span>Editar Lote</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ) : (
+            /* ======================================================== */
+            /* VIEW MODE: GRADE DE CARDS (VISUALIZAÇÃO COMPACTA)        */
+            /* ======================================================== */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredInventory.map((item) => {
                 const isLow = (item.currentQuantity || 0) <= (item.minimumQuantity || 0);
