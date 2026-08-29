@@ -227,6 +227,27 @@ model BeerRecipe {
 
   batches               ProductionBatch[]
   orderItems            OrderItem[]
+  ingredients           RecipeIngredient[]
+}
+
+// ----------------------------------------------------
+// INGREDIENTES / INSUMOS DA RECEITA
+// ----------------------------------------------------
+model RecipeIngredient {
+  id              String         @id @default(uuid())
+  recipeId        String
+  recipe          BeerRecipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  name            String
+  category        String         @default("MALTE") // MALTE, LUPULO, LEVEDURA, ADJUNTO, OUTRO
+  amount          Float          // Quantidade padrão na receita
+  unit            String         @default("KG")    // KG, G, L, ML, UN, PACOTE
+  stage           String?        @default("MOSTURA") // MOSTURA, FERVURA_60MIN, FERVURA_15MIN, WHIRLPOOL, DRY_HOPPING, FERMENTACAO, MATURACAO, OUTRO
+  costPerUnit     Float?         @default(0)
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 // ----------------------------------------------------
@@ -261,8 +282,37 @@ model ProductionBatch {
   kegs                  Keg[]
   movements             KegMovement[]
   orderItems            OrderItem[]
+  ingredients           BatchIngredient[]
+  inventoryMovements    InventoryMovement[]
 
   @@unique([breweryId, batchNumber])
+}
+
+// ----------------------------------------------------
+// RASTREABILIDADE DE INSUMOS DO LOTE (O que foi realmente usado)
+// ----------------------------------------------------
+model BatchIngredient {
+  id              String          @id @default(uuid())
+  batchId         String
+  batch           ProductionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  inventoryItemId String?
+  inventoryItem   InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  supplierId      String?
+  supplier        Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  name            String
+  category        String          @default("MALTE")
+  quantityUsed    Float
+  unit            String          @default("KG")
+  supplierName    String?
+  supplierLot     String?         // Lote do fornecedor / lote do insumo
+  costPerUnit     Float?          @default(0)
+  totalCost       Float?          @default(0)
+  expirationDate  DateTime?
+  harvestYear     String?
+  stage           String?         @default("MOSTURA")
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 }
 
 // ----------------------------------------------------
@@ -281,9 +331,39 @@ model InventoryItem {
   costPerUnit     Float     @default(0)
   supplierId      String?
   supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierLot     String?   // Lote do fornecedor
+  expirationDate  DateTime? // Data de validade
+  harvestYear     String?   // Safra / Ano
+  brand           String?   // Marca / Fabricante
+  location        String?   // Localização física / Armazenamento
   notes           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  recipeIngredients RecipeIngredient[]
+  batchIngredients  BatchIngredient[]
+  movements         InventoryMovement[]
+}
+
+// ----------------------------------------------------
+// HISTÓRICO DE MOVIMENTAÇÕES DE ESTOQUE DE INSUMOS
+// Types: ENTRADA, SAIDA_BRASSAGEM, AJUSTE_PERDA, INVENTARIO
+// ----------------------------------------------------
+model InventoryMovement {
+  id              String           @id @default(uuid())
+  breweryId       String
+  inventoryItemId String
+  inventoryItem   InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            String           // ENTRADA, SAIDA_BRASSAGEM, AJUSTE_PERDA, INVENTARIO
+  quantity        Float            // Quantidade movimentada (+ para entrada, - para saída)
+  costPerUnit     Float?
+  supplierLot     String?
+  batchId         String?
+  batch           ProductionBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  userId          String?
+  userName        String?
+  notes           String?
+  createdAt       DateTime         @default(now())
 }
 
 // ----------------------------------------------------
@@ -334,7 +414,8 @@ model Supplier {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
-  inventoryItems InventoryItem[]
+  inventoryItems   InventoryItem[]
+  batchIngredients BatchIngredient[]
 }
 
 // ----------------------------------------------------

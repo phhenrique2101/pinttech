@@ -10,6 +10,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const recipe = await prisma.beerRecipe.findUnique({
       where: { id: params.id },
       include: {
+        ingredients: {
+          include: {
+            inventoryItem: {
+              include: { supplier: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         batches: {
           orderBy: { brewDate: 'desc' },
         },
@@ -28,7 +36,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const session = getSessionFromRequest(req);
     if (!session || !session.breweryId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-    const existing = await prisma.beerRecipe.findUnique({ where: { id: params.id } });
+    const existing = await prisma.beerRecipe.findUnique({
+      where: { id: params.id },
+      include: { ingredients: true },
+    });
     if (!existing) return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 });
 
     const body = await req.json();
@@ -46,6 +57,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       pricingModel,
       profitMarginPercent,
       styleCategory,
+      ingredients,
     } = body;
 
     const cost = costPerLiter !== undefined ? parseFloat(costPerLiter) : existing.costPerLiter || 0;
@@ -60,24 +72,54 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       calculatedSalePrice = cost * (1 + margin / 100);
     }
 
-    const updated = await prisma.beerRecipe.update({
-      where: { id: params.id },
-      data: {
-        name: name ?? existing.name,
-        style: style ?? existing.style,
-        og: og !== undefined ? (og ? parseFloat(og) : null) : existing.og,
-        fg: fg !== undefined ? (fg ? parseFloat(fg) : null) : existing.fg,
-        abv: abv !== undefined ? (abv ? parseFloat(abv) : null) : existing.abv,
-        ibu: ibu !== undefined ? (ibu ? parseInt(ibu, 10) : null) : existing.ibu,
-        ebc: ebc !== undefined ? (ebc ? parseFloat(ebc) : null) : existing.ebc,
-        description: description !== undefined ? description : existing.description,
-        costPerLiter: cost,
-        salePricePerLiter: calculatedSalePrice,
-        suggestedPricePerLiter: calculatedSalePrice,
-        pricingModel: model,
-        profitMarginPercent: margin,
-        styleCategory: styleCategory ?? existing.styleCategory,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      // If ingredients array is provided, sync ingredients
+      if (Array.isArray(ingredients)) {
+        await tx.recipeIngredient.deleteMany({
+          where: { recipeId: params.id },
+        });
+
+        if (ingredients.length > 0) {
+          await tx.recipeIngredient.createMany({
+            data: ingredients.map((ing: any) => ({
+              recipeId: params.id,
+              inventoryItemId: ing.inventoryItemId || null,
+              name: ing.name?.trim() || 'Insumo',
+              category: ing.category || 'MALTE',
+              amount: parseFloat(ing.amount) || 0,
+              unit: (ing.unit || 'KG').toUpperCase(),
+              stage: ing.stage || 'MOSTURA',
+              costPerUnit: ing.costPerUnit ? parseFloat(ing.costPerUnit) : 0,
+              notes: ing.notes?.trim() || null,
+            })),
+          });
+        }
+      }
+
+      return tx.beerRecipe.update({
+        where: { id: params.id },
+        data: {
+          name: name !== undefined ? name.trim() : existing.name,
+          style: style !== undefined ? style.trim() : existing.style,
+          og: og !== undefined ? (og ? parseFloat(og) : null) : existing.og,
+          fg: fg !== undefined ? (fg ? parseFloat(fg) : null) : existing.fg,
+          abv: abv !== undefined ? (abv ? parseFloat(abv) : null) : existing.abv,
+          ibu: ibu !== undefined ? (ibu ? parseInt(ibu, 10) : null) : existing.ibu,
+          ebc: ebc !== undefined ? (ebc ? parseFloat(ebc) : null) : existing.ebc,
+          description: description !== undefined ? description : existing.description,
+          costPerLiter: cost,
+          salePricePerLiter: calculatedSalePrice,
+          suggestedPricePerLiter: calculatedSalePrice,
+          pricingModel: model,
+          profitMarginPercent: margin,
+          styleCategory: styleCategory ?? existing.styleCategory,
+        },
+        include: {
+          ingredients: {
+            include: { inventoryItem: { include: { supplier: true } } },
+          },
+        },
+      });
     });
 
     await prisma.actionLog.create({

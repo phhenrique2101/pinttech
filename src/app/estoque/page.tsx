@@ -22,6 +22,17 @@ import {
   Tag,
   Calendar,
   Info,
+  Truck,
+  Building2,
+  Clock,
+  ArrowDownRight,
+  Edit3,
+  Trash2,
+  Eye,
+  ShieldCheck,
+  RefreshCw,
+  SlidersHorizontal,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
@@ -36,16 +47,52 @@ export default function EstoquePage() {
   const [selectedKegForBarcode, setSelectedKegForBarcode] = useState<any>(null);
   const [selectedKegDetails, setSelectedKegDetails] = useState<any | null>(null);
 
-  // Raw Materials state
-  const [items, setItems] = useState<any[]>([
-    { id: '1', name: 'Malte Pilsen Agrária', category: 'MALTE', currentQuantity: 1250, minimumQuantity: 500, unit: 'KG', costPerUnit: 4.8 },
-    { id: '2', name: 'Malte Munich Weyermann', category: 'MALTE', currentQuantity: 200, minimumQuantity: 100, unit: 'KG', costPerUnit: 12.5 },
-    { id: '3', name: 'Lúpulo Citra T90 (Safra 2025)', category: 'LUPULO', currentQuantity: 18.5, minimumQuantity: 10, unit: 'KG', costPerUnit: 280.0 },
-    { id: '4', name: 'Lúpulo Mosaic Pellet', category: 'LUPULO', currentQuantity: 12.0, minimumQuantity: 5, unit: 'KG', costPerUnit: 290.0 },
-    { id: '5', name: 'Levedura SafAle US-05', category: 'LEVEDURA', currentQuantity: 15, minimumQuantity: 5, unit: 'PACOTE', costPerUnit: 45.0 },
-    { id: '6', name: 'Ácido Peracético 15% (Sanitizante)', category: 'QUIMICO_LIMPEZA', currentQuantity: 40, minimumQuantity: 20, unit: 'L', costPerUnit: 18.0 },
-    { id: '7', name: 'Soda Cáustica Escamas (Limpeza CIP)', category: 'QUIMICO_LIMPEZA', currentQuantity: 75, minimumQuantity: 50, unit: 'KG', costPerUnit: 14.0 },
-  ]);
+  // Raw Materials (Insumos) State
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [inventorySearch, setInventorySearch] = useState('');
+
+  // Modals for Insumos
+  const [newItemModal, setNewItemModal] = useState(false);
+  const [editItemModal, setEditItemModal] = useState<any | null>(null);
+  const [movementModal, setMovementModal] = useState<any | null>(null);
+  const [traceItemModal, setTraceItemModal] = useState<any | null>(null);
+  const [suppliersModal, setSuppliersModal] = useState(false);
+  const [newSupplierInline, setNewSupplierInline] = useState(false);
+
+  // Form State for Insumo
+  const [itemName, setItemName] = useState('');
+  const [itemCategory, setItemCategory] = useState('MALTE');
+  const [itemUnit, setItemUnit] = useState('KG');
+  const [itemQty, setItemQty] = useState('0');
+  const [itemMinQty, setItemMinQty] = useState('10');
+  const [itemCost, setItemCost] = useState('0');
+  const [itemSupplierId, setItemSupplierId] = useState('');
+  const [itemSupplierLot, setItemSupplierLot] = useState('');
+  const [itemExpDate, setItemExpDate] = useState('');
+  const [itemHarvestYear, setItemHarvestYear] = useState('2025/2026');
+  const [itemBrand, setItemBrand] = useState('');
+  const [itemLocation, setItemLocation] = useState('');
+  const [itemNotes, setItemNotes] = useState('');
+
+  // Form State for Movement (Entrada de estoque)
+  const [movQty, setMovQty] = useState('');
+  const [movCost, setMovCost] = useState('');
+  const [movLot, setMovLot] = useState('');
+  const [movExpDate, setMovExpDate] = useState('');
+  const [movSupplierId, setMovSupplierId] = useState('');
+  const [movNotes, setMovNotes] = useState('');
+
+  // Form State for Supplier
+  const [supName, setSupName] = useState('');
+  const [supTradeName, setSupTradeName] = useState('');
+  const [supDocument, setSupDocument] = useState('');
+  const [supPhone, setSupPhone] = useState('');
+  const [supEmail, setSupEmail] = useState('');
+  const [supCategory, setSupCategory] = useState('MALTES_E_GRAOS');
+  const [supAddress, setSupAddress] = useState('');
 
   const loadKegInventory = async () => {
     setLoading(true);
@@ -54,22 +101,227 @@ export default function EstoquePage() {
       const [kData, oData] = await Promise.all([kRes.json(), oRes.json()]);
 
       if (Array.isArray(kData)) {
-        // Filter kegs that are packaged or in stock
         setKegs(kData.filter((k: any) => k.status === 'ENVASADO' || k.status === 'EM_ESTOQUE'));
       }
       if (Array.isArray(oData)) {
         setOrders(oData);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error loading keg inventory:', e);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadInventory = async () => {
+    setInventoryLoading(true);
+    try {
+      const [invRes, supRes] = await Promise.all([fetch('/api/inventory'), fetch('/api/suppliers')]);
+      const [invData, supData] = await Promise.all([invRes.json(), supRes.json()]);
+
+      if (Array.isArray(invData)) setInventoryItems(invData);
+      if (Array.isArray(supData)) setSuppliers(supData);
+    } catch (e) {
+      console.error('Error loading inventory items:', e);
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadKegInventory();
+    loadInventory();
   }, []);
+
+  // Handle Save Insumo (Create / Edit)
+  const handleSaveItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        name: itemName,
+        category: itemCategory,
+        unit: itemUnit,
+        currentQuantity: itemQty,
+        minimumQuantity: itemMinQty,
+        costPerUnit: itemCost,
+        supplierId: itemSupplierId || null,
+        supplierLot: itemSupplierLot,
+        expirationDate: itemExpDate || null,
+        harvestYear: itemHarvestYear,
+        brand: itemBrand,
+        location: itemLocation,
+        notes: itemNotes,
+      };
+
+      const url = editItemModal ? `/api/inventory/${editItemModal.id}` : '/api/inventory';
+      const method = editItemModal ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setNewItemModal(false);
+        setEditItemModal(null);
+        resetItemForm();
+        loadInventory();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao salvar insumo');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão ao salvar insumo');
+    }
+  };
+
+  // Handle Stock Movement (Dar entrada)
+  const handleSaveMovement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!movementModal) return;
+    try {
+      const res = await fetch(`/api/inventory/${movementModal.id}/movement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'ENTRADA',
+          quantity: movQty,
+          costPerUnit: movCost,
+          supplierLot: movLot,
+          expirationDate: movExpDate || null,
+          supplierId: movSupplierId || null,
+          notes: movNotes,
+        }),
+      });
+
+      if (res.ok) {
+        setMovementModal(null);
+        setMovQty('');
+        setMovCost('');
+        setMovLot('');
+        setMovExpDate('');
+        setMovNotes('');
+        loadInventory();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao registrar entrada de estoque');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Handle Create Supplier
+  const handleSaveSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: supName,
+          tradeName: supTradeName,
+          document: supDocument,
+          phone: supPhone,
+          email: supEmail,
+          category: supCategory,
+          address: supAddress,
+        }),
+      });
+
+      if (res.ok) {
+        const createdSup = await res.json();
+        setSuppliers([...suppliers, createdSup]);
+        setItemSupplierId(createdSup.id);
+        setNewSupplierInline(false);
+        setSupName('');
+        setSupTradeName('');
+        setSupDocument('');
+        setSupPhone('');
+        setSupEmail('');
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao cadastrar fornecedor');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Handle Delete Insumo
+  const handleDeleteItem = async (id: string, name: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o insumo "${name}"?`)) return;
+    try {
+      const res = await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadInventory();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao excluir insumo');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Open Edit Insumo Modal
+  const openEditItemModal = (item: any) => {
+    setEditItemModal(item);
+    setItemName(item.name);
+    setItemCategory(item.category);
+    setItemUnit(item.unit);
+    setItemQty(String(item.currentQuantity));
+    setItemMinQty(String(item.minimumQuantity));
+    setItemCost(String(item.costPerUnit));
+    setItemSupplierId(item.supplierId || '');
+    setItemSupplierLot(item.supplierLot || '');
+    setItemExpDate(item.expirationDate ? item.expirationDate.split('T')[0] : '');
+    setItemHarvestYear(item.harvestYear || '');
+    setItemBrand(item.brand || '');
+    setItemLocation(item.location || '');
+    setItemNotes(item.notes || '');
+  };
+
+  // Open Movement Modal
+  const openMovementModal = (item: any) => {
+    setMovementModal(item);
+    setMovQty('');
+    setMovCost(String(item.costPerUnit || ''));
+    setMovLot(item.supplierLot || '');
+    setMovExpDate(item.expirationDate ? item.expirationDate.split('T')[0] : '');
+    setMovSupplierId(item.supplierId || '');
+    setMovNotes('');
+  };
+
+  // Open Trace Modal (Reverse Traceability)
+  const openTraceModal = async (item: any) => {
+    try {
+      const res = await fetch(`/api/inventory/${item.id}`);
+      const data = await res.json();
+      setTraceItemModal(data);
+    } catch (e) {
+      console.error(e);
+      setTraceItemModal(item);
+    }
+  };
+
+  const resetItemForm = () => {
+    setItemName('');
+    setItemCategory('MALTE');
+    setItemUnit('KG');
+    setItemQty('0');
+    setItemMinQty('10');
+    setItemCost('0');
+    setItemSupplierId('');
+    setItemSupplierLot('');
+    setItemExpDate('');
+    setItemHarvestYear('2025/2026');
+    setItemBrand('');
+    setItemLocation('');
+    setItemNotes('');
+  };
 
   // Group kegs by Beer Name and compute Reservations
   const groupedByBeer: {
@@ -190,14 +442,33 @@ export default function EstoquePage() {
   const totalReservedKegs = Object.values(groupedByBeer).reduce((acc, b) => acc + b.reservedKegsCount, 0);
   const totalAvailableKegs = Math.max(0, kegs.length - totalReservedKegs);
 
-  const totalCostValue = Object.values(groupedByBeer).reduce(
-    (acc, b) => acc + b.totalRealLiters * b.costPerLiter,
-    0
-  );
-  const totalSaleValue = Object.values(groupedByBeer).reduce(
-    (acc, b) => acc + b.totalRealLiters * b.salePricePerLiter,
-    0
-  );
+  const totalCostValue = Object.values(groupedByBeer).reduce((acc, b) => acc + b.totalRealLiters * b.costPerLiter, 0);
+  const totalSaleValue = Object.values(groupedByBeer).reduce((acc, b) => acc + b.totalRealLiters * b.salePricePerLiter, 0);
+
+  // Insumos Filtering & Stats
+  const filteredInventory = inventoryItems.filter((item) => {
+    const matchCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
+    const matchSearch =
+      !inventorySearch ||
+      item.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+      (item.supplierLot && item.supplierLot.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+      (item.brand && item.brand.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+      (item.supplier?.name && item.supplier.name.toLowerCase().includes(inventorySearch.toLowerCase()));
+    return matchCategory && matchSearch;
+  });
+
+  const totalInventoryValue = inventoryItems.reduce((acc, it) => acc + (it.currentQuantity || 0) * (it.costPerUnit || 0), 0);
+  const lowStockItems = inventoryItems.filter((it) => (it.currentQuantity || 0) <= (it.minimumQuantity || 0));
+
+  const categoryLabels: { [key: string]: string } = {
+    MALTE: '🌾 Maltes & Grãos',
+    LUPULO: '🌿 Lúpulos',
+    LEVEDURA: '🧬 Leveduras',
+    ADJUNTO: '🍯 Adjuntos & Frutas',
+    QUIMICO_LIMPEZA: '🧪 Químicos & CIP',
+    EMBALAGEM: '📦 Embalagens & Tampas',
+    OUTRO: '📦 Outros Insumos',
+  };
 
   return (
     <div className="space-y-6 pb-12">
@@ -206,10 +477,10 @@ export default function EstoquePage() {
         <div>
           <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
             <Package className="w-5 h-5 text-amber-600" />
-            Gestão de Estoque
+            Gestão de Estoque & Insumos
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Cervejas envasadas prontas na câmara fria com controle de reservas em pedidos e estoque de insumos
+            Controle de cervejas na câmara fria e rastreabilidade total de insumos, fornecedores e lotes
           </p>
         </div>
 
@@ -218,7 +489,7 @@ export default function EstoquePage() {
             onClick={() => setActiveTab('PACKAGED_BEER')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'PACKAGED_BEER'
-                ? 'bg-amber-500 text-white shadow-sm'
+                ? 'bg-amber-500 text-white shadow-sm font-black'
                 : 'text-slate-700 hover:text-slate-900'
             }`}
           >
@@ -230,12 +501,12 @@ export default function EstoquePage() {
             onClick={() => setActiveTab('RAW_MATERIALS')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'RAW_MATERIALS'
-                ? 'bg-amber-500 text-white shadow-sm'
+                ? 'bg-amber-500 text-white shadow-sm font-black'
                 : 'text-slate-700 hover:text-slate-900'
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Insumos & Matéria-Prima</span>
+            <span>Insumos & Matérias-Primas ({inventoryItems.length})</span>
           </button>
         </div>
       </div>
@@ -245,7 +516,6 @@ export default function EstoquePage() {
         <div className="space-y-6">
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* 1. Volume Total na Câmara */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
               <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
                 <Cylinder className="w-6 h-6" />
@@ -261,7 +531,6 @@ export default function EstoquePage() {
               </div>
             </div>
 
-            {/* 2. Disponível para Venda Imediata */}
             <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm flex items-center gap-3 bg-emerald-50/20">
               <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
                 <CheckCircle2 className="w-6 h-6" />
@@ -277,7 +546,6 @@ export default function EstoquePage() {
               </div>
             </div>
 
-            {/* 3. Reservados em Pedidos */}
             <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm flex items-center gap-3 bg-amber-50/30">
               <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
                 <Lock className="w-6 h-6" />
@@ -293,7 +561,6 @@ export default function EstoquePage() {
               </div>
             </div>
 
-            {/* 4. Potencial de Venda */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
               <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
                 <TrendingUp className="w-6 h-6" />
@@ -335,7 +602,6 @@ export default function EstoquePage() {
             ) : (
               beerList.map((beer) => {
                 const isExpanded = expandedBeer === beer.beerName;
-                const totalBeerSale = beer.totalRealLiters * beer.salePricePerLiter;
                 const hasReservations = beer.reservedKegsCount > 0;
 
                 return (
@@ -343,7 +609,6 @@ export default function EstoquePage() {
                     key={beer.beerName}
                     className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:border-amber-300"
                   >
-                    {/* Main Row */}
                     <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       <div className="flex items-center gap-3.5">
                         <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 flex-shrink-0">
@@ -358,7 +623,6 @@ export default function EstoquePage() {
                         </div>
                       </div>
 
-                      {/* Keg breakdown badges with Free / Reserved detail */}
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-2 flex-wrap text-xs">
                           {beer.count50L > 0 && (
@@ -393,7 +657,6 @@ export default function EstoquePage() {
                           )}
                         </div>
 
-                        {/* Status Balance Pill */}
                         <div className="flex items-center gap-2 text-[11px]">
                           <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                             ✓ {beer.availableKegsCount} livres ({beer.availableLiters}L)
@@ -407,7 +670,6 @@ export default function EstoquePage() {
                         </div>
                       </div>
 
-                      {/* Totals & Expand Button */}
                       <div className="flex items-center justify-between lg:justify-end gap-5 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                         <div className="text-right">
                           <span className="text-[10px] text-slate-400 block font-bold uppercase">Saldo Livre Real</span>
@@ -417,11 +679,6 @@ export default function EstoquePage() {
                         <div className="text-right">
                           <span className="text-[10px] text-slate-400 block font-bold uppercase">Total de Chopp Real</span>
                           <span className="text-base font-black text-slate-900">{beer.totalRealLiters} Litros</span>
-                          {beer.totalRealLiters !== beer.totalNominalCapacity && (
-                            <span className="text-[9px] text-slate-400 block font-bold">
-                              Capacidade: {beer.totalNominalCapacity}L
-                            </span>
-                          )}
                         </div>
 
                         <button
@@ -434,50 +691,17 @@ export default function EstoquePage() {
                       </div>
                     </div>
 
-                    {/* Active Reservations Details Card for this Beer */}
-                    {hasReservations && (
-                      <div className="px-5 py-2.5 bg-amber-50/80 border-t border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 text-amber-900 font-bold">
-                          <Lock className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                          <span>Pedidos que reservaram esta cerveja:</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {beer.reservedOrders.map((ro, roIdx) => (
-                            <span
-                              key={roIdx}
-                              className="px-2.5 py-1 bg-white rounded-lg border border-amber-300 text-amber-950 font-semibold text-[11px] flex items-center gap-1.5 shadow-xs"
-                            >
-                              <strong className="font-bold text-slate-900">#{ro.orderNumber}</strong>
-                              <span>({ro.clientName})</span>
-                              <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-black text-[10px]">
-                                {ro.quantity}x {ro.kegCapacity}L
-                              </span>
-                              {ro.deliveryDate && (
-                                <span className="text-slate-400 font-normal text-[10px]">
-                                  • {formatDate(ro.deliveryDate)}
-                                </span>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Expanded Individual Kegs List */}
                     {isExpanded && (
                       <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                            Barris Físicos na Câmara Fria ({beer.kegs.length}) — Clique em um barril para inspecionar o lote:
-                          </span>
-                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                          Barris Físicos na Câmara Fria ({beer.kegs.length}) — Clique para rastrear lote & insumos:
+                        </span>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
                           {beer.kegs.map((keg: any, kIdx: number) => {
                             const isKegReserved = kIdx < beer.reservedKegsCount;
                             const matchedResOrder = isKegReserved ? beer.reservedOrders[kIdx % beer.reservedOrders.length] : null;
                             const realVolume = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined ? keg.currentVolumeLiters : keg.capacity;
-                            const isPartial = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined && keg.currentVolumeLiters < keg.capacity;
                             const batchNum = keg.currentBatch?.batchNumber || (keg.notes?.match(/Lote:?\s*([^\s|]+)/i)?.[1] || 'Lote Inicial');
 
                             return (
@@ -494,58 +718,34 @@ export default function EstoquePage() {
                                   batchNum,
                                 })}
                                 className={`p-3.5 bg-white rounded-2xl border flex flex-col justify-between gap-2.5 shadow-xs transition-all cursor-pointer group hover:shadow-md hover:border-amber-400 active:scale-[0.99] ${
-                                  isKegReserved
-                                    ? 'border-amber-300 bg-amber-50/40'
-                                    : 'border-slate-200'
+                                  isKegReserved ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200'
                                 }`}
                               >
                                 <div className="space-y-2 min-w-0">
-                                  {/* Top Header of Card */}
                                   <div className="flex items-center justify-between gap-1.5">
                                     <span className="font-mono font-black text-xs text-slate-900 group-hover:text-amber-700 transition-colors">
                                       {keg.code}
                                     </span>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded" title="Capacidade nominal">
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded">
                                       {keg.capacity}L
                                     </span>
                                   </div>
 
-                                  {/* LOTE DESTA CERVEJA (PROMINENTE) */}
                                   <div className="flex items-center gap-1.5 bg-purple-50 text-purple-900 border border-purple-200/80 px-2 py-1 rounded-xl text-[11px] font-black">
                                     <Layers className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
                                     <span className="truncate">Lote: #{batchNum}</span>
                                   </div>
 
-                                  {/* Real Chopp Volume Badge */}
                                   <div className="flex items-center gap-1">
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border w-full text-center ${
-                                      isPartial
-                                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                    }`}>
-                                      🍺 Chopp Real: {realVolume}L {isPartial ? '(Parcial)' : ''}
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-lg border w-full text-center bg-emerald-50 text-emerald-800 border-emerald-200">
+                                      🍺 Chopp Real: {realVolume}L
                                     </span>
                                   </div>
-
-                                  {/* Status indicator on keg */}
-                                  {isKegReserved && matchedResOrder ? (
-                                    <div className="text-[10px] text-amber-900 font-bold bg-amber-100/90 px-1.5 py-0.5 rounded-lg border border-amber-200 flex items-center gap-1">
-                                      <Lock className="w-3 h-3 text-amber-600 flex-shrink-0" />
-                                      <span className="truncate">
-                                        Reservado: #{matchedResOrder.orderNumber}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-lg border border-emerald-200 flex items-center justify-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
-                                      <span>Livre em Estoque</span>
-                                    </div>
-                                  )}
                                 </div>
 
                                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
                                   <span className="text-amber-700 font-bold group-hover:underline">
-                                    Ver lote completo →
+                                    Inspecionar Lote & Insumos →
                                   </span>
                                   <button
                                     onClick={(e) => {
@@ -574,41 +774,856 @@ export default function EstoquePage() {
 
       {/* Tab 2: Insumos & Matérias-Primas */}
       {activeTab === 'RAW_MATERIALS' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between"
-            >
+        <div className="space-y-6">
+          {/* KPI Cards Insumos */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
+                <Package className="w-6 h-6" />
+              </div>
               <div>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      {item.category}
-                    </span>
-                    <h3 className="font-black text-slate-900 text-base">{item.name}</h3>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded">
-                    {item.unit}
-                  </span>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-baseline justify-between">
-                  <div>
-                    <span className="text-2xl font-black text-slate-900">{item.currentQuantity}</span>
-                    <span className="text-xs text-slate-400 font-semibold ml-1">{item.unit}</span>
-                  </div>
-                  <span className="text-xs font-semibold text-slate-600">
-                    Custo: {formatCurrency(item.costPerUnit)}/{item.unit}
-                  </span>
-                </div>
-
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Estoque Mínimo: {item.minimumQuantity} {item.unit}
-                </p>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                  Itens em Estoque
+                </span>
+                <span className="text-xl font-black text-slate-900">{inventoryItems.length} Insumos</span>
+                <span className="text-[10px] text-slate-500 block">Maltes, lúpulos e embalagens</span>
               </div>
             </div>
-          ))}
+
+            <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm flex items-center gap-3 bg-emerald-50/20">
+              <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+                <DollarSign className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+                  Valor Total em Estoque
+                </span>
+                <span className="text-xl font-black text-emerald-900">{formatCurrency(totalInventoryValue)}</span>
+                <span className="text-[10px] text-emerald-600 font-bold block">Custo acumulado em matérias-primas</span>
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-2xl border shadow-sm flex items-center gap-3 ${
+              lowStockItems.length > 0 ? 'bg-rose-50/70 border-rose-300' : 'bg-white border-slate-200'
+            }`}>
+              <div className={`p-3 rounded-xl ${lowStockItems.length > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-50 text-slate-600'}`}>
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 block">
+                  Abaixo do Mínimo
+                </span>
+                <span className="text-xl font-black text-rose-900">{lowStockItems.length} Itens</span>
+                <span className="text-[10px] text-rose-600 font-bold block">
+                  {lowStockItems.length > 0 ? 'Necessita reposição!' : 'Estoque seguro'}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+              <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                  Fornecedores Parceiros
+                </span>
+                <span className="text-xl font-black text-blue-900">{suppliers.length} Ativos</span>
+                <span className="text-[10px] text-slate-500 block">Rastreabilidade integrada</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Toolbar & Filters */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="w-4 h-4 text-slate-400 ml-2" />
+              <input
+                type="text"
+                placeholder="Buscar por nome, marca, lote de fornecedor ou fornecedor..."
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+                className="w-full text-xs font-semibold bg-transparent focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setSuppliersModal(true)}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all"
+              >
+                <Building2 className="w-4 h-4 text-slate-600" />
+                <span>Fornecedores ({suppliers.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  resetItemForm();
+                  setEditItemModal(null);
+                  setNewItemModal(true);
+                }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Novo Insumo</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Category Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <button
+              onClick={() => setSelectedCategory('ALL')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap ${
+                selectedCategory === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Todos ({inventoryItems.length})
+            </button>
+            {['MALTE', 'LUPULO', 'LEVEDURA', 'ADJUNTO', 'QUIMICO_LIMPEZA', 'EMBALAGEM', 'OUTRO'].map((cat) => {
+              const count = inventoryItems.filter((i) => i.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1 ${
+                    selectedCategory === cat
+                      ? 'bg-amber-500 text-white shadow-sm'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{categoryLabels[cat] || cat}</span>
+                  <span className="text-[10px] opacity-75 font-normal">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Inventory Items Grid */}
+          {inventoryLoading ? (
+            <div className="text-center py-12 text-slate-400">Carregando insumos do estoque...</div>
+          ) : filteredInventory.length === 0 ? (
+            <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
+              <Package className="w-12 h-12 mx-auto text-slate-300" />
+              <p className="font-bold">Nenhum insumo encontrado nesta categoria.</p>
+              <button
+                onClick={() => {
+                  resetItemForm();
+                  setNewItemModal(true);
+                }}
+                className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-sm"
+              >
+                + Cadastrar Primeiro Insumo
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredInventory.map((item) => {
+                const isLow = (item.currentQuantity || 0) <= (item.minimumQuantity || 0);
+                const totalItemCost = (item.currentQuantity || 0) * (item.costPerUnit || 0);
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-2xl border shadow-sm p-5 flex flex-col justify-between gap-4 transition-all hover:shadow-md ${
+                      isLow ? 'border-rose-300 ring-1 ring-rose-200' : 'border-slate-200 hover:border-amber-300'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      {/* Top Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            {categoryLabels[item.category] || item.category}
+                          </span>
+                          <h3 className="font-black text-slate-900 text-base mt-1 leading-tight">{item.name}</h3>
+                          {item.brand && (
+                            <span className="text-[11px] font-semibold text-slate-500 block">
+                              Marca/Fabricante: {item.brand}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs font-black px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+                          {item.unit}
+                        </span>
+                      </div>
+
+                      {/* LOTE E FORNECEDOR (DESTAQUE RASTREABILIDADE) */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
+                            <Layers className="w-3.5 h-3.5 text-purple-600" />
+                            Lote Insumo:
+                          </span>
+                          <span className="font-mono font-black text-purple-900 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                            {item.supplierLot || 'S/ Lote Registrado'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                            Fornecedor:
+                          </span>
+                          <span className="font-bold text-slate-800 truncate max-w-[140px]">
+                            {item.supplier?.name || 'Não vinculado'}
+                          </span>
+                        </div>
+
+                        {item.expirationDate && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                              Validade:
+                            </span>
+                            <span className="font-bold text-slate-800">{formatDate(item.expirationDate)}</span>
+                          </div>
+                        )}
+
+                        {item.harvestYear && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">Safra:</span>
+                            <span className="font-bold text-slate-700">{item.harvestYear}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quantidades e Custos */}
+                      <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
+                        <div>
+                          <span className={`text-2xl font-black ${isLow ? 'text-rose-700' : 'text-slate-900'}`}>
+                            {item.currentQuantity}
+                          </span>
+                          <span className="text-xs text-slate-400 font-semibold ml-1">{item.unit}</span>
+                          {isLow && (
+                            <span className="block text-[10px] font-black text-rose-600">
+                              ⚠️ Abaixo do mín. ({item.minimumQuantity} {item.unit})
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-xs font-black text-slate-800 block">
+                            {formatCurrency(item.costPerUnit)}/{item.unit}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            Total: {formatCurrency(totalItemCost)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                      <button
+                        onClick={() => openMovementModal(item)}
+                        className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-[11px] rounded-xl flex items-center gap-1 transition-all"
+                        title="Adicionar quantidade com novo lote"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Entrada</span>
+                      </button>
+
+                      <button
+                        onClick={() => openTraceModal(item)}
+                        className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 font-bold text-[11px] rounded-xl flex items-center gap-1 transition-all"
+                        title="Ver receitas, lotes e barris que utilizaram este insumo"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                        <span>Rastrear Lote</span>
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditItemModal(item)}
+                          className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50"
+                          title="Editar Insumo"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id, item.name)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
+                          title="Excluir Insumo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal: NOVO / EDITAR INSUMO NO ESTOQUE */}
+      {(newItemModal || editItemModal) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-black text-lg text-slate-900">
+                {editItemModal ? 'Editar Insumo & Rastreabilidade' : 'Cadastrar Novo Insumo no Estoque'}
+              </h3>
+              <button
+                onClick={() => {
+                  setNewItemModal(false);
+                  setEditItemModal(null);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveItem} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nome do Insumo</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Malte Pilsen Agrária, Lúpulo Citra T90, Levedura US-05"
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Categoria</label>
+                  <select
+                    value={itemCategory}
+                    onChange={(e) => setItemCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  >
+                    <option value="MALTE">🌾 Malte & Grãos</option>
+                    <option value="LUPULO">🌿 Lúpulo</option>
+                    <option value="LEVEDURA">🧬 Levedura</option>
+                    <option value="ADJUNTO">🍯 Adjunto & Frutas</option>
+                    <option value="QUIMICO_LIMPEZA">🧪 Químico & Limpeza CIP</option>
+                    <option value="EMBALAGEM">📦 Embalagem / Tampa</option>
+                    <option value="OUTRO">📦 Outro Insumo</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Unidade de Medida</label>
+                  <select
+                    value={itemUnit}
+                    onChange={(e) => setItemUnit(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  >
+                    <option value="KG">Quilograma (KG)</option>
+                    <option value="G">Gramas (G)</option>
+                    <option value="L">Litros (L)</option>
+                    <option value="ML">Mililitros (ML)</option>
+                    <option value="PACOTE">Pacote / Unidade (PCT)</option>
+                    <option value="UN">Unidade (UN)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Rastreabilidade & Fornecedor */}
+              <div className="p-3.5 bg-purple-50/60 border border-purple-200 rounded-2xl space-y-3">
+                <span className="text-[11px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-purple-700" />
+                  Rastreabilidade do Lote & Origem
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Lote do Fornecedor / Insumo</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: AGR-2026-991 ou LOT-CIT-88"
+                      value={itemSupplierLot}
+                      onChange={(e) => setItemSupplierLot(e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-mono font-bold text-purple-950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Data de Validade</label>
+                    <input
+                      type="date"
+                      value={itemExpDate}
+                      onChange={(e) => setItemExpDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Marca / Fabricante</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Agrária, Weyermann, Fermentis"
+                      value={itemBrand}
+                      onChange={(e) => setItemBrand(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Safra / Ano</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 2025 / 2026"
+                      value={itemHarvestYear}
+                      onChange={(e) => setItemHarvestYear(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700">Fornecedor Vinculado</label>
+                    <button
+                      type="button"
+                      onClick={() => setNewSupplierInline(!newSupplierInline)}
+                      className="text-[10px] text-purple-700 hover:underline font-bold"
+                    >
+                      {newSupplierInline ? '← Selecionar da lista' : '+ Cadastrar Fornecedor'}
+                    </button>
+                  </div>
+
+                  {!newSupplierInline ? (
+                    <select
+                      value={itemSupplierId}
+                      onChange={(e) => setItemSupplierId(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl font-bold"
+                    >
+                      <option value="">-- Sem fornecedor específico --</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} {s.tradeName ? `(${s.tradeName})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-2.5 bg-white border border-purple-300 rounded-xl space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Nome do Fornecedor (ex: Agrária Malte)"
+                        value={supName}
+                        onChange={(e) => setSupName(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                      />
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setNewSupplierInline(false)}
+                          className="px-2.5 py-1 text-slate-600 hover:bg-slate-100 rounded-lg text-[10px]"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveSupplier}
+                          disabled={!supName.trim()}
+                          className="px-3 py-1 bg-purple-600 text-white font-bold rounded-lg text-[10px]"
+                        >
+                          Salvar Fornecedor
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Quantidade e Custos */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {editItemModal ? 'Estoque Atual' : 'Qtd Inicial'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={itemQty}
+                    onChange={(e) => setItemQty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-black text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Estoque Mínimo</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={itemMinQty}
+                    onChange={(e) => setItemMinQty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Custo (R$/{itemUnit})</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={itemCost}
+                    onChange={(e) => setItemCost(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Local de Armazenamento</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Silo 1, Câmara Fria 02, Prateleira B"
+                  value={itemLocation}
+                  onChange={(e) => setItemLocation(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewItemModal(false);
+                    setEditItemModal(null);
+                  }}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
+                >
+                  {editItemModal ? 'Salvar Alterações' : 'Cadastrar Insumo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: ENTRADA DE NOVO LOTE NO ESTOQUE */}
+      {movementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-lg text-slate-900">Dar Entrada de Insumo</h3>
+                <p className="text-xs text-slate-500 font-bold">{movementModal.name}</p>
+              </div>
+              <button onClick={() => setMovementModal(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMovement} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Quantidade ({movementModal.unit})</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="Ex: 500"
+                    value={movQty}
+                    onChange={(e) => setMovQty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-black text-emerald-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Custo Unitário (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder={String(movementModal.costPerUnit || '0.00')}
+                    value={movCost}
+                    onChange={(e) => setMovCost(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Lote do Fornecedor / Novo Lote</label>
+                <input
+                  type="text"
+                  placeholder="Ex: AGR-2026-992"
+                  value={movLot}
+                  onChange={(e) => setMovLot(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 bg-slate-50 border border-purple-300 rounded-xl font-mono font-bold text-purple-950"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Data de Validade</label>
+                <input
+                  type="date"
+                  value={movExpDate}
+                  onChange={(e) => setMovExpDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Observações da Entrada</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ex: Compra NF-1234, recebimento conferido"
+                  value={movNotes}
+                  onChange={(e) => setMovNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setMovementModal(null)}
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm"
+                >
+                  Confirmar Entrada no Estoque
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: RASTREABILIDADE REVERSA DO INSUMO */}
+      {traceItemModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-900">{traceItemModal.name}</h3>
+                  <p className="text-xs text-purple-700 font-bold">Ficha de Rastreabilidade Reversa (Origem & Destinos)</p>
+                </div>
+              </div>
+              <button onClick={() => setTraceItemModal(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Origem e Dados do Lote */}
+            <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-2 text-xs">
+              <span className="font-black text-purple-950 uppercase tracking-wider block">Dados da Matéria-Prima:</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white p-2 rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Lote do Insumo:</span>
+                  <span className="font-mono font-black text-purple-900">{traceItemModal.supplierLot || 'N/A'}</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Fornecedor:</span>
+                  <span className="font-bold text-slate-800">{traceItemModal.supplier?.name || 'N/A'}</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Validade:</span>
+                  <span className="font-bold text-slate-800">{traceItemModal.expirationDate ? formatDate(traceItemModal.expirationDate) : 'N/A'}</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-purple-100">
+                  <span className="text-[10px] text-slate-400 block font-bold">Saldo Atual:</span>
+                  <span className="font-black text-emerald-800">{traceItemModal.currentQuantity} {traceItemModal.unit}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Onde foi utilizado: Lotes de Brassagem */}
+            <div className="space-y-2">
+              <span className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                <Beer className="w-4 h-4 text-amber-600" />
+                Lotes de Brassagem que consumiram este insumo ({traceItemModal.batchIngredients?.length || 0}):
+              </span>
+
+              {(!traceItemModal.batchIngredients || traceItemModal.batchIngredients.length === 0) ? (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400">
+                  Nenhum lote de produção consumiu este insumo ainda.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {traceItemModal.batchIngredients.map((bi: any) => (
+                    <div key={bi.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3 text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-purple-900">#{bi.batch?.batchNumber}</span>
+                          <span className="font-bold text-slate-900">{bi.batch?.recipe?.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 rounded font-bold">{bi.batch?.status}</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 block mt-0.5">
+                          Consumido: <strong>{bi.quantityUsed} {bi.unit}</strong> na etapa {bi.stage || 'Mostura'} • {formatDate(bi.createdAt)}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block">Barris Envasados:</span>
+                        <span className="font-black text-slate-900">{bi.batch?.kegs?.length || 0} barris</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Receitas cadastradas que usam este insumo */}
+            {traceItemModal.recipeIngredients && traceItemModal.recipeIngredients.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-purple-600" />
+                  Receitas Cervejeiras que utilizam este insumo:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {traceItemModal.recipeIngredients.map((ri: any) => (
+                    <span key={ri.id} className="px-2.5 py-1 bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-xs font-bold">
+                      🍺 {ri.recipe?.name} ({ri.amount} {ri.unit} na {ri.stage})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setTraceItemModal(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: GESTÃO DE FORNECEDORES */}
+      {suppliersModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-lg text-slate-900">Fornecedores de Insumos ({suppliers.length})</h3>
+              </div>
+              <button onClick={() => setSuppliersModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Add Supplier Form */}
+            <form onSubmit={handleSaveSupplier} className="p-4 bg-blue-50/50 border border-blue-200 rounded-2xl space-y-3 text-xs">
+              <span className="font-black text-blue-950 uppercase tracking-wider block">Cadastrar Novo Fornecedor:</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <input
+                  type="text"
+                  required
+                  placeholder="Razão Social / Nome *"
+                  value={supName}
+                  onChange={(e) => setSupName(e.target.value)}
+                  className="px-3 py-2 bg-white border border-blue-200 rounded-xl font-bold"
+                />
+                <input
+                  type="text"
+                  placeholder="Nome Fantasia"
+                  value={supTradeName}
+                  onChange={(e) => setSupTradeName(e.target.value)}
+                  className="px-3 py-2 bg-white border border-blue-200 rounded-xl"
+                />
+                <input
+                  type="text"
+                  placeholder="CNPJ / CPF"
+                  value={supDocument}
+                  onChange={(e) => setSupDocument(e.target.value)}
+                  className="px-3 py-2 bg-white border border-blue-200 rounded-xl"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <input
+                  type="text"
+                  placeholder="Telefone / WhatsApp"
+                  value={supPhone}
+                  onChange={(e) => setSupPhone(e.target.value)}
+                  className="px-3 py-2 bg-white border border-blue-200 rounded-xl"
+                />
+                <input
+                  type="email"
+                  placeholder="E-mail de Contato"
+                  value={supEmail}
+                  onChange={(e) => setSupEmail(e.target.value)}
+                  className="px-3 py-2 bg-white border border-blue-200 rounded-xl"
+                />
+                <select
+                  value={supCategory}
+                  onChange={(e) => setSupCategory(e.target.value)}
+                  className="px-3 py-2 bg-white border border-blue-200 rounded-xl font-bold"
+                >
+                  <option value="MALTES_E_GRAOS">Maltes & Grãos</option>
+                  <option value="LUPULOS">Lúpulos</option>
+                  <option value="LEVEDURAS">Leveduras</option>
+                  <option value="QUIMICOS">Químicos & Limpeza</option>
+                  <option value="EMBALAGENS">Embalagens & Barris</option>
+                  <option value="GERAL">Insumos Geral</option>
+                </select>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={!supName.trim()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm"
+                >
+                  + Adicionar Fornecedor
+                </button>
+              </div>
+            </form>
+
+            {/* Suppliers List */}
+            <div className="space-y-2">
+              {suppliers.length === 0 ? (
+                <p className="text-center py-6 text-xs text-slate-400">Nenhum fornecedor cadastrado.</p>
+              ) : (
+                suppliers.map((s) => (
+                  <div key={s.id} className="p-3.5 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+                    <div>
+                      <h4 className="font-black text-slate-900">{s.name} {s.tradeName && `(${s.tradeName})`}</h4>
+                      <span className="text-[11px] text-slate-500">
+                        {s.document && `CNPJ: ${s.document} • `}
+                        {s.phone && `Tel: ${s.phone} • `}
+                        {s.email && `Email: ${s.email}`}
+                      </span>
+                    </div>
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-bold text-[10px]">
+                      {s.category || 'Geral'}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setSuppliersModal(false)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -616,7 +1631,6 @@ export default function EstoquePage() {
       {selectedKegDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
-            {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center">
@@ -666,20 +1680,6 @@ export default function EstoquePage() {
                     {formatDate(selectedKegDetails.lastFilledAt || selectedKegDetails.currentBatch?.brewDate || selectedKegDetails.updatedAt)}
                   </span>
                 </div>
-
-                <div className="p-2.5 bg-white rounded-xl border border-purple-100">
-                  <span className="text-[10px] text-slate-400 block font-bold">Tanque de Origem</span>
-                  <span className="font-bold text-slate-800">
-                    {selectedKegDetails.currentBatch?.tank?.name || 'Fermentador da Cervejaria'}
-                  </span>
-                </div>
-
-                <div className="p-2.5 bg-white rounded-xl border border-purple-100">
-                  <span className="text-[10px] text-slate-400 block font-bold">Status do Lote</span>
-                  <span className="font-bold text-emerald-700">
-                    {selectedKegDetails.currentBatch?.status || 'PRONTO / ENVASADO'}
-                  </span>
-                </div>
               </div>
             </div>
 
@@ -695,16 +1695,6 @@ export default function EstoquePage() {
                   <span className="text-[10px] text-slate-400 block font-bold">Volume Real de Chopp</span>
                   <span className="font-black text-emerald-700 text-sm">
                     {selectedKegDetails.currentVolumeLiters ?? selectedKegDetails.capacity} Litros
-                  </span>
-                  <span className="text-[10px] text-slate-400 block">
-                    (Capacidade do vasilhame: {selectedKegDetails.capacity}L)
-                  </span>
-                </div>
-
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-slate-400 block font-bold">Tipo de Barril / Válvula</span>
-                  <span className="font-black text-slate-800">
-                    {selectedKegDetails.kegType || 'INOX_EURO'}
                   </span>
                 </div>
 
@@ -722,24 +1712,9 @@ export default function EstoquePage() {
                     </span>
                   )}
                 </div>
-
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-slate-400 block font-bold">Valor Estimado em Chopp</span>
-                  <span className="font-black text-slate-900">
-                    {formatCurrency(((selectedKegDetails.currentVolumeLiters ?? selectedKegDetails.capacity) * (selectedKegDetails.salePricePerLiter || 20)))}
-                  </span>
-                </div>
               </div>
-
-              {selectedKegDetails.notes && (
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-xs">
-                  <span className="text-[10px] text-slate-400 block font-bold">Observações do Barril</span>
-                  <p className="text-slate-700">{selectedKegDetails.notes}</p>
-                </div>
-              )}
             </div>
 
-            {/* Actions */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
               <button
                 type="button"

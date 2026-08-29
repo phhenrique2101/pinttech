@@ -15,13 +15,22 @@ export async function GET(req: NextRequest) {
     const recipes = await prisma.beerRecipe.findMany({
       where,
       include: {
-        _count: { select: { batches: true } },
+        ingredients: {
+          include: {
+            inventoryItem: {
+              include: { supplier: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        _count: { select: { batches: true, ingredients: true } },
       },
       orderBy: { name: 'asc' },
     });
 
     return NextResponse.json(recipes);
   } catch (error) {
+    console.error('Error fetching recipes:', error);
     return NextResponse.json({ error: 'Erro ao buscar receitas' }, { status: 500 });
   }
 }
@@ -47,6 +56,7 @@ export async function POST(req: NextRequest) {
       pricingModel,
       profitMarginPercent,
       styleCategory,
+      ingredients,
     } = body;
 
     if (!name || !style) {
@@ -72,20 +82,39 @@ export async function POST(req: NextRequest) {
     const recipe = await prisma.beerRecipe.create({
       data: {
         breweryId: session.breweryId,
-        name,
-        style,
+        name: name.trim(),
+        style: style.trim(),
         og: og ? parseFloat(og) : null,
         fg: fg ? parseFloat(fg) : null,
         abv: abv ? parseFloat(abv) : null,
         ibu: ibu ? parseInt(ibu, 10) : null,
         ebc: ebc ? parseFloat(ebc) : null,
-        description,
+        description: description?.trim() || null,
         costPerLiter: cost,
         salePricePerLiter: calculatedSalePrice,
         suggestedPricePerLiter: calculatedSalePrice,
         pricingModel: model,
         profitMarginPercent: margin,
         styleCategory: styleCategory || 'STANDARD',
+        ingredients: Array.isArray(ingredients) && ingredients.length > 0
+          ? {
+              create: ingredients.map((ing: any) => ({
+                inventoryItemId: ing.inventoryItemId || null,
+                name: ing.name?.trim() || 'Insumo',
+                category: ing.category || 'MALTE',
+                amount: parseFloat(ing.amount) || 0,
+                unit: (ing.unit || 'KG').toUpperCase(),
+                stage: ing.stage || 'MOSTURA',
+                costPerUnit: ing.costPerUnit ? parseFloat(ing.costPerUnit) : 0,
+                notes: ing.notes?.trim() || null,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        ingredients: {
+          include: { inventoryItem: { include: { supplier: true } } },
+        },
       },
     });
 
@@ -95,7 +124,7 @@ export async function POST(req: NextRequest) {
         userId: session.userId,
         userName: session.name,
         actionType: 'RECIPE_CREATE',
-        description: `Criada receita ${recipe.name} (${recipe.style}) - Venda: R$ ${recipe.salePricePerLiter?.toFixed(2)}/L`,
+        description: `Criada receita ${recipe.name} (${recipe.style}) com ${recipe.ingredients.length} insumos cadastrados`,
         entityType: 'BeerRecipe',
         entityId: recipe.id,
         previousData: null,
@@ -105,6 +134,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(recipe);
   } catch (error) {
+    console.error('Error creating recipe:', error);
     return NextResponse.json({ error: 'Erro ao cadastrar receita' }, { status: 500 });
   }
 }
