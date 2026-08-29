@@ -62,6 +62,18 @@ export default function EstoquePage() {
   const [suppliersModal, setSuppliersModal] = useState(false);
   const [newSupplierInline, setNewSupplierInline] = useState(false);
 
+  // Edit Specific Lot Modal State
+  const [editLotModal, setEditLotModal] = useState<{ lot: any; parentItem: any } | null>(null);
+  const [editLotNumber, setEditLotNumber] = useState('');
+  const [editLotCurrentQty, setEditLotCurrentQty] = useState('');
+  const [editLotCost, setEditLotCost] = useState('');
+  const [editLotExpDate, setEditLotExpDate] = useState('');
+  const [editLotHarvestYear, setEditLotHarvestYear] = useState('');
+  const [editLotSupplierId, setEditLotSupplierId] = useState('');
+  const [editLotLocation, setEditLotLocation] = useState('');
+  const [editLotNotes, setEditLotNotes] = useState('');
+  const [editLotLoading, setEditLotLoading] = useState(false);
+
   // Form State for Insumo
   const [itemName, setItemName] = useState('');
   const [itemCategory, setItemCategory] = useState('MALTE');
@@ -304,6 +316,76 @@ export default function EstoquePage() {
     } catch (e) {
       console.error(e);
       setTraceItemModal(item);
+    }
+  };
+
+  // Open Edit Specific Lot Modal
+  const openEditLotModal = (lot: any, parentItem: any) => {
+    setEditLotModal({ lot, parentItem });
+    setEditLotNumber(lot.lotNumber || '');
+    setEditLotCurrentQty(String(lot.currentQuantity ?? 0));
+    setEditLotCost(String(lot.costPerUnit ?? parentItem.costPerUnit ?? 0));
+    setEditLotExpDate(lot.expirationDate ? lot.expirationDate.split('T')[0] : '');
+    setEditLotHarvestYear(lot.harvestYear || '');
+    setEditLotSupplierId(lot.supplierId || parentItem.supplierId || '');
+    setEditLotLocation(lot.location || parentItem.location || '');
+    setEditLotNotes(lot.notes || '');
+  };
+
+  // Handle Save Specific Lot
+  const handleSaveEditLot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editLotModal) return;
+    setEditLotLoading(true);
+    try {
+      const res = await fetch(`/api/inventory/lots/${editLotModal.lot.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lotNumber: editLotNumber,
+          currentQuantity: editLotCurrentQty,
+          costPerUnit: editLotCost,
+          expirationDate: editLotExpDate || null,
+          harvestYear: editLotHarvestYear,
+          supplierId: editLotSupplierId || null,
+          location: editLotLocation,
+          notes: editLotNotes,
+        }),
+      });
+
+      if (res.ok) {
+        setEditLotModal(null);
+        await loadInventory();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao atualizar lote');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao comunicar com o servidor');
+    } finally {
+      setEditLotLoading(false);
+    }
+  };
+
+  // Handle Delete Specific Lot
+  const handleDeleteLot = async (lotId: string, lotNumber: string) => {
+    if (!confirm(`Deseja realmente excluir o lote "${lotNumber}"? O saldo total do insumo será recalculado.`)) return;
+    setEditLotLoading(true);
+    try {
+      const res = await fetch(`/api/inventory/lots/${lotId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setEditLotModal(null);
+        await loadInventory();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao excluir lote');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir lote');
+    } finally {
+      setEditLotLoading(false);
     }
   };
 
@@ -978,7 +1060,7 @@ export default function EstoquePage() {
                         ) : (
                           <div className="space-y-1.5 max-h-36 overflow-y-auto">
                             {item.lots.filter((l: any) => (l.currentQuantity || 0) > 0).map((lot: any, lIdx: number) => (
-                              <div key={lot.id || lIdx} className="p-2 bg-white rounded-lg border border-purple-200/90 flex items-center justify-between gap-2 shadow-2xs">
+                              <div key={lot.id || lIdx} className="p-2 bg-white rounded-lg border border-purple-200/90 flex items-center justify-between gap-2 shadow-2xs group hover:border-purple-300 transition-all">
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     <span className="font-mono font-black text-purple-900 bg-purple-100 px-1.5 py-0.2 rounded text-[11px]">
@@ -992,10 +1074,23 @@ export default function EstoquePage() {
                                     {lot.expirationDate ? `Venc: ${formatDate(lot.expirationDate)}` : (lot.harvestYear ? `Safra ${lot.harvestYear}` : (lot.supplier?.name || lot.supplierName || ''))}
                                   </div>
                                 </div>
-                                <div className="text-right flex-shrink-0">
-                                  <span className="text-[10px] font-bold text-slate-700 block">
-                                    R$ {(lot.costPerUnit || item.costPerUnit || 0).toFixed(2)}/{item.unit}
-                                  </span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <div className="text-right">
+                                    <span className="text-[10px] font-bold text-slate-700 block">
+                                      R$ {(lot.costPerUnit || item.costPerUnit || 0).toFixed(2)}/{item.unit}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditLotModal(lot, item);
+                                    }}
+                                    className="p-1 hover:bg-purple-100 text-purple-600 hover:text-purple-900 rounded-md transition-colors"
+                                    title="Editar dados e saldo deste lote"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                               </div>
                             ))}
@@ -1465,6 +1560,151 @@ export default function EstoquePage() {
         </div>
       )}
 
+      {/* Modal: EDITAR LOTE ESPECÍFICO */}
+      {editLotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-lg text-slate-900">Editar Lote do Insumo</h3>
+                <p className="text-xs text-purple-700 font-bold">{editLotModal.parentItem.name} • Lote #{editLotModal.lot.lotNumber}</p>
+              </div>
+              <button onClick={() => setEditLotModal(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditLot} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Código / Número do Lote *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editLotNumber}
+                    onChange={(e) => setEditLotNumber(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-purple-50/50 border border-purple-300 rounded-xl font-mono font-black text-purple-950"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Saldo Atual ({editLotModal.parentItem.unit}) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editLotCurrentQty}
+                    onChange={(e) => setEditLotCurrentQty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-black text-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Custo Unitário (R$/{editLotModal.parentItem.unit})</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editLotCost}
+                    onChange={(e) => setEditLotCost(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Data de Validade</label>
+                  <input
+                    type="date"
+                    value={editLotExpDate}
+                    onChange={(e) => setEditLotExpDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Safra / Ano</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 2025/2026"
+                    value={editLotHarvestYear}
+                    onChange={(e) => setEditLotHarvestYear(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Fornecedor deste Lote</label>
+                  <select
+                    value={editLotSupplierId}
+                    onChange={(e) => setEditLotSupplierId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  >
+                    <option value="">-- Padrão / Nenhum --</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Localização no Estoque / Posição</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Palete 04, Galpão A"
+                  value={editLotLocation}
+                  onChange={(e) => setEditLotLocation(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Observações do Lote</label>
+                <textarea
+                  rows={2}
+                  placeholder="Observações ou motivo do ajuste..."
+                  value={editLotNotes}
+                  onChange={(e) => setEditLotNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteLot(editLotModal.lot.id, editLotModal.lot.lotNumber)}
+                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs flex items-center gap-1 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir Lote</span>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditLotModal(null)}
+                    className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editLotLoading}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{editLotLoading ? 'Salvando...' : 'Salvar Alterações'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal: RASTREABILIDADE REVERSA DO INSUMO */}
       {traceItemModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
@@ -1500,14 +1740,26 @@ export default function EstoquePage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                   {traceItemModal.lots.map((lot: any) => (
-                    <div key={lot.id} className="p-2.5 bg-white rounded-xl border border-purple-200 space-y-1">
+                    <div key={lot.id} className="p-2.5 bg-white rounded-xl border border-purple-200 space-y-1 group hover:border-purple-300 transition-all">
                       <div className="flex items-center justify-between">
                         <span className="font-mono font-black text-purple-900 bg-purple-100 px-1.5 py-0.2 rounded text-[11px]">
                           Lote #{lot.lotNumber}
                         </span>
-                        <span className="font-black text-slate-900">
-                          {lot.currentQuantity} {traceItemModal.unit}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-slate-900">
+                            {lot.currentQuantity} {traceItemModal.unit}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              openEditLotModal(lot, traceItemModal);
+                            }}
+                            className="p-1 hover:bg-purple-100 text-purple-600 hover:text-purple-900 rounded-md transition-colors"
+                            title="Editar dados e saldo deste lote"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                       <div className="text-[10px] text-slate-500 flex items-center justify-between">
                         <span>{lot.expirationDate ? `Validade: ${formatDate(lot.expirationDate)}` : 'Sem validade'}</span>
