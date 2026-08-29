@@ -39,6 +39,9 @@ import {
   AlertTriangle,
   Download,
   RefreshCw,
+  List,
+  LayoutGrid,
+  CalendarDays,
 } from 'lucide-react';
 import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMENT_TYPE_MAP } from '@/lib/utils';
 import { exportJsonToExcel } from '@/lib/exportUtils';
@@ -53,6 +56,7 @@ export default function PedidosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [viewMode, setViewMode] = useState<'GRID' | 'TABLE'>('GRID');
 
   // Selected order modal for details / edit / payment
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -609,6 +613,24 @@ export default function PedidosPage() {
     }
   };
 
+  // Compute Today's Deliveries statistics
+  const todayDateStr = new Date().toISOString().slice(0, 10);
+  
+  const todayDeliveries = orders.filter((o) => {
+    if (!o.deliveryDate) return false;
+    const dStr = new Date(o.deliveryDate).toISOString().slice(0, 10);
+    return dStr === todayDateStr;
+  });
+
+  const todayPendingDeliveries = todayDeliveries.filter((o) => o.status !== 'ENTREGUE' && o.status !== 'CONCLUIDO' && o.status !== 'CANCELADO');
+  const todayCompletedDeliveries = todayDeliveries.filter((o) => o.status === 'ENTREGUE' || o.status === 'CONCLUIDO');
+  const todayTotalLiters = todayDeliveries.reduce((acc, o) => {
+    return acc + (o.items || []).reduce((sum: number, it: any) => sum + (it.quantity || 1) * (it.kegCapacity || 50), 0);
+  }, 0);
+  const todayTotalKegs = todayDeliveries.reduce((acc, o) => {
+    return acc + (o.items || []).reduce((sum: number, it: any) => sum + (it.quantity || 1), 0);
+  }, 0);
+
   const filteredOrders = orders.filter((o) => {
     const matchesSearch =
       !search ||
@@ -616,25 +638,62 @@ export default function PedidosPage() {
       (o.client?.name && o.client.name.toLowerCase().includes(search.toLowerCase())) ||
       (o.client?.tradeName && o.client.tradeName.toLowerCase().includes(search.toLowerCase())) ||
       (o.deliveryAddress && o.deliveryAddress.toLowerCase().includes(search.toLowerCase()));
-    const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+    
+    let matchesStatus = true;
+    if (statusFilter === 'TODAY') {
+      if (!o.deliveryDate) matchesStatus = false;
+      else {
+        const dStr = new Date(o.deliveryDate).toISOString().slice(0, 10);
+        matchesStatus = dStr === todayDateStr;
+      }
+    } else if (statusFilter === 'OPEN') {
+      matchesStatus = o.status === 'CONFIRMADO' || o.status === 'EM_SEPARACAO' || o.status === 'EM_ROTA';
+    } else if (statusFilter !== 'ALL') {
+      matchesStatus = o.status === statusFilter;
+    }
+
     return matchesSearch && matchesStatus;
   });
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-amber-600" />
-            Gestão de Pedidos, Entregas & Comodato
+            Pedidos & Entregas de Chopp
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Clique em qualquer pedido para ver a ficha completa de entrega, retirada, equipamentos, barris e faturamento
+            Gerencie pedidos, rotas de entrega e comodatos. Clique em qualquer pedido para ver a ficha completa.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Alternar Visualização Cards / Tabela */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
+            <button
+              onClick={() => setViewMode('GRID')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'GRID' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Visualização em Cards"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cards</span>
+            </button>
+            <button
+              onClick={() => setViewMode('TABLE')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'TABLE' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Visualização em Tabela"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tabela</span>
+            </button>
+          </div>
+
           <button
             onClick={() => {
               const rows = filteredOrders.map((o) => ({
@@ -653,11 +712,11 @@ export default function PedidosPage() {
               }));
               exportJsonToExcel(rows, `Pedidos_PintTech_${new Date().toISOString().slice(0, 10)}.xlsx`, 'Pedidos');
             }}
-            className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all shadow-xs"
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all shadow-xs"
             title="Exportar pedidos filtrados para Excel"
           >
             <Download className="w-4 h-4 text-emerald-600" />
-            <span>Exportar Excel ({filteredOrders.length})</span>
+            <span className="hidden md:inline">Exportar</span>
           </button>
 
           <button
@@ -667,54 +726,135 @@ export default function PedidosPage() {
               }
               setNewModalOpen(true);
             }}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95"
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span>Novo Pedido de Chopp</span>
+            <span>Novo Pedido</span>
           </button>
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
+      {/* Painel Destaque: Entregas do Dia */}
+      {todayDeliveries.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-emerald-500/10 p-4 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm shadow-amber-500/30">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-black text-slate-900">
+                  Entregas de Hoje ({todayDeliveries.length})
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+                  {todayPendingDeliveries.length} pendentes • {todayCompletedDeliveries.length} entregues
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 font-medium mt-0.5">
+                Volume total do dia: <strong className="text-slate-900">{todayTotalLiters}L</strong> ({todayTotalKegs} barris) • Faturamento: <strong className="text-slate-900">{formatCurrency(todayDeliveries.reduce((acc, o) => acc + (o.totalAmount || 0), 0))}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setStatusFilter(statusFilter === 'TODAY' ? 'ALL' : 'TODAY')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'TODAY'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-300'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>{statusFilter === 'TODAY' ? 'Mostrando Entregas de Hoje ✓' : 'Ver Entregas de Hoje'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filtros Rápidos & Busca */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
+        <div className="relative w-full sm:w-72">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar por nº, cliente, endereço..."
+            placeholder="Buscar por nº, cliente, bairro..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-sm"
+            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-xs"
           />
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-          {['ALL', 'CONFIRMADO', 'EM_SEPARACAO', 'EM_ROTA', 'ENTREGUE', 'CONCLUIDO', 'CANCELADO'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap ${
-                statusFilter === st
-                  ? 'bg-amber-500 text-white shadow-sm'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {st === 'ALL' ? 'Todos os Pedidos' : ORDER_STATUS_MAP[st]?.label || st}
-            </button>
-          ))}
+        <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+          <button
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              statusFilter === 'ALL'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Todos ({orders.length})
+          </button>
+          
+          <button
+            onClick={() => setStatusFilter('TODAY')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1 ${
+              statusFilter === 'TODAY'
+                ? 'bg-amber-500 text-white shadow-xs font-black'
+                : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+            }`}
+          >
+            <CalendarDays className="w-3 h-3" />
+            <span>Hoje ({todayDeliveries.length})</span>
+          </button>
+
+          <button
+            onClick={() => setStatusFilter('OPEN')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              statusFilter === 'OPEN'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Em Aberto ({orders.filter(o => o.status === 'CONFIRMADO' || o.status === 'EM_SEPARACAO' || o.status === 'EM_ROTA').length})
+          </button>
+
+          <button
+            onClick={() => setStatusFilter('EM_ROTA')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              statusFilter === 'EM_ROTA'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Em Rota ({orders.filter(o => o.status === 'EM_ROTA').length})
+          </button>
+
+          <button
+            onClick={() => setStatusFilter('ENTREGUE')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              statusFilter === 'ENTREGUE'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Entregues ({orders.filter(o => o.status === 'ENTREGUE' || o.status === 'CONCLUIDO').length})
+          </button>
         </div>
       </div>
 
-      {/* Orders Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? (
-          <div className="col-span-full text-center py-12 text-slate-400">Carregando pedidos...</div>
-        ) : filteredOrders.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 p-8">
-            Nenhum pedido encontrado com os filtros selecionados.
-          </div>
-        ) : (
-          filteredOrders.map((order) => {
+      {/* Orders View: CARDS COMPACTOS OU TABELA */}
+      {loading ? (
+        <div className="text-center py-12 text-slate-400 font-medium">Carregando pedidos...</div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 p-8 shadow-xs">
+          Nenhum pedido encontrado com os filtros selecionados.
+        </div>
+      ) : viewMode === 'GRID' ? (
+        /* VISUALIZAÇÃO EM CARDS COMPACTOS & DIRETOS */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {filteredOrders.map((order) => {
             const statusInfo = ORDER_STATUS_MAP[order.status] || {
               label: order.status,
               bg: 'bg-slate-100',
@@ -724,156 +864,258 @@ export default function PedidosPage() {
             const isPaid = order.paymentStatus === 'PAGO';
             const isPartial = order.paymentStatus === 'PARCIAL';
             const totalKegs = order.items?.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0) || 0;
+            const totalLiters = order.items?.reduce((acc: number, it: any) => acc + (it.quantity || 1) * (it.kegCapacity || 50), 0) || 0;
+
+            const isOrderToday = order.deliveryDate && new Date(order.deliveryDate).toISOString().slice(0, 10) === todayDateStr;
 
             return (
               <div
                 key={order.id}
                 onClick={() => openOrderDetails(order, 'DETAILS')}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-400 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+                className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group shadow-xs space-y-3"
               >
+                {/* Linha 1: Cabeçalho com Nº Pedido, Cliente e Status */}
                 <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-black text-amber-700 block">
-                          {order.orderNumber}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-black text-amber-700">
+                          #{order.orderNumber}
                         </span>
+                        {isOrderToday && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500 text-white">
+                            HOJE ⚡
+                          </span>
+                        )}
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                          className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
                             isPaid
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              ? 'bg-emerald-100 text-emerald-800'
                               : isPartial
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : 'bg-amber-100 text-amber-800 border border-amber-200'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-amber-100 text-amber-800'
                           }`}
                         >
                           {isPaid ? 'PAGO' : isPartial ? 'PARCIAL' : 'PENDENTE'}
                         </span>
                       </div>
-                      <h3 className="font-black text-slate-900 text-base mt-1 group-hover:text-amber-600 transition-colors">
+                      <h3 className="font-black text-slate-900 text-sm mt-0.5 truncate group-hover:text-amber-600 transition-colors">
                         {order.client?.tradeName || order.client?.name}
                       </h3>
-                      <p className="text-xs text-slate-500 font-medium flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                        <span className="truncate max-w-[220px]">
-                          {order.deliveryAddress || `${order.client?.city || ''} - ${order.client?.neighborhood || ''}`}
-                        </span>
-                      </p>
                     </div>
 
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${statusInfo.bg} ${statusInfo.color}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex-shrink-0 ${statusInfo.bg} ${statusInfo.color}`}>
                       {statusInfo.label}
                     </span>
                   </div>
 
-                  {/* Dates & Logistics Snippet */}
-                  <div className="mt-3.5 pt-2.5 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="p-2 bg-slate-50 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold">Entrega Agendada:</span>
-                      <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3 h-3 text-amber-600" />
-                        {order.deliveryDate ? formatDateShort(order.deliveryDate) : 'Imediata'}
+                  {/* Linha 2: Resumo do Chopp / Itens e Comodatos */}
+                  <div className="mt-2.5 bg-slate-50 p-2 rounded-xl text-xs space-y-1">
+                    <div className="flex items-center justify-between font-bold text-slate-800">
+                      <span className="truncate max-w-[200px] flex items-center gap-1">
+                        🍺 {(order.items || []).map((i: any) => `${i.quantity}x ${i.description}`).join(', ') || 'Chopp'}
+                      </span>
+                      <span className="text-[11px] text-amber-800 font-extrabold flex-shrink-0">
+                        {totalLiters > 0 ? `${totalLiters}L` : `${totalKegs} barris`}
                       </span>
                     </div>
 
-                    <div className="p-2 bg-slate-50 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold">Previsão Devolução:</span>
-                      <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3 text-orange-600" />
-                        {order.estimatedReturnDate ? formatDateShort(order.estimatedReturnDate) : 'A combinar'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Items Summary */}
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      <span>Itens Solicitados ({totalKegs} barris):</span>
-                      <span className="text-amber-600 font-bold group-hover:underline flex items-center gap-0.5">
-                        Ver Detalhes <ChevronRight className="w-3 h-3" />
-                      </span>
-                    </div>
-                    {order.items?.slice(0, 2).map((item: any) => (
-                      <div key={item.id} className="flex items-center justify-between text-xs text-slate-700 font-medium">
-                        <span className="truncate max-w-[200px]">{item.quantity}x {item.description}</span>
-                        <span className="font-bold text-slate-900">{formatCurrency(item.totalPrice)}</span>
-                      </div>
-                    ))}
-                    {order.items?.length > 2 && (
-                      <span className="text-[10px] text-slate-400 font-bold block">
-                        + {order.items.length - 2} outros itens...
-                      </span>
-                    )}
-
-                    {/* Comodato de Equipamentos */}
                     {order.orderEquipments?.length > 0 && (
-                      <div className="pt-1 flex items-center gap-1 flex-wrap">
-                        <span className="text-[10px] font-bold text-orange-700">Comodato:</span>
-                        {order.orderEquipments.map((oe: any) => (
-                          <span key={oe.id} className="text-[10px] bg-orange-50 text-orange-800 border border-orange-200 px-2 py-0.5 rounded font-semibold">
-                            {oe.equipment?.name}
-                          </span>
-                        ))}
+                      <div className="flex items-center gap-1 text-[10px] text-orange-800 font-semibold pt-0.5">
+                        <Wrench className="w-3 h-3 text-orange-600 flex-shrink-0" />
+                        <span className="truncate">
+                          Comodato: {order.orderEquipments.map((oe: any) => oe.equipment?.name).join(', ')}
+                        </span>
                       </div>
                     )}
                   </div>
 
-                  {/* Total & Paid Balance */}
-                  <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-1">
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs font-bold text-slate-500">Valor Total:</span>
-                      <span className="text-lg font-black text-slate-900">
-                        {formatCurrency(order.totalAmount)}
-                      </span>
-                    </div>
+                  {/* Linha 3: Endereço & Data de Entrega */}
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                    <span className="flex items-center gap-1 truncate max-w-[170px]" title={order.deliveryAddress}>
+                      <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{order.deliveryAddress || order.client?.neighborhood || order.client?.city || 'Sem endereço'}</span>
+                    </span>
 
-                    {(order.paidAmount > 0 || order.remainingAmount > 0) && (
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-emerald-700 font-bold">
-                          Pago: {formatCurrency(order.paidAmount || 0)}
-                        </span>
-                        <span className={`font-bold ${order.remainingAmount > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                          Saldo: {formatCurrency(order.remainingAmount !== undefined ? order.remainingAmount : (order.totalAmount - (order.paidAmount || 0)))}
-                        </span>
-                      </div>
-                    )}
+                    <span className="flex items-center gap-1 flex-shrink-0 font-bold text-slate-700">
+                      <Calendar className="w-3 h-3 text-amber-600" />
+                      {order.deliveryDate ? formatDateShort(order.deliveryDate) : 'Imediata'}
+                    </span>
                   </div>
                 </div>
 
-                {/* Actions Row */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => openOrderDetails(order, 'DETAILS')}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-all"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Detalhes</span>
-                  </button>
+                {/* Linha 4: Rodapé com Valor e Ações */}
+                <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div>
+                    <span className="text-sm font-black text-slate-900">
+                      {formatCurrency(order.totalAmount)}
+                    </span>
+                    {!isPaid && (
+                      <span className="text-[10px] text-rose-600 font-bold block">
+                        Saldo: {formatCurrency(Math.max(0, order.totalAmount - (order.paidAmount || 0)))}
+                      </span>
+                    )}
+                  </div>
 
-                  <button
-                    onClick={() => openOrderDetails(order, 'PAYMENT')}
-                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-xl flex items-center gap-1 transition-all"
-                  >
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Receber</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openOrderDetails(order, 'DETAILS')}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1"
+                      title="Ver Ficha Completa do Pedido"
+                    >
+                      <Eye className="w-3 h-3 text-amber-600" />
+                      <span>Detalhes</span>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setScanFeedback(null);
-                      setScanModalOrder(order);
-                    }}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>Bipar</span>
-                  </button>
+                    <button
+                      onClick={() => openOrderDetails(order, 'PAYMENT')}
+                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-0.5"
+                      title="Receber Pagamento"
+                    >
+                      <DollarSign className="w-3 h-3 text-emerald-600" />
+                      <span>Receber</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setScanFeedback(null);
+                        setScanModalOrder(order);
+                      }}
+                      className="p-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
+                      title="Bipar / Conferir Barris"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      ) : (
+        /* VISUALIZAÇÃO EM TABELA COMPACTA */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  <th className="py-3 px-4">Pedido</th>
+                  <th className="py-3 px-4">Cliente</th>
+                  <th className="py-3 px-4">Chopp / Itens</th>
+                  <th className="py-3 px-4">Entrega</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Pagamento</th>
+                  <th className="py-3 px-4">Valor Total</th>
+                  <th className="py-3 px-4 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                {filteredOrders.map((order) => {
+                  const statusInfo = ORDER_STATUS_MAP[order.status] || {
+                    label: order.status,
+                    bg: 'bg-slate-100',
+                    color: 'text-slate-800',
+                  };
+                  const isPaid = order.paymentStatus === 'PAGO';
+                  const isPartial = order.paymentStatus === 'PARCIAL';
+                  const totalLiters = order.items?.reduce((acc: number, it: any) => acc + (it.quantity || 1) * (it.kegCapacity || 50), 0) || 0;
+                  const isOrderToday = order.deliveryDate && new Date(order.deliveryDate).toISOString().slice(0, 10) === todayDateStr;
+
+                  return (
+                    <tr
+                      key={order.id}
+                      onClick={() => openOrderDetails(order, 'DETAILS')}
+                      className="hover:bg-amber-50/50 cursor-pointer transition-colors"
+                    >
+                      <td className="py-3 px-4 font-mono font-bold text-amber-700">
+                        #{order.orderNumber}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {order.client?.tradeName || order.client?.name}
+                        {order.deliveryAddress && (
+                          <span className="text-[10px] text-slate-400 block font-normal truncate max-w-[160px]">
+                            {order.deliveryAddress}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-semibold text-slate-800">
+                          {(order.items || []).map((i: any) => `${i.quantity}x ${i.description}`).join(', ') || 'Chopp'}
+                        </span>
+                        {totalLiters > 0 && (
+                          <span className="text-[10px] text-amber-700 font-bold block">
+                            {totalLiters}L totais
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {isOrderToday ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white">
+                            Hoje ⚡
+                          </span>
+                        ) : (
+                          <span className="font-bold text-slate-700">
+                            {order.deliveryDate ? formatDateShort(order.deliveryDate) : 'Imediata'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${statusInfo.bg} ${statusInfo.color}`}>
+                          {statusInfo.label}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isPaid
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : isPartial
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {isPaid ? 'PAGO' : isPartial ? 'PARCIAL' : 'PENDENTE'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-black text-slate-900">
+                        {formatCurrency(order.totalAmount)}
+                      </td>
+                      <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openOrderDetails(order, 'DETAILS')}
+                            className="p-1.5 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Ver Detalhes"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => openOrderDetails(order, 'PAYMENT')}
+                            className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Receber Pagamento"
+                          >
+                            <DollarSign className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setScanFeedback(null);
+                              setScanModalOrder(order);
+                            }}
+                            className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Bipar"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Detalhes Completos, Edição e Recebimentos do Pedido */}
       {selectedOrder && (
