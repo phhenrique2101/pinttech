@@ -106,6 +106,7 @@ export default function ProducaoPage() {
   const [tankStatusFilter, setTankStatusFilter] = useState('ALL');
   const [tankSearch, setTankSearch] = useState('');
   const [recipeSearch, setRecipeSearch] = useState('');
+  const [expandedRecipeId, setExpandedRecipeId] = useState<string | null>(null);
 
   // New batch form
   const [recipeId, setRecipeId] = useState('');
@@ -123,6 +124,7 @@ export default function ProducaoPage() {
   const [editBatchVolumeProduced, setEditBatchVolumeProduced] = useState('500');
   const [editBatchTankId, setEditBatchTankId] = useState('');
   const [editBatchNotes, setEditBatchNotes] = useState('');
+  const [editBatchIngredients, setEditBatchIngredients] = useState<any[]>([]);
 
   // New / Edit recipe form
   const [recipeName, setRecipeName] = useState('');
@@ -323,14 +325,19 @@ export default function ProducaoPage() {
           totalCost: cost * vol,
           tankId: editBatchTankId || null,
           notes: editBatchNotes,
+          ingredients: editBatchIngredients,
         }),
       });
       if (res.ok) {
         setEditBatchModal(null);
         loadData();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Erro ao atualizar lote');
       }
     } catch (e) {
       console.error(e);
+      alert('Erro de conexão ao atualizar lote');
     }
   };
 
@@ -341,6 +348,207 @@ export default function ProducaoPage() {
     setEditBatchVolumeProduced(String(batch.volumeProducedLiters || batch.volumePlannedLiters || '500'));
     setEditBatchTankId(batch.tankId || '');
     setEditBatchNotes(batch.notes || '');
+    setEditBatchIngredients(
+      (batch.ingredients || []).map((ing: any) => {
+        const stockItem = inventoryItems.find((s) => (ing.inventoryItemId && s.id === ing.inventoryItemId) || s.name.toLowerCase() === ing.name.toLowerCase());
+        const activeLots = stockItem?.lots || [];
+        return {
+          id: ing.id,
+          inventoryItemId: ing.inventoryItemId || stockItem?.id || null,
+          inventoryLotId: ing.inventoryLotId || null,
+          availableLots: activeLots,
+          supplierId: ing.supplierId || stockItem?.supplierId || null,
+          name: ing.name,
+          category: ing.category || 'MALTE',
+          quantityUsed: ing.quantityUsed || ing.amount || 0,
+          unit: ing.unit || 'KG',
+          supplierName: ing.supplierName || ing.supplier?.name || stockItem?.supplier?.name || '',
+          supplierLot: ing.supplierLot || '',
+          costPerUnit: ing.costPerUnit || 0,
+          totalCost: ing.totalCost || ((ing.quantityUsed || 0) * (ing.costPerUnit || 0)),
+          stage: ing.stage || 'MOSTURA',
+          expirationDate: ing.expirationDate ? ing.expirationDate.split('T')[0] : '',
+          harvestYear: ing.harvestYear || '',
+          notes: ing.notes || '',
+        };
+      })
+    );
+  };
+
+  // Helper functions for New Batch Ingredients
+  const addIngredientRowToNewBatch = (category: string = 'MALTE', stage: string = 'MOSTURA') => {
+    const unit = category === 'MALTE' ? 'KG' : category === 'LUPULO' ? 'G' : category === 'LEVEDURA' ? 'PACOTE' : 'KG';
+    setBatchIngredients([
+      ...batchIngredients,
+      {
+        inventoryItemId: null,
+        inventoryLotId: null,
+        availableLots: [],
+        supplierId: null,
+        name: '',
+        category,
+        quantityUsed: category === 'MALTE' ? 25 : category === 'LUPULO' ? 500 : 1,
+        unit,
+        supplierName: '',
+        supplierLot: '',
+        costPerUnit: 0,
+        totalCost: 0,
+        expirationDate: '',
+        harvestYear: '',
+        stage,
+        notes: '',
+      },
+    ]);
+  };
+
+  const updateIngredientInNewBatch = (idx: number, field: string, value: any) => {
+    const updated = [...batchIngredients];
+    updated[idx] = { ...updated[idx], [field]: value };
+
+    if (field === 'inventoryItemId') {
+      const item = inventoryItems.find((it) => it.id === value);
+      if (item) {
+        updated[idx].name = item.name;
+        updated[idx].category = item.category || updated[idx].category;
+        updated[idx].unit = item.unit || updated[idx].unit;
+        const activeLots = (item.lots || []).filter((l: any) => (l.currentQuantity || 0) > 0);
+        updated[idx].availableLots = activeLots;
+        const chosenLot = activeLots.length > 0 ? activeLots[0] : null;
+        if (chosenLot) {
+          updated[idx].inventoryLotId = chosenLot.id;
+          updated[idx].supplierId = chosenLot.supplierId || item.supplierId;
+          updated[idx].supplierName = chosenLot.supplier?.name || chosenLot.supplierName || item.supplier?.name || '';
+          updated[idx].supplierLot = chosenLot.lotNumber || '';
+          updated[idx].costPerUnit = chosenLot.costPerUnit || item.costPerUnit || 0;
+          updated[idx].expirationDate = chosenLot.expirationDate ? chosenLot.expirationDate.split('T')[0] : '';
+          updated[idx].harvestYear = chosenLot.harvestYear || '';
+        } else {
+          updated[idx].inventoryLotId = null;
+          updated[idx].costPerUnit = item.costPerUnit || 0;
+          updated[idx].supplierName = item.supplier?.name || '';
+        }
+      } else {
+        updated[idx].availableLots = [];
+        updated[idx].inventoryLotId = null;
+      }
+    }
+
+    if (field === 'inventoryLotId') {
+      const chosenLot = (updated[idx].availableLots || []).find((l: any) => l.id === value);
+      if (chosenLot) {
+        updated[idx].supplierLot = chosenLot.lotNumber || '';
+        updated[idx].costPerUnit = chosenLot.costPerUnit || updated[idx].costPerUnit || 0;
+        updated[idx].supplierName = chosenLot.supplier?.name || chosenLot.supplierName || updated[idx].supplierName;
+        updated[idx].expirationDate = chosenLot.expirationDate ? chosenLot.expirationDate.split('T')[0] : '';
+        updated[idx].harvestYear = chosenLot.harvestYear || '';
+      }
+    }
+
+    const q = parseFloat(updated[idx].quantityUsed) || 0;
+    const c = parseFloat(updated[idx].costPerUnit) || 0;
+    updated[idx].totalCost = Math.round(q * c * 100) / 100;
+
+    setBatchIngredients(updated);
+  };
+
+  const removeIngredientFromNewBatch = (idx: number) => {
+    setBatchIngredients(batchIngredients.filter((_, i) => i !== idx));
+  };
+
+  const autoCalculateCostInNewBatch = () => {
+    const totalIngredientsCost = batchIngredients.reduce((sum: number, it: any) => sum + (parseFloat(it.totalCost) || 0), 0);
+    const vol = parseFloat(volumePlanned) || 500;
+    if (totalIngredientsCost > 0 && vol > 0) {
+      setCostPerLiter((totalIngredientsCost / vol).toFixed(2));
+    }
+  };
+
+  // Helper functions for Edit Batch Ingredients
+  const addIngredientRowToEditBatch = (category: string = 'MALTE', stage: string = 'MOSTURA') => {
+    const unit = category === 'MALTE' ? 'KG' : category === 'LUPULO' ? 'G' : category === 'LEVEDURA' ? 'PACOTE' : 'KG';
+    setEditBatchIngredients([
+      ...editBatchIngredients,
+      {
+        inventoryItemId: null,
+        inventoryLotId: null,
+        availableLots: [],
+        supplierId: null,
+        name: '',
+        category,
+        quantityUsed: category === 'MALTE' ? 25 : category === 'LUPULO' ? 500 : 1,
+        unit,
+        supplierName: '',
+        supplierLot: '',
+        costPerUnit: 0,
+        totalCost: 0,
+        expirationDate: '',
+        harvestYear: '',
+        stage,
+        notes: '',
+      },
+    ]);
+  };
+
+  const updateIngredientInEditBatch = (idx: number, field: string, value: any) => {
+    const updated = [...editBatchIngredients];
+    updated[idx] = { ...updated[idx], [field]: value };
+
+    if (field === 'inventoryItemId') {
+      const item = inventoryItems.find((it) => it.id === value);
+      if (item) {
+        updated[idx].name = item.name;
+        updated[idx].category = item.category || updated[idx].category;
+        updated[idx].unit = item.unit || updated[idx].unit;
+        const activeLots = (item.lots || []).filter((l: any) => (l.currentQuantity || 0) > 0);
+        updated[idx].availableLots = activeLots;
+        const chosenLot = activeLots.length > 0 ? activeLots[0] : null;
+        if (chosenLot) {
+          updated[idx].inventoryLotId = chosenLot.id;
+          updated[idx].supplierId = chosenLot.supplierId || item.supplierId;
+          updated[idx].supplierName = chosenLot.supplier?.name || chosenLot.supplierName || item.supplier?.name || '';
+          updated[idx].supplierLot = chosenLot.lotNumber || '';
+          updated[idx].costPerUnit = chosenLot.costPerUnit || item.costPerUnit || 0;
+          updated[idx].expirationDate = chosenLot.expirationDate ? chosenLot.expirationDate.split('T')[0] : '';
+          updated[idx].harvestYear = chosenLot.harvestYear || '';
+        } else {
+          updated[idx].inventoryLotId = null;
+          updated[idx].costPerUnit = item.costPerUnit || 0;
+          updated[idx].supplierName = item.supplier?.name || '';
+        }
+      } else {
+        updated[idx].availableLots = [];
+        updated[idx].inventoryLotId = null;
+      }
+    }
+
+    if (field === 'inventoryLotId') {
+      const chosenLot = (updated[idx].availableLots || []).find((l: any) => l.id === value);
+      if (chosenLot) {
+        updated[idx].supplierLot = chosenLot.lotNumber || '';
+        updated[idx].costPerUnit = chosenLot.costPerUnit || updated[idx].costPerUnit || 0;
+        updated[idx].supplierName = chosenLot.supplier?.name || chosenLot.supplierName || updated[idx].supplierName;
+        updated[idx].expirationDate = chosenLot.expirationDate ? chosenLot.expirationDate.split('T')[0] : '';
+        updated[idx].harvestYear = chosenLot.harvestYear || '';
+      }
+    }
+
+    const q = parseFloat(updated[idx].quantityUsed) || 0;
+    const c = parseFloat(updated[idx].costPerUnit) || 0;
+    updated[idx].totalCost = Math.round(q * c * 100) / 100;
+
+    setEditBatchIngredients(updated);
+  };
+
+  const removeIngredientFromEditBatch = (idx: number) => {
+    setEditBatchIngredients(editBatchIngredients.filter((_, i) => i !== idx));
+  };
+
+  const autoCalculateCostInEditBatch = () => {
+    const totalIngredientsCost = editBatchIngredients.reduce((sum: number, it: any) => sum + (parseFloat(it.totalCost) || 0), 0);
+    const vol = parseFloat(editBatchVolumeProduced) || parseFloat(editBatchModal?.volumePlannedLiters) || 500;
+    if (totalIngredientsCost > 0 && vol > 0) {
+      setEditBatchCostPerLiter((totalIngredientsCost / vol).toFixed(2));
+    }
   };
 
   // Recipe Ingredients Dynamic Handlers
@@ -847,7 +1055,7 @@ export default function ProducaoPage() {
             activeTab === 'RECIPES' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Tabela de Preços & Receitas ({recipes.length})
+          Cervejas & Lotes ({recipes.length})
         </button>
       </div>
 
@@ -1516,13 +1724,13 @@ export default function ProducaoPage() {
 
         return (
           <div className="space-y-6">
-            {/* Toolbar de Receitas */}
+            {/* Toolbar de Receitas / Cervejas */}
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs">
               <div className="flex items-center gap-2 flex-1 max-w-md bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
                 <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
                 <input
                   type="text"
-                  placeholder="Buscar receita por nome, estilo ou registro MAPA..."
+                  placeholder="Buscar cerveja por nome, estilo ou registro MAPA..."
                   value={recipeSearch}
                   onChange={(e) => setRecipeSearch(e.target.value)}
                   className="bg-transparent w-full text-xs font-bold text-slate-800 focus:outline-none"
@@ -1537,7 +1745,7 @@ export default function ProducaoPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-900 font-bold rounded-xl flex items-center gap-1.5">
                   <Beer className="w-4 h-4 text-purple-700" />
-                  <span>{recipes.length} Receitas Ativas</span>
+                  <span>{recipes.length} Cervejas Cadastradas</span>
                 </div>
 
                 <button
@@ -1546,21 +1754,21 @@ export default function ProducaoPage() {
                   className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Nova Receita</span>
+                  <span>+ Cadastrar Nova Cerveja (Rótulo)</span>
                 </button>
               </div>
             </div>
 
-            {/* Grid de Receitas */}
+            {/* Grid de Cervejas & Lotes Produzidos */}
             {filteredRecipes.length === 0 ? (
               <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
                 <Beer className="w-12 h-12 mx-auto text-slate-300" />
-                <p className="font-bold">Nenhuma receita encontrada.</p>
+                <p className="font-bold">Nenhuma cerveja cadastrada.</p>
                 <button
                   onClick={openNewRecipeModal}
                   className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-sm"
                 >
-                  + Criar Primeira Receita
+                  + Cadastrar Primeira Cerveja
                 </button>
               </div>
             ) : (
@@ -1577,13 +1785,16 @@ export default function ProducaoPage() {
                       ? `Tabela (${recipe.styleCategory || 'Estilo'})`
                       : 'Preço Manual';
 
+                  const recipeBatches = batches.filter((b: any) => b.recipeId === recipe.id);
+                  const isExpanded = expandedRecipeId === recipe.id;
+
                   return (
                     <div
                       key={recipe.id}
                       className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all flex flex-col justify-between gap-4"
                     >
                       <div className="space-y-3">
-                        {/* Header da Receita */}
+                        {/* Header da Cerveja */}
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1607,14 +1818,14 @@ export default function ProducaoPage() {
                             <button
                               onClick={() => openEditRecipeModal(recipe)}
                               className="p-1.5 text-slate-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
-                              title="Editar Receita & Insumos"
+                              title="Editar Dados da Cerveja / Rótulo"
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteRecipe(recipe.id, recipe.name)}
                               className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
-                              title="Excluir Receita"
+                              title="Excluir Cerveja"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1662,46 +1873,6 @@ export default function ProducaoPage() {
                           </div>
                         </div>
 
-                        {/* Parâmetros de pH Alvo */}
-                        {(recipe.targetPhMash || recipe.targetPhFinal) && (
-                          <div className="p-2 bg-purple-50/50 border border-purple-200 rounded-xl flex items-center justify-between text-[11px] text-purple-900">
-                            <span>pH Mostura Alvo: <strong>{recipe.targetPhMash || '-'}</strong></span>
-                            <span>•</span>
-                            <span>pH Cerveja Pronta: <strong>{recipe.targetPhFinal || '-'}</strong></span>
-                          </div>
-                        )}
-
-                        {/* Insumos da Receita */}
-                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1">
-                              <Layers className="w-3.5 h-3.5 text-purple-600" />
-                              Insumos da Receita ({recipe.ingredients?.length || 0}):
-                            </span>
-                            <button
-                              onClick={() => openEditRecipeModal(recipe)}
-                              className="text-[10px] text-purple-700 font-bold hover:underline"
-                            >
-                              Editar Insumos
-                            </button>
-                          </div>
-
-                          {(recipe.ingredients && recipe.ingredients.length > 0) ? (
-                            <div className="space-y-1 pt-1 border-t border-slate-200 text-[11px] max-h-32 overflow-y-auto">
-                              {recipe.ingredients.map((ing: any, iIdx: number) => (
-                                <div key={iIdx} className="flex items-center justify-between text-slate-700 bg-white p-1 rounded border border-slate-100">
-                                  <span className="truncate font-semibold">• {ing.name} <span className="text-[10px] text-slate-400">({ing.stage})</span></span>
-                                  <span className="font-bold text-slate-900 flex-shrink-0 ml-1">{ing.amount} {ing.unit}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic block">
-                              Nenhum insumo configurado. Clique em &quot;Editar Insumos&quot; para adicionar.
-                            </span>
-                          )}
-                        </div>
-
                         {/* Tabela de Preços e Margens */}
                         <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-xl space-y-1.5 text-xs">
                           <div className="flex items-center justify-between">
@@ -1717,21 +1888,109 @@ export default function ProducaoPage() {
                             </span>
                           </div>
                         </div>
+
+                        {/* SEÇÃO EXPANSÍVEL: HISTÓRICO DE LOTES PRODUZIDOS DESTA CERVEJA */}
+                        <div className="space-y-2 pt-1 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedRecipeId(isExpanded ? null : recipe.id)}
+                            className="w-full py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-950 border border-purple-200 rounded-xl font-black text-xs flex items-center justify-between transition-colors shadow-2xs"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <Activity className="w-4 h-4 text-purple-700" />
+                              <span>Lotes Produzidos ({recipeBatches.length})</span>
+                            </div>
+                            <span className="text-[11px] font-bold text-purple-700 flex items-center gap-1">
+                              {isExpanded ? 'Recolher ▲' : 'Ver Lotes & Rastrear ▼'}
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="space-y-2 pt-1 animate-in fade-in">
+                              {recipeBatches.length === 0 ? (
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500 space-y-1">
+                                  <p className="font-bold">Nenhum lote registrado para {recipe.name}.</p>
+                                  <p className="text-[10px] text-slate-400">
+                                    Clique em &quot;Iniciar Brassagem&quot; abaixo para registrar o lote e inserir os insumos na hora!
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                  {recipeBatches.map((b: any) => (
+                                    <div
+                                      key={b.id}
+                                      className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs hover:border-purple-300 transition-all"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-mono font-black text-slate-900 text-xs">
+                                          #{b.batchNumber}
+                                        </span>
+                                        <span className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded-full font-black text-[9px]">
+                                          {b.status}
+                                        </span>
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600">
+                                        <span>Data: <strong>{formatDateShort(b.brewDate)}</strong></span>
+                                        <span>Tanque: <strong>{b.tank?.name || 'S/ Tanque'}</strong></span>
+                                        <span>Vol: <strong>{b.volumeProducedLiters || b.volumePlannedLiters}L</strong></span>
+                                        <span>Insumos: <strong>{b.ingredients?.length || 0}</strong></span>
+                                      </div>
+
+                                      {/* Ações Diretas no Lote */}
+                                      <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-200">
+                                        <button
+                                          type="button"
+                                          onClick={() => setBatchTraceabilityModal(b)}
+                                          className="py-1 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
+                                          title="Ver insumos, fornecedores e lotes utilizados"
+                                        >
+                                          <ShieldCheck className="w-3 h-3 text-purple-600 flex-shrink-0" />
+                                          <span>Insumos</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openBatchQualityModal(b)}
+                                          className="py-1 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
+                                          title="Ver parâmetros MAPA, pHs e sensorial"
+                                        >
+                                          <Activity className="w-3 h-3 text-purple-600 flex-shrink-0" />
+                                          <span>MAPA & pH</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openEditBatchModal(b)}
+                                          className="py-1 px-1 bg-white hover:bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
+                                          title="Editar insumos e dados deste lote"
+                                        >
+                                          <Edit3 className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                                          <span>Editar</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Card Footer Actions */}
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      {/* Card Footer: Botão Iniciar Brassagem desta Cerveja */}
+                      <div className="pt-3 border-t border-slate-100">
                         <button
                           type="button"
                           onClick={() => {
                             setRecipeId(recipe.id);
-                            populateBatchIngredientsFromRecipe(recipe, 500);
+                            setBatchNumber(`LOTE-${new Date().getFullYear()}-${String(batches.length + 1).padStart(3, '0')}`);
+                            setVolumePlanned(String(recipe.batchYieldLiters || 500));
+                            populateBatchIngredientsFromRecipe(recipe, recipe.batchYieldLiters || 500);
                             setNewBatchModal(true);
                           }}
-                          className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all"
                         >
                           <Plus className="w-4 h-4" />
-                          <span>Iniciar Brassagem desta Receita</span>
+                          <span>+ Iniciar Brassagem de {recipe.name}</span>
                         </button>
                       </div>
                     </div>
@@ -1746,16 +2005,18 @@ export default function ProducaoPage() {
       {/* Modal: Nova Brassagem com Rastreabilidade de Insumos */}
       {newBatchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
             <div>
               <h3 className="font-black text-lg text-slate-900 mb-0.5">Iniciar Nova Brassagem</h3>
-              <p className="text-xs text-slate-500">Cadastre o lote, confirme os lotes de insumos utilizados e faça a baixa no estoque</p>
+              <p className="text-xs text-slate-500">
+                Selecione a cerveja que vai brassar e adicione os insumos e lotes utilizados livremente na hora
+              </p>
             </div>
 
             <form onSubmit={handleCreateBatch} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Receita da Cerveja</label>
+                  <label className="block font-bold text-slate-700 mb-1">Cerveja / Rótulo a Brassar *</label>
                   <select
                     value={recipeId}
                     onChange={(e) => handleRecipeChangeInBatch(e.target.value)}
@@ -1770,7 +2031,7 @@ export default function ProducaoPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Número / Código do Lote</label>
+                  <label className="block font-bold text-slate-700 mb-1">Número / Código do Lote *</label>
                   <input
                     type="text"
                     required
@@ -1784,7 +2045,7 @@ export default function ProducaoPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Volume Previsto (L)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Volume Previsto da Brassagem (L)</label>
                   <input
                     type="number"
                     required
@@ -1795,13 +2056,13 @@ export default function ProducaoPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Tanque / Fermentador</label>
+                  <label className="block font-bold text-slate-700 mb-1">Tanque de Destino / Fermentador</label>
                   <select
                     value={tankId}
                     onChange={(e) => setTankId(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
                   >
-                    <option value="">-- Sem Tanque --</option>
+                    <option value="">-- Sem Tanque (Alocar Depois) --</option>
                     {tanks.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name} ({t.capacityLiters}L) - {t.status}
@@ -1811,111 +2072,142 @@ export default function ProducaoPage() {
                 </div>
               </div>
 
-              {/* SEÇÃO RASTREABILIDADE DE INSUMOS DA BRASSAGEM */}
+              {/* SEÇÃO RASTREABILIDADE DE INSUMOS DA BRASSAGEM (DINÂMICA) */}
               <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-purple-950 font-black">
-                    <ShieldCheck className="w-4 h-4 text-purple-700" />
-                    <span>Insumos & Rastreabilidade de Lotes ({batchIngredients.length})</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="text-purple-950 font-black flex items-center gap-1.5 text-xs">
+                      <ShieldCheck className="w-4 h-4 text-purple-700" />
+                      Insumos Utilizados nesta Brassagem ({batchIngredients.length})
+                    </span>
+                    <p className="text-[10px] text-slate-500">
+                      Adicione os maltes, lúpulos e leveduras que foram realmente para a panela/tanque
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBatchIngredients([
-                        ...batchIngredients,
-                        {
-                          name: '',
-                          category: 'MALTE',
-                          quantityUsed: 10,
-                          unit: 'KG',
-                          supplierName: '',
-                          supplierLot: '',
-                          costPerUnit: 0,
-                          totalCost: 0,
-                          stage: 'MOSTURA',
-                        },
-                      ]);
-                    }}
-                    className="px-2.5 py-1 bg-white hover:bg-purple-100 text-purple-900 border border-purple-300 rounded-lg text-[10px] font-bold"
-                  >
-                    + Adicionar Insumo Extra
-                  </button>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToNewBatch('MALTE', 'MOSTURA')}
+                      className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Malte
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToNewBatch('LUPULO', 'FERVURA_60MIN')}
+                      className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Lúpulo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToNewBatch('LEVEDURA', 'FERMENTACAO')}
+                      className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Levedura
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToNewBatch('OUTRO', 'MOSTURA')}
+                      className="px-2 py-1 bg-white hover:bg-purple-100 text-purple-900 border border-purple-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Outro
+                    </button>
+                  </div>
                 </div>
 
                 {batchIngredients.length === 0 ? (
-                  <p className="text-[11px] text-slate-500 italic p-2 bg-white rounded-xl border border-purple-100 text-center">
-                    Nenhum insumo configurado nesta receita. Adicione os insumos abaixo para garantir rastreabilidade completa.
-                  </p>
+                  <div className="p-4 bg-white rounded-xl border border-purple-200 text-center text-[11px] text-slate-500 space-y-2">
+                    <p className="font-bold">Nenhum insumo lançado nesta brassagem ainda.</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => addIngredientRowToNewBatch('MALTE', 'MOSTURA')}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold"
+                      >
+                        + Adicionar Primeiro Insumo
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                  <div className="space-y-2.5 max-h-64 overflow-y-auto">
                     {batchIngredients.map((ing: any, idx: number) => (
-                      <div key={idx} className="p-2.5 bg-white rounded-xl border border-purple-200/80 space-y-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <div>
-                            <span className="text-[10px] text-slate-400 block font-bold">Insumo</span>
-                            <input
-                              type="text"
-                              required
-                              value={ing.name}
-                              onChange={(e) => {
-                                const updated = [...batchIngredients];
-                                updated[idx].name = e.target.value;
-                                setBatchIngredients(updated);
-                              }}
-                              className="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                            />
+                      <div key={idx} className="p-3 bg-white rounded-xl border border-purple-200/80 space-y-2 shadow-2xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-slate-500 block font-bold">Insumo do Estoque</span>
+                            <select
+                              value={ing.inventoryItemId || ''}
+                              onChange={(e) => updateIngredientInNewBatch(idx, 'inventoryItemId', e.target.value)}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                            >
+                              <option value="">-- Selecionar do Estoque ou Personalizar --</option>
+                              {inventoryItems.map((it) => (
+                                <option key={it.id} value={it.id}>
+                                  {it.name} ({it.category}) - R$ {it.costPerUnit}/{it.unit}
+                                </option>
+                              ))}
+                            </select>
                           </div>
 
                           <div>
-                            <span className="text-[10px] text-slate-400 block font-bold">Qtd ({ing.unit})</span>
+                            <span className="text-[10px] text-slate-500 block font-bold">Qtd Utilizada ({ing.unit})</span>
                             <div className="flex gap-1">
                               <input
                                 type="number"
                                 step="0.01"
                                 required
                                 value={ing.quantityUsed}
-                                onChange={(e) => {
-                                  const updated = [...batchIngredients];
-                                  const q = parseFloat(e.target.value) || 0;
-                                  updated[idx].quantityUsed = q;
-                                  updated[idx].totalCost = Math.round(q * (updated[idx].costPerUnit || 0) * 100) / 100;
-                                  setBatchIngredients(updated);
-                                }}
-                                className="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                                onChange={(e) => updateIngredientInNewBatch(idx, 'quantityUsed', e.target.value)}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
                               />
-                              <span className="p-1 bg-slate-100 rounded text-[10px] font-bold self-center">
-                                {ing.unit}
-                              </span>
+                              <select
+                                value={ing.unit}
+                                onChange={(e) => updateIngredientInNewBatch(idx, 'unit', e.target.value)}
+                                className="px-1.5 py-1 bg-slate-100 border border-slate-300 rounded-lg text-[10px] font-bold"
+                              >
+                                <option value="KG">KG</option>
+                                <option value="G">G</option>
+                                <option value="L">L</option>
+                                <option value="ML">ML</option>
+                                <option value="PACOTE">PCT</option>
+                                <option value="UN">UN</option>
+                              </select>
                             </div>
                           </div>
 
                           <div>
-                            <span className="text-[10px] text-purple-900 block font-black">Lote do Insumo em Estoque *</span>
+                            <span className="text-[10px] text-slate-500 block font-bold">Etapa de Adição</span>
+                            <select
+                              value={ing.stage}
+                              onChange={(e) => updateIngredientInNewBatch(idx, 'stage', e.target.value)}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-[11px]"
+                            >
+                              <option value="MOSTURA">Mostura</option>
+                              <option value="FERVURA_60MIN">Fervura 60m</option>
+                              <option value="FERVURA_15MIN">Fervura 15m</option>
+                              <option value="WHIRLPOOL">Whirlpool</option>
+                              <option value="DRY_HOPPING">Dry Hopping</option>
+                              <option value="FERMENTACAO">Fermentação</option>
+                              <option value="MATURACAO">Maturação</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Linha do Lote do Insumo e Fornecedor */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-purple-50">
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-purple-900 block font-black">Lote do Insumo em Estoque (Rastreabilidade MAPA) *</span>
                             {ing.availableLots && ing.availableLots.length > 0 ? (
                               <select
                                 value={ing.inventoryLotId || ''}
-                                onChange={(e) => {
-                                  const selectedLotId = e.target.value;
-                                  const chosenLot = ing.availableLots.find((l: any) => l.id === selectedLotId);
-                                  const updated = [...batchIngredients];
-                                  if (chosenLot) {
-                                    updated[idx].inventoryLotId = chosenLot.id;
-                                    updated[idx].supplierLot = chosenLot.lotNumber;
-                                    updated[idx].supplierName = chosenLot.supplier?.name || chosenLot.supplierName || updated[idx].supplierName;
-                                    updated[idx].costPerUnit = chosenLot.costPerUnit || updated[idx].costPerUnit;
-                                    updated[idx].expirationDate = chosenLot.expirationDate ? chosenLot.expirationDate.split('T')[0] : '';
-                                    updated[idx].harvestYear = chosenLot.harvestYear || '';
-                                    updated[idx].totalCost = Math.round((updated[idx].quantityUsed || 0) * (updated[idx].costPerUnit || 0) * 100) / 100;
-                                  } else {
-                                    updated[idx].inventoryLotId = null;
-                                  }
-                                  setBatchIngredients(updated);
-                                }}
+                                onChange={(e) => updateIngredientInNewBatch(idx, 'inventoryLotId', e.target.value)}
                                 className="w-full px-2 py-1 bg-purple-50 border border-purple-300 rounded-lg font-mono font-bold text-xs text-purple-950"
                               >
                                 {ing.availableLots.map((lot: any) => (
                                   <option key={lot.id} value={lot.id}>
-                                    Lote #{lot.lotNumber} ({lot.currentQuantity} {ing.unit} disp.{lot.expirationDate ? ` - Venc: ${formatDate(lot.expirationDate)}` : ''})
+                                    Lote #{lot.lotNumber} ({lot.currentQuantity} {ing.unit} disp. {lot.supplier?.name ? `- ${lot.supplier.name}` : ''})
                                   </option>
                                 ))}
                                 <option value="">-- Digitar Lote Manual --</option>
@@ -1923,31 +2215,41 @@ export default function ProducaoPage() {
                             ) : (
                               <input
                                 type="text"
-                                placeholder="Ex: AGR-2026-991"
+                                placeholder="Digite o Lote do Fornecedor (ex: AGR-2026-081)"
                                 value={ing.supplierLot || ''}
-                                onChange={(e) => {
-                                  const updated = [...batchIngredients];
-                                  updated[idx].supplierLot = e.target.value.toUpperCase();
-                                  setBatchIngredients(updated);
-                                }}
+                                onChange={(e) => updateIngredientInNewBatch(idx, 'supplierLot', e.target.value.toUpperCase())}
                                 className="w-full px-2 py-1 bg-purple-50 border border-purple-300 rounded-lg font-mono font-bold text-xs text-purple-950"
                               />
                             )}
                           </div>
+
+                          {!ing.inventoryItemId && (
+                            <div>
+                              <span className="text-[10px] text-slate-500 block font-bold">Nome do Insumo</span>
+                              <input
+                                type="text"
+                                placeholder="Ex: Lúpulo Citra T90"
+                                value={ing.name}
+                                onChange={(e) => updateIngredientInNewBatch(idx, 'name', e.target.value)}
+                                className="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                              />
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
-                          <span className="text-slate-500 truncate max-w-[200px]">
+                          <span className="text-slate-500 truncate max-w-[250px]">
                             {ing.supplierName ? `Fornecedor: ${ing.supplierName}` : `Etapa: ${ing.stage}`}
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-slate-700 font-bold">
-                              Custo: {formatCurrency(ing.costPerUnit || 0)}/{ing.unit} (Total: {formatCurrency(ing.totalCost || (ing.quantityUsed * (ing.costPerUnit || 0)))})
+                              Custo: {formatCurrency(ing.costPerUnit || 0)}/{ing.unit} (Total: {formatCurrency(ing.totalCost || 0)})
                             </span>
                             <button
                               type="button"
-                              onClick={() => setBatchIngredients(batchIngredients.filter((_, i) => i !== idx))}
+                              onClick={() => removeIngredientFromNewBatch(idx)}
                               className="text-rose-500 hover:text-rose-700 p-0.5"
+                              title="Remover Insumo"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1958,8 +2260,8 @@ export default function ProducaoPage() {
                   </div>
                 )}
 
-                {/* Baixa Automática no Estoque */}
-                <div className="p-2.5 bg-white rounded-xl border border-purple-200 flex items-center justify-between">
+                {/* Baixa Automática no Estoque & Recalcular Custo */}
+                <div className="pt-2 border-t border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -1968,20 +2270,26 @@ export default function ProducaoPage() {
                       className="w-4 h-4 text-purple-600 rounded"
                     />
                     <span className="font-bold text-slate-800 text-xs">
-                      Dar baixa automática no estoque de insumos ao iniciar esta brassagem
+                      Dar baixa automática no estoque de insumos
                     </span>
                   </label>
-                  <span className="text-[10px] text-purple-800 font-black bg-purple-100 px-2 py-0.5 rounded">
-                    Recomendado
-                  </span>
+
+                  <button
+                    type="button"
+                    onClick={autoCalculateCostInNewBatch}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center gap-1 shadow-xs self-end sm:self-auto"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Calcular Custo/L dos Insumos</span>
+                  </button>
                 </div>
               </div>
 
               {/* Cost per Liter Input */}
               <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-amber-900">Preço de Custo da Cerveja</span>
-                  <span className="text-[10px] text-amber-700">Calculado a partir dos insumos</span>
+                  <span className="font-extrabold text-amber-900">Preço de Custo Apurado da Cerveja</span>
+                  <span className="text-[10px] text-amber-700">Calculado a partir dos insumos adicionados</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 items-center">
                   <div>
@@ -1996,7 +2304,7 @@ export default function ProducaoPage() {
                     />
                   </div>
                   <div className="text-right pr-2">
-                    <span className="text-[10px] text-slate-500 block">Custo Total Lote:</span>
+                    <span className="text-[10px] text-slate-500 block">Custo Total Brassagem:</span>
                     <span className="text-base font-black text-rose-700">
                       {formatCurrency((parseFloat(volumePlanned) || 0) * (parseFloat(costPerLiter) || 0))}
                     </span>
@@ -2008,7 +2316,7 @@ export default function ProducaoPage() {
                 <label className="block font-bold text-slate-700 mb-1">Notas da Brassagem</label>
                 <textarea
                   rows={2}
-                  placeholder="OG medida, temperatura de mostura, observações do lote..."
+                  placeholder="Observações da brassagem, correção de água, dry hopping previsto..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
@@ -2025,9 +2333,9 @@ export default function ProducaoPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl shadow-md"
                 >
-                  Iniciar Lote & Rastrear Insumos
+                  Iniciar Brassagem & Rastrear Lote
                 </button>
               </div>
             </form>
@@ -2035,33 +2343,64 @@ export default function ProducaoPage() {
         </div>
       )}
 
-      {/* Modal: Editar Lote e Custo */}
+      {/* Modal: Editar Lote, Status & Insumos Utilizados (Sempre Editável) */}
       {editBatchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-black text-lg text-slate-900 mb-1">Editar Lote {editBatchModal.batchNumber}</h3>
-            <p className="text-xs text-slate-500 mb-4">{editBatchModal.recipe?.name} ({editBatchModal.recipe?.style})</p>
-
-            <form onSubmit={handleUpdateBatch} className="space-y-3 text-xs">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Etapa de Produção (Status)</label>
-                <select
-                  value={editBatchStatus}
-                  onChange={(e) => setEditBatchStatus(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                >
-                  <option value="BRASSAGEM">BRASSAGEM</option>
-                  <option value="FERMENTANDO">FERMENTANDO</option>
-                  <option value="MATURANDO">MATURANDO</option>
-                  <option value="PRONTO_ENVASE">PRONTO P/ ENVASE</option>
-                  <option value="ENVASADO">ENVASADO</option>
-                  <option value="FINALIZADO">FINALIZADO (Liberar Tanque)</option>
-                </select>
+                <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                  <span>Editar Lote #{editBatchModal.batchNumber}</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-bold">
+                  {editBatchModal.recipe?.name} ({editBatchModal.recipe?.style}) • Ajuste de Etapas e Insumos
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setEditBatchModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleUpdateBatch} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Volume Produzido Real (L)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Etapa de Produção (Status)</label>
+                  <select
+                    value={editBatchStatus}
+                    onChange={(e) => setEditBatchStatus(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  >
+                    <option value="BRASSAGEM">BRASSAGEM</option>
+                    <option value="FERMENTANDO">FERMENTANDO</option>
+                    <option value="MATURANDO">MATURANDO</option>
+                    <option value="PRONTO_ENVASE">PRONTO P/ ENVASE</option>
+                    <option value="ENVASADO">ENVASADO</option>
+                    <option value="FINALIZADO">FINALIZADO (Liberar Tanque)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tanque Alocado</label>
+                  <select
+                    value={editBatchTankId}
+                    onChange={(e) => setEditBatchTankId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                  >
+                    <option value="">-- Sem Tanque --</option>
+                    {tanks.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.capacityLiters}L)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Volume Real Produzido (L)</label>
                   <input
                     type="number"
                     value={editBatchVolumeProduced}
@@ -2069,9 +2408,201 @@ export default function ProducaoPage() {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
                   />
                 </div>
+              </div>
 
+              {/* SEÇÃO INSUMOS DO LOTE (SEMPRE EDITÁVEIS) */}
+              <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="text-purple-950 font-black flex items-center gap-1.5 text-xs">
+                      <ShieldCheck className="w-4 h-4 text-purple-700" />
+                      Insumos Utilizados neste Lote ({editBatchIngredients.length})
+                    </span>
+                    <p className="text-[10px] text-slate-500">
+                      Adicione ou ajuste os insumos, quantidades e lotes utilizados a qualquer momento
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToEditBatch('MALTE', 'MOSTURA')}
+                      className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Malte
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToEditBatch('LUPULO', 'FERVURA_60MIN')}
+                      className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Lúpulo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToEditBatch('LEVEDURA', 'FERMENTACAO')}
+                      className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Levedura
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addIngredientRowToEditBatch('OUTRO', 'MOSTURA')}
+                      className="px-2 py-1 bg-white hover:bg-purple-100 text-purple-900 border border-purple-300 rounded-lg text-[10px] font-bold"
+                    >
+                      + Outro
+                    </button>
+                  </div>
+                </div>
+
+                {editBatchIngredients.length === 0 ? (
+                  <div className="p-3 bg-white rounded-xl border border-purple-200 text-center text-[11px] text-slate-400">
+                    Nenhum insumo registrado para este lote. Clique nos botões acima para adicionar.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-56 overflow-y-auto">
+                    {editBatchIngredients.map((ing: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-white rounded-xl border border-purple-200/80 space-y-2 shadow-2xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-slate-500 block font-bold">Insumo</span>
+                            <select
+                              value={ing.inventoryItemId || ''}
+                              onChange={(e) => updateIngredientInEditBatch(idx, 'inventoryItemId', e.target.value)}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                            >
+                              <option value="">-- Selecionar do Estoque ou Personalizar --</option>
+                              {inventoryItems.map((it) => (
+                                <option key={it.id} value={it.id}>
+                                  {it.name} ({it.category}) - R$ {it.costPerUnit}/{it.unit}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] text-slate-500 block font-bold">Qtd ({ing.unit})</span>
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                required
+                                value={ing.quantityUsed}
+                                onChange={(e) => updateIngredientInEditBatch(idx, 'quantityUsed', e.target.value)}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                              />
+                              <select
+                                value={ing.unit}
+                                onChange={(e) => updateIngredientInEditBatch(idx, 'unit', e.target.value)}
+                                className="px-1.5 py-1 bg-slate-100 border border-slate-300 rounded-lg text-[10px] font-bold"
+                              >
+                                <option value="KG">KG</option>
+                                <option value="G">G</option>
+                                <option value="L">L</option>
+                                <option value="ML">ML</option>
+                                <option value="PACOTE">PCT</option>
+                                <option value="UN">UN</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] text-slate-500 block font-bold">Etapa</span>
+                            <select
+                              value={ing.stage}
+                              onChange={(e) => updateIngredientInEditBatch(idx, 'stage', e.target.value)}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-[11px]"
+                            >
+                              <option value="MOSTURA">Mostura</option>
+                              <option value="FERVURA_60MIN">Fervura 60m</option>
+                              <option value="FERVURA_15MIN">Fervura 15m</option>
+                              <option value="WHIRLPOOL">Whirlpool</option>
+                              <option value="DRY_HOPPING">Dry Hopping</option>
+                              <option value="FERMENTACAO">Fermentação</option>
+                              <option value="MATURACAO">Maturação</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Lote do Insumo */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-purple-50">
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-purple-900 block font-black">Lote do Insumo (Rastreabilidade) *</span>
+                            {ing.availableLots && ing.availableLots.length > 0 ? (
+                              <select
+                                value={ing.inventoryLotId || ''}
+                                onChange={(e) => updateIngredientInEditBatch(idx, 'inventoryLotId', e.target.value)}
+                                className="w-full px-2 py-1 bg-purple-50 border border-purple-300 rounded-lg font-mono font-bold text-xs text-purple-950"
+                              >
+                                {ing.availableLots.map((lot: any) => (
+                                  <option key={lot.id} value={lot.id}>
+                                    Lote #{lot.lotNumber} ({lot.currentQuantity} {ing.unit} disp. {lot.supplier?.name ? `- ${lot.supplier.name}` : ''})
+                                  </option>
+                                ))}
+                                <option value="">-- Digitar Lote Manual --</option>
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder="Digite o Lote do Fornecedor (ex: AGR-2026-081)"
+                                value={ing.supplierLot || ''}
+                                onChange={(e) => updateIngredientInEditBatch(idx, 'supplierLot', e.target.value.toUpperCase())}
+                                className="w-full px-2 py-1 bg-purple-50 border border-purple-300 rounded-lg font-mono font-bold text-xs text-purple-950"
+                              />
+                            )}
+                          </div>
+
+                          {!ing.inventoryItemId && (
+                            <div>
+                              <span className="text-[10px] text-slate-500 block font-bold">Nome do Insumo</span>
+                              <input
+                                type="text"
+                                placeholder="Ex: Lúpulo Citra T90"
+                                value={ing.name}
+                                onChange={(e) => updateIngredientInEditBatch(idx, 'name', e.target.value)}
+                                className="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
+                          <span className="text-slate-500 truncate max-w-[250px]">
+                            {ing.supplierName ? `Fornecedor: ${ing.supplierName}` : `Etapa: ${ing.stage}`}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-700 font-bold">
+                              Custo: {formatCurrency(ing.costPerUnit || 0)}/{ing.unit} (Total: {formatCurrency(ing.totalCost || 0)})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeIngredientFromEditBatch(idx)}
+                              className="text-rose-500 hover:text-rose-700 p-0.5"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-purple-200 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={autoCalculateCostInEditBatch}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center gap-1 shadow-xs"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Recalcular Custo/L a partir dos Insumos</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Custo por Litro (R$/L)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Custo por Litro Apurado (R$/L)</label>
                   <input
                     type="number"
                     step="0.10"
@@ -2080,13 +2611,13 @@ export default function ProducaoPage() {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-rose-700"
                   />
                 </div>
-              </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="text-slate-500 font-bold">Custo Total Apurado:</span>
-                <span className="text-base font-black text-slate-900">
-                  {formatCurrency((parseFloat(editBatchVolumeProduced) || 0) * (parseFloat(editBatchCostPerLiter) || 0))}
-                </span>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                  <span className="text-slate-500 font-bold">Custo Total Apurado:</span>
+                  <span className="text-base font-black text-slate-900">
+                    {formatCurrency((parseFloat(editBatchVolumeProduced) || 0) * (parseFloat(editBatchCostPerLiter) || 0))}
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -2109,9 +2640,9 @@ export default function ProducaoPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm"
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl shadow-md"
                 >
-                  Salvar Alterações
+                  Salvar Alterações do Lote & Insumos
                 </button>
               </div>
             </form>
@@ -2125,10 +2656,10 @@ export default function ProducaoPage() {
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
             <div>
               <h3 className="font-black text-lg text-slate-900 mb-0.5">
-                {editRecipeModal ? 'Editar Receita & Insumos' : 'Cadastrar Nova Receita & Insumos'}
+                {editRecipeModal ? 'Editar Cerveja (Rótulo)' : 'Cadastrar Nova Cerveja (Rótulo)'}
               </h3>
               <p className="text-xs text-slate-500">
-                Configure os insumos da receita para cálculo automático de custos e rastreabilidade total
+                Cadastre o estilo, registros MAPA e parâmetros da cerveja. Os insumos reais e seus lotes podem ser inseridos livremente na hora de cada brassagem.
               </p>
             </div>
 
@@ -2300,7 +2831,7 @@ export default function ProducaoPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-purple-950 font-black">
                     <Layers className="w-4 h-4 text-purple-700" />
-                    <span>Insumos & Ingredientes da Receita ({recipeIngredients.length})</span>
+                    <span>Insumos Padrão (Opcional) ({recipeIngredients.length})</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
