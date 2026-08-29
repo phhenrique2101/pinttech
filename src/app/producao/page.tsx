@@ -43,7 +43,9 @@ export default function ProducaoPage() {
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'BATCHES' | 'TANKS' | 'RECIPES'>('BATCHES');
+  const [activeTab, setActiveTab] = useState<'CERVEJAS' | 'TANKS'>('CERVEJAS');
+  const [batchViewMode, setBatchViewMode] = useState<'BY_RECIPE' | 'ALL_BATCHES'>('BY_RECIPE');
+  const [batchStatusFilter, setBatchStatusFilter] = useState<string>('ALL');
 
   // Modals
   const [newBatchModal, setNewBatchModal] = useState(false);
@@ -1031,189 +1033,587 @@ export default function ProducaoPage() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs Principais (Simplificado em 2 Abas Claras e Diretas) */}
       <div className="flex gap-2 p-1 bg-slate-200/80 rounded-xl w-fit">
         <button
-          onClick={() => setActiveTab('BATCHES')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            activeTab === 'BATCHES' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          onClick={() => setActiveTab('CERVEJAS')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+            activeTab === 'CERVEJAS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Lotes & Custos ({batches.length})
+          <Beer className="w-4 h-4 text-purple-600" />
+          <span>Cervejas & Produção ({recipes.length} cervejas • {batches.length} lotes)</span>
         </button>
         <button
           onClick={() => setActiveTab('TANKS')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
             activeTab === 'TANKS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Tanques & Fermentadores ({tanks.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('RECIPES')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            activeTab === 'RECIPES' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Cervejas & Lotes ({recipes.length})
+          <Cylinder className="w-4 h-4 text-blue-600" />
+          <span>Tanques & Fermentadores ({tanks.length})</span>
         </button>
       </div>
 
-      {/* Tab: Batches */}
-      {activeTab === 'BATCHES' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {loading ? (
-            <div className="col-span-full text-center py-12 text-slate-400">Carregando lotes...</div>
-          ) : batches.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-slate-400">Nenhum lote registrado.</div>
-          ) : (
-            batches.map((batch) => {
-              const isReady = batch.status === 'PRONTO_ENVASE' || batch.status === 'ENVASADO';
-              const vol = batch.volumeProducedLiters || batch.volumePlannedLiters || 0;
-              const costL = batch.costPerLiter || 0;
-              const totalCost = batch.totalCost || costL * vol;
-              const salePriceL = batch.recipe?.salePricePerLiter || batch.recipe?.suggestedPricePerLiter || 20;
-              const projectedRevenue = vol * salePriceL;
-              const projectedProfit = projectedRevenue - totalCost;
-              const marginPercent = totalCost > 0 ? ((projectedProfit / totalCost) * 100) : 0;
+      {/* Tab: Cervejas & Produção (Unificado e Completo) */}
+      {activeTab === 'CERVEJAS' && (() => {
+        const totalVolumeProduced = batches.reduce((acc, b) => acc + (b.volumeProducedLiters || b.volumePlannedLiters || 0), 0);
+        const activeBatchesCount = batches.filter((b) => ['BRASSAGEM', 'FERMENTANDO', 'MATURANDO', 'PRONTO_ENVASE'].includes(b.status)).length;
 
-              return (
-                <div
-                  key={batch.id}
-                  className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-400 transition-all flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="font-mono text-xs font-bold text-amber-700 block">
-                          {batch.batchNumber}
-                        </span>
-                        <h3 className="font-black text-slate-900 text-base mt-0.5">
-                          {batch.recipe?.name || 'Cerveja'}
-                        </h3>
-                        <p className="text-xs text-slate-500 font-medium">
-                          {batch.recipe?.style || 'Estilo'}
-                        </p>
-                      </div>
+        // Filtrar cervejas
+        const filteredRecipes = recipes.filter((r) => {
+          if (!recipeSearch) return true;
+          const s = recipeSearch.toLowerCase();
+          return (
+            r.name.toLowerCase().includes(s) ||
+            r.style.toLowerCase().includes(s) ||
+            (r.mapaRegistration && r.mapaRegistration.toLowerCase().includes(s)) ||
+            (r.commercialDenomination && r.commercialDenomination.toLowerCase().includes(s))
+          );
+        });
 
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                            isReady
-                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                              : 'bg-blue-100 text-blue-800 border border-blue-200'
-                          }`}
-                        >
-                          {batch.status}
-                        </span>
-                        <button
-                          onClick={() => openEditBatchModal(batch)}
-                          className="p-1 text-slate-400 hover:text-amber-600 rounded"
-                          title="Editar Lote e Custos"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
+        // Filtrar lotes para a visualização geral
+        const filteredBatches = batches.filter((b) => {
+          const matchesStatus = batchStatusFilter === 'ALL' || b.status === batchStatusFilter;
+          const s = recipeSearch.toLowerCase();
+          const matchesSearch =
+            !recipeSearch ||
+            (b.batchNumber && b.batchNumber.toLowerCase().includes(s)) ||
+            (b.recipe?.name && b.recipe.name.toLowerCase().includes(s)) ||
+            (b.recipe?.style && b.recipe.style.toLowerCase().includes(s)) ||
+            (b.tank?.name && b.tank.name.toLowerCase().includes(s));
+          return matchesStatus && matchesSearch;
+        });
 
-                    {/* Cost & Financial Analysis Box */}
-                    <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-medium">Custo por Litro:</span>
-                        <span className="font-black text-rose-700">
-                          {costL > 0 ? formatCurrency(costL) + '/L' : 'Não informado'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-medium">Custo Total Brassagem:</span>
-                        <span className="font-bold text-slate-900">{formatCurrency(totalCost)}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
-                        <span className="text-slate-500 font-medium">Preço Venda Sugerido:</span>
-                        <span className="font-extrabold text-emerald-700">
-                          {formatCurrency(salePriceL)}/L
-                        </span>
-                      </div>
-
-                      {costL > 0 && (
-                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
-                          <span className="text-slate-500 font-medium">Margem Projetada:</span>
-                          <span className="font-black text-emerald-600 flex items-center gap-0.5">
-                            <TrendingUp className="w-3 h-3" />
-                            +{marginPercent.toFixed(0)}% ({formatCurrency(projectedProfit)})
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Volume:</span>
-                        <span className="font-bold text-slate-800">{vol} Litros</span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Tanque:</span>
-                        <span className="font-semibold text-blue-700">{batch.tank?.name || 'Sem tanque'}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Data Brassagem:</span>
-                        <span className="font-semibold">{formatDateShort(batch.brewDate)}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Barris Vinculados:</span>
-                        <span className="font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                          {batch._count?.kegs || 0} barris
-                        </span>
-                      </div>
-
-                      {/* Botões Ficha de Rastreabilidade e Ficha MAPA */}
-                      <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openBatchQualityModal(batch)}
-                          className="w-full py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
-                        >
-                          <Activity className="w-4 h-4" />
-                          <span>Ficha de Acompanhamento & MAPA</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBatchTraceabilityModal(batch)}
-                          className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
-                        >
-                          <ShieldCheck className="w-4 h-4 text-purple-600" />
-                          <span>Rastreabilidade de Insumos ({batch.ingredients?.length || 0})</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <button
-                      onClick={() => openEditBatchModal(batch)}
-                      className="text-xs font-bold text-slate-600 hover:text-slate-900"
-                    >
-                      Alterar Etapa / Custo
-                    </button>
-                    <a
-                      href="/scanner"
-                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl border border-purple-200 flex items-center gap-1 transition-colors shadow-sm"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Envasar Barris
-                    </a>
-                  </div>
+        return (
+          <div className="space-y-6">
+            {/* Top KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                <div className="p-2.5 bg-purple-50 text-purple-700 rounded-xl">
+                  <Beer className="w-5 h-5" />
                 </div>
-              );
-            })
-          )}
-        </div>
-      )}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cervejas</span>
+                  <span className="text-base font-black text-slate-900">{recipes.length} Cadastradas</span>
+                </div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lotes Produzidos</span>
+                  <span className="text-base font-black text-slate-900">{batches.length} Lotes</span>
+                </div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+                  <Droplet className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Volume Total</span>
+                  <span className="text-base font-black text-slate-900">{totalVolumeProduced.toLocaleString('pt-BR')} L</span>
+                </div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Em Produção</span>
+                  <span className="text-base font-black text-emerald-700">{activeBatchesCount} Lotes Ativos</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Toolbar Unificada com Alternador de Modo de Visualização */}
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs">
+              <div className="flex items-center gap-2 flex-1 max-w-md bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Buscar por cerveja, estilo, nº do lote ou MAPA..."
+                  value={recipeSearch}
+                  onChange={(e) => setRecipeSearch(e.target.value)}
+                  className="bg-transparent w-full text-xs font-bold text-slate-800 focus:outline-none"
+                />
+                {recipeSearch && (
+                  <button onClick={() => setRecipeSearch('')} className="text-slate-400 hover:text-slate-600">
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Switcher de Visualização: Por Cerveja vs Todos os Lotes */}
+                <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setBatchViewMode('BY_RECIPE')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 ${
+                      batchViewMode === 'BY_RECIPE' ? 'bg-white text-purple-950 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Beer className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Por Cerveja ({recipes.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchViewMode('ALL_BATCHES')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 ${
+                      batchViewMode === 'ALL_BATCHES' ? 'bg-white text-amber-950 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Todos os Lotes ({batches.length})</span>
+                  </button>
+                </div>
+
+                {/* Filtro de Status para a Visão de Todos os Lotes */}
+                {batchViewMode === 'ALL_BATCHES' && (
+                  <select
+                    value={batchStatusFilter}
+                    onChange={(e) => setBatchStatusFilter(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none text-xs"
+                  >
+                    <option value="ALL">Todos os Status</option>
+                    <option value="BRASSAGEM">Brassagem</option>
+                    <option value="FERMENTANDO">Fermentando</option>
+                    <option value="MATURANDO">Maturando</option>
+                    <option value="PRONTO_ENVASE">Pronto p/ Envase</option>
+                    <option value="ENVASADO">Envasado</option>
+                    <option value="FINALIZADO">Finalizado</option>
+                  </select>
+                )}
+
+                <button
+                  type="button"
+                  onClick={openNewRecipeModal}
+                  className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-black rounded-xl flex items-center gap-1.5 transition-all shadow-2xs"
+                >
+                  <Plus className="w-4 h-4 text-purple-700" />
+                  <span>+ Nova Cerveja</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBatchNumber(`LOTE-${new Date().getFullYear()}-${String(batches.length + 1).padStart(3, '0')}`);
+                    setNewBatchModal(true);
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Nova Brassagem</span>
+                </button>
+              </div>
+            </div>
+
+            {/* CONTEÚDO: MODO POR CERVEJA (CATÁLOGO & LOTES) */}
+            {batchViewMode === 'BY_RECIPE' && (
+              filteredRecipes.length === 0 ? (
+                <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
+                  <Beer className="w-12 h-12 mx-auto text-slate-300" />
+                  <p className="font-bold">Nenhuma cerveja encontrada.</p>
+                  <button
+                    onClick={openNewRecipeModal}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-sm"
+                  >
+                    + Cadastrar Primeira Cerveja
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredRecipes.map((recipe) => {
+                    const saleL = recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 18.0;
+                    const costL = recipe.costPerLiter || 0;
+                    const modelLabel =
+                      recipe.pricingModel === 'AT_COST'
+                        ? 'Preço de Custo'
+                        : recipe.pricingModel === 'MARKUP'
+                        ? `Custo + ${recipe.profitMarginPercent || 100}%`
+                        : recipe.pricingModel === 'BY_STYLE'
+                        ? `Tabela (${recipe.styleCategory || 'Estilo'})`
+                        : 'Preço Manual';
+
+                    const recipeBatches = batches.filter((b: any) => b.recipeId === recipe.id);
+                    const isExpanded = expandedRecipeId === recipe.id;
+
+                    return (
+                      <div
+                        key={recipe.id}
+                        className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all flex flex-col justify-between gap-4"
+                      >
+                        <div className="space-y-3">
+                          {/* Header da Cerveja */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                                  {recipe.styleCategory || 'STANDARD'}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                  Rendimento: {recipe.batchYieldLiters || 500}L
+                                </span>
+                              </div>
+                              <h3 className="font-black text-slate-900 text-lg mt-1 leading-tight">{recipe.name}</h3>
+                              <p className="text-xs font-bold text-purple-700">{recipe.style}</p>
+                              {recipe.commercialDenomination && (
+                                <span className="text-[11px] text-slate-500 italic block mt-0.5">
+                                  &quot;{recipe.commercialDenomination}&quot;
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => openEditRecipeModal(recipe)}
+                                className="p-1.5 text-slate-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
+                                title="Editar Dados da Cerveja / Rótulo"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRecipe(recipe.id, recipe.name)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                title="Excluir Cerveja"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Badges de Registro MAPA */}
+                          {recipe.mapaRegistration ? (
+                            <div className="p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-emerald-900 flex items-center gap-1">
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                                Registro MAPA:
+                              </span>
+                              <span className="font-mono font-black text-emerald-950">{recipe.mapaRegistration}</span>
+                            </div>
+                          ) : (
+                            <div className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-[10px] text-slate-400">
+                              <span>Registro MAPA não preenchido</span>
+                              <button
+                                onClick={() => openEditRecipeModal(recipe)}
+                                className="text-purple-700 font-bold hover:underline"
+                              >
+                                + Adicionar
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Metas Físico-Químicas da Receita */}
+                          <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
+                            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                              <span className="text-[9px] text-slate-400 block font-bold uppercase">ABV Alvo</span>
+                              <span className="font-black text-slate-900">{recipe.abv ? `${recipe.abv}%` : '-'}</span>
+                            </div>
+                            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                              <span className="text-[9px] text-slate-400 block font-bold uppercase">IBU</span>
+                              <span className="font-black text-slate-900">{recipe.ibu || '-'}</span>
+                            </div>
+                            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                              <span className="text-[9px] text-slate-400 block font-bold uppercase">OG Alvo</span>
+                              <span className="font-black text-purple-900">{recipe.og || '-'}</span>
+                            </div>
+                            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                              <span className="text-[9px] text-slate-400 block font-bold uppercase">FG Alvo</span>
+                              <span className="font-black text-purple-900">{recipe.fg || '-'}</span>
+                            </div>
+                          </div>
+
+                          {/* Tabela de Preços e Margens */}
+                          <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-xl space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black uppercase text-purple-900">{modelLabel}</span>
+                              <span className="text-xs font-black text-emerald-800">
+                                Venda: {formatCurrency(saleL)}/L
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-purple-100">
+                              <span>Custo Estimado: <strong>{formatCurrency(costL)}/L</strong></span>
+                              <span className="text-emerald-700 font-black">
+                                Lucro: +{formatCurrency(Math.max(0, saleL - costL))}/L
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* SEÇÃO EXPANSÍVEL: HISTÓRICO DE LOTES PRODUZIDOS DESTA CERVEJA */}
+                          <div className="space-y-2 pt-1 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedRecipeId(isExpanded ? null : recipe.id)}
+                              className="w-full py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-950 border border-purple-200 rounded-xl font-black text-xs flex items-center justify-between transition-colors shadow-2xs"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <Activity className="w-4 h-4 text-purple-700" />
+                                <span>Lotes Produzidos ({recipeBatches.length})</span>
+                              </div>
+                              <span className="text-[11px] font-bold text-purple-700 flex items-center gap-1">
+                                {isExpanded ? 'Recolher ▲' : 'Ver Lotes & Rastrear ▼'}
+                              </span>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="space-y-2 pt-1 animate-in fade-in">
+                                {recipeBatches.length === 0 ? (
+                                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500 space-y-1">
+                                    <p className="font-bold">Nenhum lote registrado para {recipe.name}.</p>
+                                    <p className="text-[10px] text-slate-400">
+                                      Clique em &quot;Iniciar Brassagem&quot; abaixo para registrar o lote e inserir os insumos na hora!
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                    {recipeBatches.map((b: any) => (
+                                      <div
+                                        key={b.id}
+                                        className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs hover:border-purple-300 transition-all"
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span className="font-mono font-black text-slate-900 text-xs">
+                                            #{b.batchNumber}
+                                          </span>
+                                          <span className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded-full font-black text-[9px]">
+                                            {b.status}
+                                          </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600">
+                                          <span>Data: <strong>{formatDateShort(b.brewDate)}</strong></span>
+                                          <span>Tanque: <strong>{b.tank?.name || 'S/ Tanque'}</strong></span>
+                                          <span>Vol: <strong>{b.volumeProducedLiters || b.volumePlannedLiters}L</strong></span>
+                                          <span>Insumos: <strong>{b.ingredients?.length || 0}</strong></span>
+                                        </div>
+
+                                        {/* Ações Diretas no Lote */}
+                                        <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-200">
+                                          <button
+                                            type="button"
+                                            onClick={() => setBatchTraceabilityModal(b)}
+                                            className="py-1 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
+                                            title="Ver insumos, fornecedores e lotes utilizados"
+                                          >
+                                            <ShieldCheck className="w-3 h-3 text-purple-600 flex-shrink-0" />
+                                            <span>Insumos</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => openBatchQualityModal(b)}
+                                            className="py-1 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
+                                            title="Ver parâmetros MAPA, pHs e sensorial"
+                                          >
+                                            <Activity className="w-3 h-3 text-purple-600 flex-shrink-0" />
+                                            <span>MAPA & pH</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => openEditBatchModal(b)}
+                                            className="py-1 px-1 bg-white hover:bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
+                                            title="Editar insumos e dados deste lote"
+                                          >
+                                            <Edit3 className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                                            <span>Editar</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Card Footer: Botão Iniciar Brassagem desta Cerveja */}
+                        <div className="pt-3 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRecipeId(recipe.id);
+                              setBatchNumber(`LOTE-${new Date().getFullYear()}-${String(batches.length + 1).padStart(3, '0')}`);
+                              setVolumePlanned(String(recipe.batchYieldLiters || 500));
+                              populateBatchIngredientsFromRecipe(recipe, recipe.batchYieldLiters || 500);
+                              setNewBatchModal(true);
+                            }}
+                            className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>+ Iniciar Brassagem de {recipe.name}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {/* CONTEÚDO: MODO TODOS OS LOTES (LINHA DO TEMPO & CUSTOS) */}
+            {batchViewMode === 'ALL_BATCHES' && (
+              filteredBatches.length === 0 ? (
+                <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
+                  <Layers className="w-12 h-12 mx-auto text-slate-300" />
+                  <p className="font-bold">Nenhum lote encontrado para os filtros selecionados.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredBatches.map((batch) => {
+                    const isReady = batch.status === 'PRONTO_ENVASE' || batch.status === 'ENVASADO';
+                    const vol = batch.volumeProducedLiters || batch.volumePlannedLiters || 0;
+                    const costL = batch.costPerLiter || 0;
+                    const totalCost = batch.totalCost || costL * vol;
+                    const salePriceL = batch.recipe?.salePricePerLiter || batch.recipe?.suggestedPricePerLiter || 20;
+                    const projectedRevenue = vol * salePriceL;
+                    const projectedProfit = projectedRevenue - totalCost;
+                    const marginPercent = totalCost > 0 ? (projectedProfit / totalCost) * 100 : 0;
+
+                    return (
+                      <div
+                        key={batch.id}
+                        className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-400 transition-all flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="font-mono text-xs font-bold text-amber-700 block">
+                                #{batch.batchNumber}
+                              </span>
+                              <h3 className="font-black text-slate-900 text-base mt-0.5">
+                                {batch.recipe?.name || 'Cerveja'}
+                              </h3>
+                              <p className="text-xs text-slate-500 font-medium">
+                                {batch.recipe?.style || 'Estilo'}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                                  isReady
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}
+                              >
+                                {batch.status}
+                              </span>
+                              <button
+                                onClick={() => openEditBatchModal(batch)}
+                                className="p-1 text-slate-400 hover:text-amber-600 rounded"
+                                title="Editar Lote e Custos"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Cost & Financial Analysis Box */}
+                          <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500 font-medium">Custo por Litro:</span>
+                              <span className="font-black text-rose-700">
+                                {costL > 0 ? formatCurrency(costL) + '/L' : 'Não informado'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500 font-medium">Custo Total Brassagem:</span>
+                              <span className="font-bold text-slate-900">{formatCurrency(totalCost)}</span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
+                              <span className="text-slate-500 font-medium">Preço Venda Sugerido:</span>
+                              <span className="font-extrabold text-emerald-700">
+                                {formatCurrency(salePriceL)}/L
+                              </span>
+                            </div>
+
+                            {costL > 0 && (
+                              <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
+                                <span className="text-slate-500 font-medium">Margem Projetada:</span>
+                                <span className="font-black text-emerald-600 flex items-center gap-0.5">
+                                  <TrendingUp className="w-3 h-3" />
+                                  +{marginPercent.toFixed(0)}% ({formatCurrency(projectedProfit)})
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span className="text-slate-400">Volume:</span>
+                              <span className="font-bold text-slate-800">{vol} Litros</span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span className="text-slate-400">Tanque:</span>
+                              <span className="font-semibold text-blue-700">{batch.tank?.name || 'Sem tanque'}</span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span className="text-slate-400">Data Brassagem:</span>
+                              <span className="font-semibold">{formatDateShort(batch.brewDate)}</span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span className="text-slate-400">Barris Vinculados:</span>
+                              <span className="font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                                {batch._count?.kegs || 0} barris
+                              </span>
+                            </div>
+
+                            {/* Botões Ficha de Rastreabilidade e Ficha MAPA */}
+                            <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                              <button
+                                type="button"
+                                onClick={() => openBatchQualityModal(batch)}
+                                className="w-full py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                              >
+                                <Activity className="w-4 h-4" />
+                                <span>Ficha de Acompanhamento & MAPA</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBatchTraceabilityModal(batch)}
+                                className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                              >
+                                <ShieldCheck className="w-4 h-4 text-purple-600" />
+                                <span>Rastreabilidade de Insumos ({batch.ingredients?.length || 0})</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <button
+                            onClick={() => openEditBatchModal(batch)}
+                            className="text-xs font-bold text-slate-600 hover:text-slate-900"
+                          >
+                            Alterar Etapa / Custo
+                          </button>
+                          <a
+                            href="/scanner"
+                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl border border-purple-200 flex items-center gap-1 transition-colors shadow-sm"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Envasar Barris
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+        );
+      })()}
 
       {/* Tab: Tanques & Fermentadores */}
       {activeTab === 'TANKS' && (() => {
@@ -1709,298 +2109,6 @@ export default function ProducaoPage() {
         );
       })()}
 
-      {/* Tab: Recipes & Pricing Table */}
-      {activeTab === 'RECIPES' && (() => {
-        const filteredRecipes = recipes.filter((r) => {
-          if (!recipeSearch) return true;
-          const s = recipeSearch.toLowerCase();
-          return (
-            r.name.toLowerCase().includes(s) ||
-            r.style.toLowerCase().includes(s) ||
-            (r.mapaRegistration && r.mapaRegistration.toLowerCase().includes(s)) ||
-            (r.commercialDenomination && r.commercialDenomination.toLowerCase().includes(s))
-          );
-        });
-
-        return (
-          <div className="space-y-6">
-            {/* Toolbar de Receitas / Cervejas */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs">
-              <div className="flex items-center gap-2 flex-1 max-w-md bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
-                <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Buscar cerveja por nome, estilo ou registro MAPA..."
-                  value={recipeSearch}
-                  onChange={(e) => setRecipeSearch(e.target.value)}
-                  className="bg-transparent w-full text-xs font-bold text-slate-800 focus:outline-none"
-                />
-                {recipeSearch && (
-                  <button onClick={() => setRecipeSearch('')} className="text-slate-400 hover:text-slate-600">
-                    ✕
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-900 font-bold rounded-xl flex items-center gap-1.5">
-                  <Beer className="w-4 h-4 text-purple-700" />
-                  <span>{recipes.length} Cervejas Cadastradas</span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={openNewRecipeModal}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Cadastrar Nova Cerveja (Rótulo)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Grid de Cervejas & Lotes Produzidos */}
-            {filteredRecipes.length === 0 ? (
-              <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
-                <Beer className="w-12 h-12 mx-auto text-slate-300" />
-                <p className="font-bold">Nenhuma cerveja cadastrada.</p>
-                <button
-                  onClick={openNewRecipeModal}
-                  className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-sm"
-                >
-                  + Cadastrar Primeira Cerveja
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredRecipes.map((recipe) => {
-                  const saleL = recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 18.0;
-                  const costL = recipe.costPerLiter || 0;
-                  const modelLabel =
-                    recipe.pricingModel === 'AT_COST'
-                      ? 'Preço de Custo'
-                      : recipe.pricingModel === 'MARKUP'
-                      ? `Custo + ${recipe.profitMarginPercent || 100}%`
-                      : recipe.pricingModel === 'BY_STYLE'
-                      ? `Tabela (${recipe.styleCategory || 'Estilo'})`
-                      : 'Preço Manual';
-
-                  const recipeBatches = batches.filter((b: any) => b.recipeId === recipe.id);
-                  const isExpanded = expandedRecipeId === recipe.id;
-
-                  return (
-                    <div
-                      key={recipe.id}
-                      className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all flex flex-col justify-between gap-4"
-                    >
-                      <div className="space-y-3">
-                        {/* Header da Cerveja */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                                {recipe.styleCategory || 'STANDARD'}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                                Rendimento: {recipe.batchYieldLiters || 500}L
-                              </span>
-                            </div>
-                            <h3 className="font-black text-slate-900 text-lg mt-1 leading-tight">{recipe.name}</h3>
-                            <p className="text-xs font-bold text-purple-700">{recipe.style}</p>
-                            {recipe.commercialDenomination && (
-                              <span className="text-[11px] text-slate-500 italic block mt-0.5">
-                                &quot;{recipe.commercialDenomination}&quot;
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => openEditRecipeModal(recipe)}
-                              className="p-1.5 text-slate-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
-                              title="Editar Dados da Cerveja / Rótulo"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteRecipe(recipe.id, recipe.name)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
-                              title="Excluir Cerveja"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Badges de Registro MAPA */}
-                        {recipe.mapaRegistration ? (
-                          <div className="p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-emerald-900 flex items-center gap-1">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                              Registro MAPA:
-                            </span>
-                            <span className="font-mono font-black text-emerald-950">{recipe.mapaRegistration}</span>
-                          </div>
-                        ) : (
-                          <div className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-[10px] text-slate-400">
-                            <span>Registro MAPA não preenchido</span>
-                            <button
-                              onClick={() => openEditRecipeModal(recipe)}
-                              className="text-purple-700 font-bold hover:underline"
-                            >
-                              + Adicionar
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Metas Físico-Químicas da Receita */}
-                        <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
-                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[9px] text-slate-400 block font-bold uppercase">ABV Alvo</span>
-                            <span className="font-black text-slate-900">{recipe.abv ? `${recipe.abv}%` : '-'}</span>
-                          </div>
-                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[9px] text-slate-400 block font-bold uppercase">IBU</span>
-                            <span className="font-black text-slate-900">{recipe.ibu || '-'}</span>
-                          </div>
-                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[9px] text-slate-400 block font-bold uppercase">OG Alvo</span>
-                            <span className="font-black text-purple-900">{recipe.og || '-'}</span>
-                          </div>
-                          <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[9px] text-slate-400 block font-bold uppercase">FG Alvo</span>
-                            <span className="font-black text-purple-900">{recipe.fg || '-'}</span>
-                          </div>
-                        </div>
-
-                        {/* Tabela de Preços e Margens */}
-                        <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-xl space-y-1.5 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase text-purple-900">{modelLabel}</span>
-                            <span className="text-xs font-black text-emerald-800">
-                              Venda: {formatCurrency(saleL)}/L
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-purple-100">
-                            <span>Custo Estimado: <strong>{formatCurrency(costL)}/L</strong></span>
-                            <span className="text-emerald-700 font-black">
-                              Lucro: +{formatCurrency(Math.max(0, saleL - costL))}/L
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* SEÇÃO EXPANSÍVEL: HISTÓRICO DE LOTES PRODUZIDOS DESTA CERVEJA */}
-                        <div className="space-y-2 pt-1 border-t border-slate-100">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedRecipeId(isExpanded ? null : recipe.id)}
-                            className="w-full py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-950 border border-purple-200 rounded-xl font-black text-xs flex items-center justify-between transition-colors shadow-2xs"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <Activity className="w-4 h-4 text-purple-700" />
-                              <span>Lotes Produzidos ({recipeBatches.length})</span>
-                            </div>
-                            <span className="text-[11px] font-bold text-purple-700 flex items-center gap-1">
-                              {isExpanded ? 'Recolher ▲' : 'Ver Lotes & Rastrear ▼'}
-                            </span>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="space-y-2 pt-1 animate-in fade-in">
-                              {recipeBatches.length === 0 ? (
-                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500 space-y-1">
-                                  <p className="font-bold">Nenhum lote registrado para {recipe.name}.</p>
-                                  <p className="text-[10px] text-slate-400">
-                                    Clique em &quot;Iniciar Brassagem&quot; abaixo para registrar o lote e inserir os insumos na hora!
-                                  </p>
-                                </div>
-                              ) : (
-                                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                                  {recipeBatches.map((b: any) => (
-                                    <div
-                                      key={b.id}
-                                      className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs hover:border-purple-300 transition-all"
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-mono font-black text-slate-900 text-xs">
-                                          #{b.batchNumber}
-                                        </span>
-                                        <span className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded-full font-black text-[9px]">
-                                          {b.status}
-                                        </span>
-                                      </div>
-
-                                      <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600">
-                                        <span>Data: <strong>{formatDateShort(b.brewDate)}</strong></span>
-                                        <span>Tanque: <strong>{b.tank?.name || 'S/ Tanque'}</strong></span>
-                                        <span>Vol: <strong>{b.volumeProducedLiters || b.volumePlannedLiters}L</strong></span>
-                                        <span>Insumos: <strong>{b.ingredients?.length || 0}</strong></span>
-                                      </div>
-
-                                      {/* Ações Diretas no Lote */}
-                                      <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-200">
-                                        <button
-                                          type="button"
-                                          onClick={() => setBatchTraceabilityModal(b)}
-                                          className="py-1 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
-                                          title="Ver insumos, fornecedores e lotes utilizados"
-                                        >
-                                          <ShieldCheck className="w-3 h-3 text-purple-600 flex-shrink-0" />
-                                          <span>Insumos</span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => openBatchQualityModal(b)}
-                                          className="py-1 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
-                                          title="Ver parâmetros MAPA, pHs e sensorial"
-                                        >
-                                          <Activity className="w-3 h-3 text-purple-600 flex-shrink-0" />
-                                          <span>MAPA & pH</span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => openEditBatchModal(b)}
-                                          className="py-1 px-1 bg-white hover:bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5 shadow-2xs"
-                                          title="Editar insumos e dados deste lote"
-                                        >
-                                          <Edit3 className="w-3 h-3 text-amber-600 flex-shrink-0" />
-                                          <span>Editar</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Card Footer: Botão Iniciar Brassagem desta Cerveja */}
-                      <div className="pt-3 border-t border-slate-100">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRecipeId(recipe.id);
-                            setBatchNumber(`LOTE-${new Date().getFullYear()}-${String(batches.length + 1).padStart(3, '0')}`);
-                            setVolumePlanned(String(recipe.batchYieldLiters || 500));
-                            populateBatchIngredientsFromRecipe(recipe, recipe.batchYieldLiters || 500);
-                            setNewBatchModal(true);
-                          }}
-                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>+ Iniciar Brassagem de {recipe.name}</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
 
       {/* Modal: Nova Brassagem com Rastreabilidade de Insumos */}
       {newBatchModal && (
