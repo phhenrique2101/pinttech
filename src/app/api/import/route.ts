@@ -435,12 +435,12 @@ export async function POST(req: NextRequest) {
           if (rawStatus.includes('ORCA') || rawStatus.includes('ORÇA')) status = 'ORCAMENTO';
           else if (rawStatus.includes('SEPAR')) status = 'EM_SEPARACAO';
           else if (rawStatus.includes('ROTA') || rawStatus.includes('TRANSIT')) status = 'EM_ROTA';
-          else if (rawStatus.includes('ENTREG') || rawStatus.includes('CONCLU')) status = 'ENTREGUE';
+          else if (rawStatus.includes('ENTREG') || rawStatus.includes('CONCLU') || rawStatus.includes('FINALIZ') || rawStatus.includes('FATURAD') || rawStatus.includes('FECHAD') || rawStatus.includes('HISTORIC') || rawStatus.includes('HISTÓRIC')) status = 'ENTREGUE';
           else if (rawStatus.includes('CANCEL')) status = 'CANCELADO';
 
-          const rawPayment = cleanStr(row.paymentStatus || row.payment || row.pagamento)?.toUpperCase() || 'PENDENTE';
+          const rawPayment = cleanStr(row.paymentStatus || row.payment || row.pagamento)?.toUpperCase() || (status === 'ENTREGUE' ? 'PAGO' : 'PENDENTE');
           let paymentStatus = 'PENDENTE';
-          if (rawPayment.includes('PAGO') || rawPayment.includes('RECEBIDO') || rawPayment.includes('LIQUIDAD')) paymentStatus = 'PAGO';
+          if (rawPayment.includes('PAGO') || rawPayment.includes('RECEBIDO') || rawPayment.includes('LIQUIDAD') || rawPayment.includes('SIM')) paymentStatus = 'PAGO';
           else if (rawPayment.includes('PARC')) paymentStatus = 'PARCIAL';
 
           const beerName = cleanStr(row.beerName || row.item || row.cerveja || row.chopp || row.product) || 'Chopp Artesanal';
@@ -459,9 +459,18 @@ export async function POST(req: NextRequest) {
           const paymentMethod = cleanStr(row.paymentMethod)?.toUpperCase() || 'PIX';
           const notes = cleanStr(row.notes);
 
-          let deliveryDate: Date | null = null;
-          if (row.deliveryDate) {
-            const parsedD = new Date(row.deliveryDate);
+          const rawOrderDate = row.orderDate || row.data || row.dataPedido || row.dataVenda || row.dataDaVenda || row.dataDaCompra;
+          let orderDate = new Date();
+          if (rawOrderDate) {
+            const parsedOrderD = new Date(rawOrderDate);
+            if (!isNaN(parsedOrderD.getTime())) {
+              orderDate = parsedOrderD;
+            }
+          }
+
+          let deliveryDate: Date = orderDate;
+          if (row.deliveryDate || row.dataEntrega) {
+            const parsedD = new Date(row.deliveryDate || row.dataEntrega);
             if (!isNaN(parsedD.getTime())) {
               deliveryDate = parsedD;
             }
@@ -471,8 +480,9 @@ export async function POST(req: NextRequest) {
             where: { breweryId_orderNumber: { breweryId, orderNumber } },
           });
 
+          let savedOrder;
           if (existing) {
-            await prisma.order.update({
+            savedOrder = await prisma.order.update({
               where: { id: existing.id },
               data: {
                 clientId: client.id,
@@ -484,12 +494,13 @@ export async function POST(req: NextRequest) {
                 paidAmount,
                 remainingAmount,
                 deliveryDate: deliveryDate || existing.deliveryDate,
+                createdAt: orderDate || existing.createdAt,
                 notes: notes ? (existing.notes ? `${existing.notes} | ${notes}` : notes) : existing.notes,
               },
             });
             updatedCount++;
           } else {
-            await prisma.order.create({
+            savedOrder = await prisma.order.create({
               data: {
                 breweryId,
                 orderNumber,
@@ -501,7 +512,8 @@ export async function POST(req: NextRequest) {
                 subtotal: totalAmount,
                 paidAmount,
                 remainingAmount,
-                deliveryDate: deliveryDate || new Date(),
+                deliveryDate: deliveryDate,
+                createdAt: orderDate,
                 notes,
                 items: {
                   create: [
@@ -516,6 +528,29 @@ export async function POST(req: NextRequest) {
               },
             });
             createdCount++;
+          }
+
+          // Se o pedido for histórico e estiver pago, registrar transação financeira
+          if (paymentStatus === 'PAGO' && totalAmount > 0 && savedOrder) {
+            const existingTx = await prisma.financialTransaction.findFirst({
+              where: { breweryId, orderId: savedOrder.id },
+            });
+            if (!existingTx) {
+              await prisma.financialTransaction.create({
+                data: {
+                  breweryId,
+                  orderId: savedOrder.id,
+                  type: 'RECEITA',
+                  category: 'VENDA_CERVEJA',
+                  description: `Venda - Pedido #${orderNumber} (${client.name})`,
+                  amount: totalAmount,
+                  dueDate: deliveryDate,
+                  paymentDate: deliveryDate,
+                  status: 'PAGO',
+                  paymentMethod: paymentMethod,
+                },
+              });
+            }
           }
         } catch (err: any) {
           errors.push(`Linha ${i + 1} (${clientName}): ${err.message}`);

@@ -247,13 +247,13 @@ export default async function DashboardPage() {
 
       {/* Main Grid: Status dos Barris & Produção / Movimentações */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Distribuição do Parque de Barris */}
+        {/* Distribuição dos Barris */}
         <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
                 <Cylinder className="w-4 h-4 text-amber-600" />
-                Status do Parque de Barris ({totalKegs} Total)
+                Status dos Barris ({totalKegs} Total)
               </h2>
               <p className="text-xs text-slate-500">Localização e disponibilidade em tempo real</p>
             </div>

@@ -437,7 +437,7 @@ export default function RelatoriosPage() {
 
     const reportLabels: Record<ReportType, string> = {
       ORDERS: 'Pedidos_e_Vendas',
-      KEGS: 'Parque_de_Barris',
+      KEGS: 'Relatorio_de_Barris',
       EQUIPMENT: 'Equipamentos_Chopeiras',
       CLIENTS: 'Clientes_e_Vasilhames',
       FINANCIAL: 'Financeiro_Fluxo_Caixa',
@@ -497,7 +497,7 @@ export default function RelatoriosPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           {[
             { type: 'ORDERS' as ReportType, label: 'Pedidos & Vendas', icon: ShoppingCart, count: orders.length, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
-            { type: 'KEGS' as ReportType, label: 'Parque de Barris', icon: Cylinder, count: kegs.length, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
+            { type: 'KEGS' as ReportType, label: 'Barris', icon: Cylinder, count: kegs.length, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
             { type: 'EQUIPMENT' as ReportType, label: 'Chopeiras & Comodato', icon: Wrench, count: equipment.length, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
             { type: 'CLIENTS' as ReportType, label: 'Clientes & Vasilhames', icon: Users, count: clients.length, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
             { type: 'STOCK' as ReportType, label: 'Estoque de Chopp', icon: Package, count: kegs.filter(k => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO').length, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },

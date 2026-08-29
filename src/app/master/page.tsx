@@ -234,7 +234,7 @@ export default function MasterDashboardPage() {
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2 font-medium">
-            Parque total de barris rastreados
+            Total de barris rastreados
           </p>
         </div>
 

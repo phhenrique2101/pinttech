@@ -82,14 +82,14 @@ const ENTITY_CONFIGS: Record<EntityType, EntityDefinition> = {
   },
   KEGS: {
     type: 'KEGS',
-    title: 'Parque de Barris',
+    title: 'Barris',
     description: 'Barris disponíveis p/ envase (limpos), emprestados no cliente (comodato) ou cheios no estoque.',
     icon: Cylinder,
     color: 'text-amber-600',
     bgColor: 'bg-amber-50',
     borderColor: 'border-amber-200',
     redirectUrl: '/barris',
-    redirectLabel: 'Ver Parque de Barris',
+    redirectLabel: 'Ver Barris',
     fields: [
       { key: 'code', label: 'Código / Patrimônio do Barril', required: true, synonyms: ['codigo', 'código', 'cod', 'patrimonio', 'patrimônio', 'tag', 'id', 'barril', 'numero', 'número'], example: 'BAR-50L-001' },
       { key: 'capacity', label: 'Capacidade Total do Barril (Litros)', required: true, synonyms: ['capacidade', 'litragem', 'volume nominal', 'tamanho', 'capacidade nominal', 'capacidade total', 'cap'], example: '50' },
@@ -136,14 +136,14 @@ const ENTITY_CONFIGS: Record<EntityType, EntityDefinition> = {
   },
   ORDERS: {
     type: 'ORDERS',
-    title: 'Pedidos em Aberto & Entregas',
-    description: 'Pedidos de vendas de chopp, entregas agendadas, valores e status.',
+    title: 'Pedidos & Histórico de Vendas',
+    description: 'Pedidos em aberto, entregas agendadas e histórico de vendas passadas (entregues/pagas).',
     icon: ShoppingBag,
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50',
     borderColor: 'border-emerald-200',
     redirectUrl: '/pedidos',
-    redirectLabel: 'Ver Pedidos de Venda',
+    redirectLabel: 'Ver Pedidos & Vendas',
     fields: [
       { key: 'orderNumber', label: 'Número do Pedido (Opcional)', synonyms: ['pedido', 'numero do pedido', 'número do pedido', 'num pedido', 'n pedido', 'ordem', 'codigo pedido'], example: 'PED-101' },
       { key: 'clientName', label: 'Nome do Cliente / Ponto de Venda', required: true, synonyms: ['cliente', 'nome do cliente', 'razao social', 'nome fantasia', 'ponto', 'comprador'], example: 'Bar e Restaurante Estrela' },
@@ -151,16 +151,17 @@ const ENTITY_CONFIGS: Record<EntityType, EntityDefinition> = {
       { key: 'quantity', label: 'Quantidade de Barris / Itens', synonyms: ['quantidade', 'qtd', 'quant', 'barris', 'unidades', 'un'], example: '2' },
       { key: 'unitPrice', label: 'Valor Unitário (R$)', synonyms: ['unitario', 'unitário', 'preco', 'preço', 'valor unitario', 'preco unitario'], example: '550.00' },
       { key: 'totalAmount', label: 'Valor Total do Pedido (R$)', synonyms: ['total', 'valor total', 'subtotal', 'valor'], example: '1100.00' },
-      { key: 'status', label: 'Status do Pedido (CONFIRMADO, EM_ROTA, ENTREGUE)', synonyms: ['status', 'situacao', 'situação', 'estado', 'status entrega'], example: 'CONFIRMADO' },
-      { key: 'paymentStatus', label: 'Status do Pagamento (PENDENTE, PAGO, PARCIAL)', synonyms: ['pagamento', 'status pagamento', 'status pago', 'financeiro'], example: 'PENDENTE' },
-      { key: 'deliveryDate', label: 'Data Prevista de Entrega', synonyms: ['data entrega', 'entrega', 'data', 'previsao', 'previsão', 'data de entrega'], example: '2026-08-30' },
+      { key: 'status', label: 'Status do Pedido (ENTREGUE/FINALIZADO, CONFIRMADO, EM_ROTA, ORCAMENTO)', synonyms: ['status', 'situacao', 'situação', 'estado', 'status entrega', 'status pedido'], example: 'ENTREGUE' },
+      { key: 'paymentStatus', label: 'Status do Pagamento (PAGO, PENDENTE, PARCIAL)', synonyms: ['pagamento', 'status pagamento', 'status pago', 'financeiro', 'pago'], example: 'PAGO' },
+      { key: 'orderDate', label: 'Data da Venda / Pedido', synonyms: ['data', 'data pedido', 'data da venda', 'data da compra', 'data do pedido', 'data venda', 'criado em'], example: '2026-08-25' },
+      { key: 'deliveryDate', label: 'Data de Entrega / Finalização', synonyms: ['data entrega', 'data da entrega', 'entrega', 'previsao', 'previsão', 'entregue em', 'finalizado em'], example: '2026-08-26' },
       { key: 'paymentMethod', label: 'Forma de Pagamento (PIX, BOLETO, CARTAO, DINHEIRO)', synonyms: ['forma de pagamento', 'meio de pagamento', 'pagamento via', 'forma pagto'], example: 'PIX' },
-      { key: 'notes', label: 'Observações do Pedido', synonyms: ['observacoes', 'observações', 'obs', 'notas', 'detalhes'], example: 'Entregar com chopeira 2 vias' },
+      { key: 'notes', label: 'Observações do Pedido', synonyms: ['observacoes', 'observações', 'obs', 'notas', 'detalhes'], example: 'Entregue com chopeira 2 vias' },
     ],
     sampleData: [
-      { 'Número do Pedido': 'PED-101', 'Nome do Cliente': 'Bar e Restaurante Estrela', 'Cerveja / Chopp': 'German Pilsen 50L', 'Quantidade': 2, 'Valor Unitário (R$)': 550.0, 'Valor Total (R$)': 1100.0, 'Status do Pedido': 'CONFIRMADO', 'Status Pagamento': 'PENDENTE', 'Data de Entrega': '2026-08-30', 'Forma de Pagamento': 'PIX', 'Observações': 'Pedido em aberto para o fim de semana' },
-      { 'Número do Pedido': 'PED-102', 'Nome do Cliente': 'Empório da Serra', 'Cerveja / Chopp': 'Hop Storm IPA 30L', 'Quantidade': 3, 'Valor Unitário (R$)': 450.0, 'Valor Total (R$)': 1350.0, 'Status do Pedido': 'CONFIRMADO', 'Status Pagamento': 'PENDENTE', 'Data de Entrega': '2026-08-31', 'Forma de Pagamento': 'BOLETO', 'Observações': 'Entregar no período da manhã' },
-      { 'Número do Pedido': 'PED-103', 'Nome do Cliente': 'Boteco do Zé', 'Cerveja / Chopp': 'Weissbier 50L', 'Quantidade': 1, 'Valor Unitário (R$)': 580.0, 'Valor Total (R$)': 580.0, 'Status do Pedido': 'ENTREGUE', 'Status Pagamento': 'PAGO', 'Data de Entrega': '2026-08-25', 'Forma de Pagamento': 'CARTAO', 'Observações': 'Entregue com 1 chopeira' },
+      { 'Número do Pedido': 'PED-089', 'Nome do Cliente': 'Boteco do Zé', 'Cerveja / Chopp': 'German Pilsen 50L', 'Quantidade': 2, 'Valor Unitário (R$)': 550.0, 'Valor Total (R$)': 1100.0, 'Status do Pedido': 'ENTREGUE', 'Status Pagamento': 'PAGO', 'Data da Venda': '2026-07-15', 'Data de Entrega': '2026-07-16', 'Forma de Pagamento': 'PIX', 'Observações': 'Venda histórica finalizada e recebida' },
+      { 'Número do Pedido': 'PED-090', 'Nome do Cliente': 'Empório da Serra', 'Cerveja / Chopp': 'Hop Storm IPA 30L', 'Quantidade': 3, 'Valor Unitário (R$)': 450.0, 'Valor Total (R$)': 1350.0, 'Status do Pedido': 'ENTREGUE', 'Status Pagamento': 'PAGO', 'Data da Venda': '2026-08-01', 'Data de Entrega': '2026-08-02', 'Forma de Pagamento': 'BOLETO', 'Observações': 'Venda histórica liquidada via boleto' },
+      { 'Número do Pedido': 'PED-101', 'Nome do Cliente': 'Bar e Restaurante Estrela', 'Cerveja / Chopp': 'German Pilsen 50L', 'Quantidade': 2, 'Valor Unitário (R$)': 550.0, 'Valor Total (R$)': 1100.0, 'Status do Pedido': 'CONFIRMADO', 'Status Pagamento': 'PENDENTE', 'Data da Venda': '2026-08-30', 'Data de Entrega': '2026-08-31', 'Forma de Pagamento': 'PIX', 'Observações': 'Pedido em aberto para entrega' },
     ],
   },
   RECIPES: {
@@ -468,7 +469,7 @@ export default function ImportacaoPage() {
             Central de Importação de Dados
           </h1>
           <p className="text-xs text-slate-400 max-w-2xl mt-1">
-            Cadastre novos clientes, parque de barris, chopeiras, receitas e tanques em segundos a partir de planilhas exportadas de sistemas anteriores ou criadas no Excel.
+            Cadastre novos clientes, barris, chopeiras, receitas, tanques e histórico de vendas em segundos a partir de planilhas exportadas de sistemas anteriores ou criadas no Excel.
           </p>
         </div>
 
