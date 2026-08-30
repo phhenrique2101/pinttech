@@ -47,6 +47,224 @@ import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMEN
 import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 
+// Componente de Busca Digitada de Cerveja / Chopp
+function RecipeSearchSelect({
+  recipeId,
+  recipes,
+  onSelectRecipe,
+  placeholder = '🔍 Digite para buscar cerveja...',
+}: {
+  recipeId: string;
+  recipes: any[];
+  onSelectRecipe: (recipe: any) => void;
+  placeholder?: string;
+}) {
+  const selectedRecipe = recipes.find((r) => r.id === recipeId);
+  const [query, setQuery] = useState(selectedRecipe?.name || '');
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (selectedRecipe) {
+      setQuery(selectedRecipe.name);
+    } else {
+      setQuery('');
+    }
+  }, [recipeId, selectedRecipe]);
+
+  const filtered = recipes.filter((r) => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (
+      r.name?.toLowerCase().includes(q) ||
+      r.style?.toLowerCase().includes(q) ||
+      (r.description && r.description.toLowerCase().includes(q))
+    );
+  });
+
+  return (
+    <div className="relative w-full">
+      <div className="relative">
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none pr-7 shadow-2xs"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('');
+              setIsOpen(true);
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setIsOpen(false);
+              if (selectedRecipe) setQuery(selectedRecipe.name);
+            }}
+          />
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
+            {filtered.length === 0 ? (
+              <div className="p-2.5 text-[11px] text-slate-400 text-center font-medium">
+                Nenhuma cerveja encontrada com esse nome
+              </div>
+            ) : (
+              filtered.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    setQuery(r.name);
+                    setIsOpen(false);
+                    onSelectRecipe(r);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
+                    recipeId === r.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
+                  }`}
+                >
+                  <div>
+                    <span className="font-extrabold block text-slate-900">{r.name}</span>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {r.style ? `${r.style} • ` : ''}
+                      {formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L
+                    </span>
+                  </div>
+                  {recipeId === r.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Componente de Busca Digitada de Cliente
+function ClientSearchSelect({
+  clientId,
+  clients,
+  onSelectClient,
+  placeholder = '🔍 Digite o nome do cliente, bar, CNPJ ou cidade...',
+}: {
+  clientId: string;
+  clients: any[];
+  onSelectClient: (client: any) => void;
+  placeholder?: string;
+}) {
+  const selectedClient = clients.find((c) => c.id === clientId);
+  const [query, setQuery] = useState(selectedClient?.tradeName || selectedClient?.name || '');
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (selectedClient) {
+      setQuery(selectedClient.tradeName || selectedClient.name);
+    } else {
+      setQuery('');
+    }
+  }, [clientId, selectedClient]);
+
+  const filtered = clients.filter((c) => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
+      (c.document && c.document.includes(q)) ||
+      (c.city && c.city.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.includes(q))
+    );
+  });
+
+  return (
+    <div className="relative w-full">
+      <div className="relative">
+        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none shadow-xs"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('');
+              setIsOpen(true);
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setIsOpen(false);
+              if (selectedClient) setQuery(selectedClient.tradeName || selectedClient.name);
+            }}
+          />
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100">
+            {filtered.length === 0 ? (
+              <div className="p-2.5 text-xs text-slate-400 text-center font-medium">
+                Nenhum cliente encontrado
+              </div>
+            ) : (
+              filtered.slice(0, 20).map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    setQuery(c.tradeName || c.name);
+                    setIsOpen(false);
+                    onSelectClient(c);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
+                    clientId === c.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
+                  }`}
+                >
+                  <div>
+                    <span className="font-extrabold block text-slate-900">{c.tradeName || c.name}</span>
+                    <span className="text-[10px] text-slate-400 block font-normal">
+                      {c.city ? `${c.city}/${c.state || ''}` : ''} {c.document ? `• CNPJ: ${c.document}` : ''}
+                    </span>
+                  </div>
+                  {clientId === c.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function PedidosPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -89,10 +307,6 @@ export default function PedidosPage() {
   // New order modal state
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [clientId, setClientId] = useState('');
-  const [clientSearchQuery, setClientSearchQuery] = useState('');
-  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
-  const [editClientSearchQuery, setEditClientSearchQuery] = useState('');
-  const [editClientDropdownOpen, setEditClientDropdownOpen] = useState(false);
   const [orderItems, setOrderItems] = useState<{ recipeId: string; quantity: number; unitPrice: number; kegCapacity?: number }[]>([]);
   const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
@@ -353,8 +567,6 @@ export default function PedidosPage() {
     setOrderModalTab(tab);
     setCopiedAddress(false);
     setEditClientId(order.clientId || '');
-    setEditClientSearchQuery(order.client?.tradeName || order.client?.name || '');
-    setEditClientDropdownOpen(false);
     setEditStatus(order.status || 'CONFIRMADO');
     setEditDeliveryDate(order.deliveryDate ? new Date(order.deliveryDate).toISOString().split('T')[0] : '');
     setEditReturnDate(order.estimatedReturnDate ? new Date(order.estimatedReturnDate).toISOString().split('T')[0] : '');
@@ -467,6 +679,17 @@ export default function PedidosPage() {
       return;
     }
 
+    // Collect informational stock notes
+    const stockNotes: string[] = [];
+    for (const it of orderItems) {
+      const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
+      if (stock.available <= 0) {
+        stockNotes.push(`• ${stock.recipeName} (${it.kegCapacity || 50}L): 0 barris livres na câmara fria (${stock.matchingTotal} total, ${stock.reserved} reservados)`);
+      } else if (it.quantity > stock.available) {
+        stockNotes.push(`• ${stock.recipeName} (${it.kegCapacity || 50}L): solicitado ${it.quantity} un, mas há ${stock.available} livres (${stock.reserved} já reservados em outros pedidos)`);
+      }
+    }
+
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
@@ -486,8 +709,15 @@ export default function PedidosPage() {
       });
 
       if (res.ok) {
+        const createdOrder = await res.json();
         setNewModalOpen(false);
         loadData();
+
+        if (stockNotes.length > 0) {
+          alert(
+            `✅ Pedido cadastrado com sucesso!\n\nℹ️ Observação de Estoque / Envase:\n${stockNotes.join('\n')}\n\nO pedido foi registrado para o planejamento de envase e produção.`
+          );
+        }
       } else {
         const err = await res.json();
         alert(err.error || 'Erro ao criar pedido');
@@ -501,14 +731,14 @@ export default function PedidosPage() {
     e.preventDefault();
     if (!selectedOrder) return;
 
-    // Verify stock availability
+    // Collect informational stock notes for edit
+    const stockNotes: string[] = [];
     for (const it of editItems) {
       const stock = getStockAvailability(it.recipeId, 50, selectedOrder.id);
-      if (it.quantity > stock.available) {
-        alert(
-          `⛔ Estoque Insuficiente!\n\nO estilo "${stock.recipeName}" possui apenas ${stock.available} barril(is) disponível(is) na câmara fria (Solicitado: ${it.quantity}).`
-        );
-        return;
+      if (stock.available <= 0) {
+        stockNotes.push(`• ${stock.recipeName}: 0 barris livres na câmara fria (${stock.matchingTotal} total, ${stock.reserved} reservados)`);
+      } else if (it.quantity > stock.available) {
+        stockNotes.push(`• ${stock.recipeName}: solicitado ${it.quantity} un, mas há ${stock.available} livres (${stock.reserved} reservados)`);
       }
     }
 
@@ -544,15 +774,21 @@ export default function PedidosPage() {
       if (res.ok) {
         const updated = await res.json();
         setSelectedOrder(updated);
+        setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
         setOrderModalTab('DETAILS');
         loadData();
+
+        if (stockNotes.length > 0) {
+          alert(
+            `✅ Alterações salvas com sucesso!\n\nℹ️ Observação de Estoque / Envase:\n${stockNotes.join('\n')}\n\nO pedido foi atualizado normalmente.`
+          );
+        }
       } else {
-        const data = await res.json();
-        alert(data.error || 'Erro ao atualizar pedido');
+        const err = await res.json();
+        alert(err.error || 'Erro ao atualizar pedido');
       }
     } catch (err) {
       console.error(err);
-      alert('Erro de conexão ao atualizar pedido');
     } finally {
       setSavingOrder(false);
     }
@@ -741,8 +977,6 @@ export default function PedidosPage() {
 
           <button
             onClick={() => {
-              setClientSearchQuery('');
-              setClientDropdownOpen(false);
               if (recipes.length > 0 && orderItems.length === 0) {
                 const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
                 setOrderItems([{ recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
@@ -1584,85 +1818,20 @@ export default function PedidosPage() {
             {/* TAB 2: EDITAR PEDIDO */}
             {orderModalTab === 'EDIT' && (
               <form onSubmit={handleSaveOrderEdits} className="space-y-4 text-xs">
-                <datalist id="recipes-datalist-edit">
-                  {recipes.map((r) => (
-                    <option key={r.id} value={r.name}>
-                      {r.style ? `${r.style} • ` : ''}{formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L
-                    </option>
-                  ))}
-                </datalist>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="relative">
+                  <div>
                     <label className="block font-bold text-slate-700 mb-1">Cliente / Ponto de Venda</label>
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        placeholder="🔍 Digite para buscar cliente..."
-                        value={editClientSearchQuery || (clients.find(c => c.id === editClientId)?.tradeName || clients.find(c => c.id === editClientId)?.name || '')}
-                        onChange={(e) => {
-                          setEditClientSearchQuery(e.target.value);
-                          setEditClientDropdownOpen(true);
-                        }}
-                        onFocus={() => setEditClientDropdownOpen(true)}
-                        className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
-                      />
-                      {(editClientSearchQuery || editClientId) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditClientSearchQuery('');
-                            setEditClientId('');
-                            setEditClientDropdownOpen(true);
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {editClientDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
-                        {clients
-                          .filter((c) => {
-                            if (!editClientSearchQuery) return true;
-                            const q = editClientSearchQuery.toLowerCase();
-                            return (
-                              (c.name && c.name.toLowerCase().includes(q)) ||
-                              (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
-                              (c.document && c.document.includes(q)) ||
-                              (c.city && c.city.toLowerCase().includes(q))
-                            );
-                          })
-                          .slice(0, 15)
-                          .map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => {
-                                setEditClientId(c.id);
-                                setEditClientSearchQuery(c.tradeName || c.name);
-                                setEditClientDropdownOpen(false);
-                                if (!editAddress) {
-                                  const addr = [c.address, c.number, c.neighborhood, c.city].filter(Boolean).join(', ');
-                                  setEditAddress(addr);
-                                }
-                              }}
-                              className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
-                                editClientId === c.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
-                              }`}
-                            >
-                              <div>
-                                <span className="font-extrabold block">{c.tradeName || c.name}</span>
-                                <span className="text-[10px] text-slate-400 block font-normal">{c.city || ''} {c.document ? `• CNPJ: ${c.document}` : ''}</span>
-                              </div>
-                              {editClientId === c.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
-                            </button>
-                          ))}
-                      </div>
-                    )}
+                    <ClientSearchSelect
+                      clientId={editClientId}
+                      clients={clients}
+                      onSelectClient={(c) => {
+                        setEditClientId(c.id);
+                        if (!editAddress) {
+                          const addr = [c.address, c.number, c.neighborhood, c.city].filter(Boolean).join(', ');
+                          setEditAddress(addr);
+                        }
+                      }}
+                    />
                   </div>
 
                   <div>
@@ -1741,7 +1910,9 @@ export default function PedidosPage() {
 
                   <div className="space-y-2">
                     {editItems.map((item, idx) => {
-                      const selectedRecipe = recipes.find((r) => r.id === item.recipeId);
+                      const stock = getStockAvailability(item.recipeId, 50, selectedOrder?.id);
+                      const isOutOfStock = stock.available <= 0;
+                      const isInsufficient = !isOutOfStock && item.quantity > stock.available;
 
                       return (
                         <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
@@ -1749,26 +1920,17 @@ export default function PedidosPage() {
                             {/* Busca Digitada de Cerveja */}
                             <div className="col-span-5">
                               <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
-                              <input
-                                type="text"
-                                list="recipes-datalist-edit"
-                                placeholder="🔍 Digite a cerveja..."
-                                value={selectedRecipe?.name || item.description?.replace(/^Barril - /, '') || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const matched = recipes.find(
-                                    (r) => r.name.toLowerCase() === val.toLowerCase() || r.name.toLowerCase().includes(val.toLowerCase())
-                                  );
-                                  if (matched) {
-                                    const updated = [...editItems];
-                                    updated[idx].recipeId = matched.id;
-                                    updated[idx].description = `Barril - ${matched.name}`;
-                                    updated[idx].unitPrice = (matched.salePricePerLiter || matched.suggestedPricePerLiter || 20) * 50;
-                                    updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
-                                    setEditItems(updated);
-                                  }
+                              <RecipeSearchSelect
+                                recipeId={item.recipeId}
+                                recipes={recipes}
+                                onSelectRecipe={(r) => {
+                                  const updated = [...editItems];
+                                  updated[idx].recipeId = r.id;
+                                  updated[idx].description = `Barril - ${r.name}`;
+                                  updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * 50;
+                                  updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                  setEditItems(updated);
                                 }}
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
                               />
                             </div>
 
@@ -1822,6 +1984,17 @@ export default function PedidosPage() {
                               </button>
                             </div>
                           </div>
+
+                          {/* Aviso Informativo de Estoque / Reserva */}
+                          {isOutOfStock ? (
+                            <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
+                              <span>ℹ️ Sem estoque imediato na câmara fria (0 barris disponíveis). O pedido será salvo normalmente para programação de envase.</span>
+                            </div>
+                          ) : isInsufficient ? (
+                            <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
+                              <span>ℹ️ Saldo livre na câmara fria: {stock.available} un ({stock.reserved} já reservados em outros pedidos).</span>
+                            </div>
+                          ) : null}
 
                           <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
                             <span className="text-slate-500">
@@ -2218,79 +2391,17 @@ export default function PedidosPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Busca Digitada de Cliente */}
-                <div className="col-span-2 sm:col-span-1 relative">
+                <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Cliente / Ponto de Venda <span className="text-amber-600">*</span>
                   </label>
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="🔍 Digite para buscar cliente..."
-                      value={clientSearchQuery || (clients.find(c => c.id === clientId)?.tradeName || clients.find(c => c.id === clientId)?.name || '')}
-                      onChange={(e) => {
-                        setClientSearchQuery(e.target.value);
-                        setClientDropdownOpen(true);
-                      }}
-                      onFocus={() => setClientDropdownOpen(true)}
-                      className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none shadow-xs"
-                    />
-                    {(clientSearchQuery || clientId) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setClientSearchQuery('');
-                          setClientId('');
-                          setDeliveryAddress('');
-                          setClientDropdownOpen(true);
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Dropdown de Clientes Filtrados */}
-                  {clientDropdownOpen && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100">
-                      {clients
-                        .filter((c) => {
-                          if (!clientSearchQuery) return true;
-                          const q = clientSearchQuery.toLowerCase();
-                          return (
-                            (c.name && c.name.toLowerCase().includes(q)) ||
-                            (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
-                            (c.document && c.document.includes(q)) ||
-                            (c.city && c.city.toLowerCase().includes(q)) ||
-                            (c.phone && c.phone.includes(q))
-                          );
-                        })
-                        .slice(0, 15)
-                        .map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              handleClientSelectForNewOrder(c.id);
-                              setClientSearchQuery(c.tradeName || c.name);
-                              setClientDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
-                              clientId === c.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
-                            }`}
-                          >
-                            <div>
-                              <span className="font-extrabold block">{c.tradeName || c.name}</span>
-                              <span className="text-[10px] text-slate-400 block font-normal">
-                                {c.city ? `${c.city}/${c.state || ''}` : ''} {c.document ? `• CNPJ: ${c.document}` : ''}
-                              </span>
-                            </div>
-                            {clientId === c.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
-                          </button>
-                        ))}
-                    </div>
-                  )}
+                  <ClientSearchSelect
+                    clientId={clientId}
+                    clients={clients}
+                    onSelectClient={(c) => {
+                      handleClientSelectForNewOrder(c.id);
+                    }}
+                  />
                 </div>
 
                 <div>
@@ -2346,7 +2457,9 @@ export default function PedidosPage() {
 
                 <div className="space-y-2">
                   {orderItems.map((item, idx) => {
-                    const selectedRecipe = recipes.find((r) => r.id === item.recipeId);
+                    const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
+                    const isOutOfStock = stock.available <= 0;
+                    const isInsufficient = !isOutOfStock && item.quantity > stock.available;
 
                     return (
                       <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
@@ -2354,25 +2467,16 @@ export default function PedidosPage() {
                           {/* Busca Digitada de Cerveja */}
                           <div className="col-span-5">
                             <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
-                            <input
-                              type="text"
-                              list="recipes-datalist-new"
-                              placeholder="🔍 Digite a cerveja..."
-                              value={selectedRecipe?.name || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const matched = recipes.find(
-                                  (r) => r.name.toLowerCase() === val.toLowerCase() || r.name.toLowerCase().includes(val.toLowerCase())
-                                );
-                                if (matched) {
-                                  const newItems = [...orderItems];
-                                  newItems[idx].recipeId = matched.id;
-                                  const cap = item.kegCapacity || 50;
-                                  newItems[idx].unitPrice = (matched.salePricePerLiter || matched.suggestedPricePerLiter || 20) * cap;
-                                  setOrderItems(newItems);
-                                }
+                            <RecipeSearchSelect
+                              recipeId={item.recipeId}
+                              recipes={recipes}
+                              onSelectRecipe={(r) => {
+                                const newItems = [...orderItems];
+                                newItems[idx].recipeId = r.id;
+                                const cap = item.kegCapacity || 50;
+                                newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                setOrderItems(newItems);
                               }}
-                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
                             />
                           </div>
 
@@ -2446,6 +2550,17 @@ export default function PedidosPage() {
                             </button>
                           </div>
                         </div>
+
+                        {/* Aviso Informativo de Estoque / Reserva */}
+                        {isOutOfStock ? (
+                          <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
+                            <span>ℹ️ Sem estoque imediato na câmara fria (0 barris disponíveis). O pedido será gerado normalmente para programação de envase.</span>
+                          </div>
+                        ) : isInsufficient ? (
+                          <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
+                            <span>ℹ️ Saldo livre na câmara fria: {stock.available} un ({stock.reserved} já reservados em outros pedidos).</span>
+                          </div>
+                        ) : null}
 
                         <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
                           <span className="text-slate-500">
