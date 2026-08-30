@@ -4,7 +4,6 @@ import { getSessionFromCookies } from '@/lib/auth';
 import Navbar from '@/components/layout/Navbar';
 import Sidebar from '@/components/layout/Sidebar';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
-import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 
 export const metadata: Metadata = {
   title: 'PintTech — Gestão Inteligente para Cervejarias',
@@ -63,7 +62,6 @@ export default function RootLayout({
             {children}
           </main>
         )}
-        <PwaInstallPrompt />
       </body>
     </html>
   );
