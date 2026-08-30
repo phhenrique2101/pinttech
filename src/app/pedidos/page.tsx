@@ -137,13 +137,7 @@ function RecipeSearchSelect({
                     recipeId === r.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
                   }`}
                 >
-                  <div>
-                    <span className="font-extrabold block text-slate-900">{r.name}</span>
-                    <span className="text-[10px] text-slate-500 font-medium">
-                      {r.style ? `${r.style} • ` : ''}
-                      {formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L
-                    </span>
-                  </div>
+                  <span className="font-extrabold block text-slate-900">{r.name}</span>
                   {recipeId === r.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
                 </button>
               ))
@@ -516,14 +510,6 @@ export default function PedidosPage() {
       if (Array.isArray(oData)) setOrders(oData);
       if (Array.isArray(cData)) {
         setClients(cData);
-        if (cData.length > 0 && !clientId) {
-          setClientId(cData[0].id);
-          const c = cData[0];
-          const fullAddr = [c.address, c.number, c.complement, c.neighborhood, c.city, c.state]
-            .filter(Boolean)
-            .join(', ');
-          setDeliveryAddress(fullAddr || '');
-        }
       }
       if (Array.isArray(rData)) {
         setRecipes(rData);
@@ -977,7 +963,10 @@ export default function PedidosPage() {
 
           <button
             onClick={() => {
-              if (recipes.length > 0 && orderItems.length === 0) {
+              setClientId('');
+              setDeliveryAddress('');
+              setSelectedEquipments([]);
+              if (recipes.length > 0) {
                 const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
                 setOrderItems([{ recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
               }
