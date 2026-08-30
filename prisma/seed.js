@@ -36,10 +36,10 @@ async function main() {
   // ============================================================================
   const demoBrewery = await prisma.brewery.create({
     data: {
-      name: 'Cervejaria Sabores do Malte',
-      slug: 'sabores-do-malte',
+      name: 'Cervejaria Artesanal PintTech Demo',
+      slug: 'cervejaria-demo',
       document: '12.345.678/0001-90',
-      email: 'contato@saboresdomalte.com.br',
+      email: 'demo@pinttech.com.br',
       phone: '(16) 99876-5432',
       address: 'Av. dos Mestres Cervejeiros, 1500 - Distrito Industrial',
       city: 'Ribeirão Preto',
@@ -86,7 +86,7 @@ async function main() {
         paidDate: new Date('2026-02-09'),
         status: 'PAGO',
         paymentMethod: 'PIX',
-        notes: 'Mensalidade Plano Enterprise Cervejaria Sabores do Malte',
+        notes: 'Mensalidade Plano Enterprise PintTech Demo',
       },
       {
         breweryId: demoBrewery.id,
@@ -96,7 +96,7 @@ async function main() {
         paidDate: new Date('2026-03-09'),
         status: 'PAGO',
         paymentMethod: 'PIX',
-        notes: 'Mensalidade Plano Enterprise Cervejaria Sabores do Malte',
+        notes: 'Mensalidade Plano Enterprise PintTech Demo',
       },
       {
         breweryId: secondBrewery.id,
@@ -116,7 +116,7 @@ async function main() {
   // ============================================================================
   const userAdmin = await prisma.user.create({
     data: {
-      name: 'Gestor Sabores do Malte',
+      name: 'Gestor PintTech (Admin Demo)',
       email: 'admin@demo.com',
       password: passwordHash,
       role: 'ADMIN',
