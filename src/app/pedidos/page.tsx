@@ -399,13 +399,16 @@ export default function PedidosPage() {
     const recipe = recipes.find((r) => r.id === recipeId);
     if (!recipe) return { available: 0, matchingTotal: 0, reserved: 0, reservedOrders: [], recipeName: 'Chopp' };
 
+    const targetCleanName = cleanProductName(recipe.name).toLowerCase();
+
     // Find filled kegs in stock matching this recipe and capacity
     const matchingKegs = kegs.filter(
       (k) =>
         (k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO') &&
         k.capacity === capacity &&
         (k.currentBatch?.recipeId === recipeId ||
-          (k.currentBeerName && k.currentBeerName.toLowerCase() === recipe.name.toLowerCase()))
+          (k.currentBeerName && cleanProductName(k.currentBeerName).toLowerCase() === targetCleanName) ||
+          (k.currentBatch?.recipe?.name && cleanProductName(k.currentBatch.recipe.name).toLowerCase() === targetCleanName))
     );
 
     // Calculate quantity already committed in active unfulfilled orders
@@ -416,7 +419,11 @@ export default function PedidosPage() {
       if (o.id !== editingOrderId && ['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
         let qtyInOrder = 0;
         (o.items || []).forEach((it: any) => {
-          if (it.recipeId === recipeId && (it.kegCapacity || 50) === capacity) {
+          const itCleanName = cleanProductName(it.recipe?.name || it.description || '').toLowerCase();
+          if (
+            (it.recipeId === recipeId || (itCleanName && itCleanName === targetCleanName)) &&
+            (it.kegCapacity || 50) === capacity
+          ) {
             qtyInOrder += (it.quantity || 1);
           }
         });
@@ -438,7 +445,7 @@ export default function PedidosPage() {
       matchingTotal: matchingKegs.length,
       reserved: reservedCount,
       reservedOrders,
-      recipeName: recipe.name,
+      recipeName: cleanProductName(recipe.name),
     };
   };
 
@@ -1999,15 +2006,34 @@ export default function PedidosPage() {
                             </div>
                           </div>
 
-                          {/* Aviso Informativo de Estoque / Reserva */}
-                          {isOutOfStock ? (
-                            <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
-                              <span>ℹ️ Sem estoque imediato na câmara fria (0 barris disponíveis). O pedido será salvo normalmente para programação de envase.</span>
-                            </div>
-                          ) : isInsufficient ? (
-                            <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
-                              <span>ℹ️ Saldo livre na câmara fria: {stock.available} un ({stock.reserved} já reservados em outros pedidos).</span>
-                            </div>
+                          {/* Quantidade em Estoque / Disponibilidade */}
+                          {item.recipeId ? (
+                            stock.available > 0 ? (
+                              <div className="text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                  <span>
+                                    Estoque (50L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
+                                    {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
+                                  </span>
+                                </span>
+                                <span className="text-[10px] text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded font-black">
+                                  {stock.matchingTotal} barris cheios
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                  <span>
+                                    Estoque (50L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será salvo normalmente para programação de envase)
+                                  </span>
+                                </span>
+                                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded font-black">
+                                  {stock.matchingTotal} cheios • {stock.reserved} reservados
+                                </span>
+                              </div>
+                            )
                           ) : null}
 
                           <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
@@ -2534,15 +2560,34 @@ export default function PedidosPage() {
                           </div>
                         </div>
 
-                        {/* Aviso Informativo de Estoque / Reserva */}
-                        {isOutOfStock ? (
-                          <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
-                            <span>ℹ️ Sem estoque imediato na câmara fria (0 barris disponíveis). O pedido será gerado normalmente para programação de envase.</span>
-                          </div>
-                        ) : isInsufficient ? (
-                          <div className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1.5 mt-1.5">
-                            <span>ℹ️ Saldo livre na câmara fria: {stock.available} un ({stock.reserved} já reservados em outros pedidos).</span>
-                          </div>
+                        {/* Quantidade em Estoque / Disponibilidade */}
+                        {item.recipeId ? (
+                          stock.available > 0 ? (
+                            <div className="text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span>
+                                  Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
+                                  {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
+                                </span>
+                              </span>
+                              <span className="text-[10px] text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded font-black">
+                                {stock.matchingTotal} barris cheios
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                <span>
+                                  Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será gerado normalmente para programação de envase)
+                                </span>
+                              </span>
+                              <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded font-black">
+                                {stock.matchingTotal} cheios • {stock.reserved} reservados
+                              </span>
+                            </div>
+                          )
                         ) : null}
 
                         <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
