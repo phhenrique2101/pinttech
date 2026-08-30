@@ -8,7 +8,6 @@ import {
   Mail,
   ArrowRight,
   Truck,
-  Layers,
   Cylinder,
   ShieldCheck,
 } from 'lucide-react';
@@ -167,86 +166,6 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
-        {/* Demo Fast Access Badges for Client Presentation */}
-        <div className="mt-6 pt-5 border-t border-slate-100">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
-            ⚡ Acesso Rápido para Demonstração:
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('admin@demo.com');
-                setPassword('admin123');
-              }}
-              className="p-2 text-left bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200/60 rounded-xl transition-all"
-            >
-              <span className="block text-[11px] font-bold text-amber-900">👑 Gestor (Admin)</span>
-              <span className="block text-[10px] text-amber-700/80 font-mono">admin@demo.com</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('mestre@demo.com');
-                setPassword('admin123');
-              }}
-              className="p-2 text-left bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200/60 rounded-xl transition-all"
-            >
-              <span className="block text-[11px] font-bold text-blue-900">🍺 Cervejeiro</span>
-              <span className="block text-[10px] text-blue-700/80 font-mono">mestre@demo.com</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('vendas@demo.com');
-                setPassword('admin123');
-              }}
-              className="p-2 text-left bg-purple-50/70 hover:bg-purple-100/70 border border-purple-200/60 rounded-xl transition-all"
-            >
-              <span className="block text-[11px] font-bold text-purple-900">💼 Comercial</span>
-              <span className="block text-[10px] text-purple-700/80 font-mono">vendas@demo.com</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('logistica@demo.com');
-                setPassword('admin123');
-              }}
-              className="p-2 text-left bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200/60 rounded-xl transition-all"
-            >
-              <span className="block text-[11px] font-bold text-emerald-900">🚚 Scanner / Entrega</span>
-              <span className="block text-[10px] text-emerald-700/80 font-mono">logistica@demo.com</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('financeiro@demo.com');
-                setPassword('admin123');
-              }}
-              className="p-2 text-left bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all"
-            >
-              <span className="block text-[11px] font-bold text-slate-800">💰 Financeiro</span>
-              <span className="block text-[10px] text-slate-600 font-mono">financeiro@demo.com</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('owner@pinttech.com');
-                setPassword('admin123');
-              }}
-              className="p-2 text-left bg-rose-50/70 hover:bg-rose-100/70 border border-rose-200/60 rounded-xl transition-all"
-            >
-              <span className="block text-[11px] font-bold text-rose-900">🛡️ Super Admin</span>
-              <span className="block text-[10px] text-rose-700/80 font-mono">owner@pinttech.com</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
