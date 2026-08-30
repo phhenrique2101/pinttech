@@ -89,6 +89,10 @@ export default function PedidosPage() {
   // New order modal state
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [clientId, setClientId] = useState('');
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const [editClientSearchQuery, setEditClientSearchQuery] = useState('');
+  const [editClientDropdownOpen, setEditClientDropdownOpen] = useState(false);
   const [orderItems, setOrderItems] = useState<{ recipeId: string; quantity: number; unitPrice: number; kegCapacity?: number }[]>([]);
   const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
@@ -349,6 +353,8 @@ export default function PedidosPage() {
     setOrderModalTab(tab);
     setCopiedAddress(false);
     setEditClientId(order.clientId || '');
+    setEditClientSearchQuery(order.client?.tradeName || order.client?.name || '');
+    setEditClientDropdownOpen(false);
     setEditStatus(order.status || 'CONFIRMADO');
     setEditDeliveryDate(order.deliveryDate ? new Date(order.deliveryDate).toISOString().split('T')[0] : '');
     setEditReturnDate(order.estimatedReturnDate ? new Date(order.estimatedReturnDate).toISOString().split('T')[0] : '');
@@ -418,6 +424,15 @@ export default function PedidosPage() {
     }
   };
 
+  const handleRemoveItemRow = (index: number) => {
+    if (orderItems.length > 1) {
+      setOrderItems(orderItems.filter((_, i) => i !== index));
+    } else if (recipes.length > 0) {
+      const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
+      setOrderItems([{ recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
+    }
+  };
+
   const handleAddEditItemRow = () => {
     if (recipes.length > 0) {
       const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
@@ -433,18 +448,23 @@ export default function PedidosPage() {
     }
   };
 
+  const handleRemoveEditItemRow = (index: number) => {
+    if (editItems.length > 1) {
+      setEditItems(editItems.filter((_, i) => i !== index));
+    }
+  };
+
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Verify stock availability on the client side before submitting
-    for (const it of orderItems) {
-      const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
-      if (it.quantity > stock.available) {
-        alert(
-          `⛔ Estoque Insuficiente!\n\nO estilo "${stock.recipeName} (${it.kegCapacity || 50}L)" possui apenas ${stock.available} barril(is) disponível(is) na câmara fria (Solicitado: ${it.quantity}).\n\nRealize o envase de novos barris na aba Produção antes de vender.`
-        );
-        return;
-      }
+    if (!clientId) {
+      alert('Por favor, selecione ou busque um cliente para o pedido.');
+      return;
+    }
+
+    if (orderItems.length === 0) {
+      alert('Adicione pelo menos um item ao pedido.');
+      return;
     }
 
     try {
@@ -721,8 +741,11 @@ export default function PedidosPage() {
 
           <button
             onClick={() => {
-              if (clients.length > 0 && !clientId) {
-                handleClientSelectForNewOrder(clients[0].id);
+              setClientSearchQuery('');
+              setClientDropdownOpen(false);
+              if (recipes.length > 0 && orderItems.length === 0) {
+                const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
+                setOrderItems([{ recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
               }
               setNewModalOpen(true);
             }}
@@ -1561,20 +1584,85 @@ export default function PedidosPage() {
             {/* TAB 2: EDITAR PEDIDO */}
             {orderModalTab === 'EDIT' && (
               <form onSubmit={handleSaveOrderEdits} className="space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Cliente</label>
-                    <select
-                      value={editClientId}
-                      onChange={(e) => setEditClientId(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                    >
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.tradeName || c.name} ({c.city})
-                        </option>
-                      ))}
-                    </select>
+                <datalist id="recipes-datalist-edit">
+                  {recipes.map((r) => (
+                    <option key={r.id} value={r.name}>
+                      {r.style ? `${r.style} • ` : ''}{formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L
+                    </option>
+                  ))}
+                </datalist>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="relative">
+                    <label className="block font-bold text-slate-700 mb-1">Cliente / Ponto de Venda</label>
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="🔍 Digite para buscar cliente..."
+                        value={editClientSearchQuery || (clients.find(c => c.id === editClientId)?.tradeName || clients.find(c => c.id === editClientId)?.name || '')}
+                        onChange={(e) => {
+                          setEditClientSearchQuery(e.target.value);
+                          setEditClientDropdownOpen(true);
+                        }}
+                        onFocus={() => setEditClientDropdownOpen(true)}
+                        className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                      />
+                      {(editClientSearchQuery || editClientId) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditClientSearchQuery('');
+                            setEditClientId('');
+                            setEditClientDropdownOpen(true);
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {editClientDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                        {clients
+                          .filter((c) => {
+                            if (!editClientSearchQuery) return true;
+                            const q = editClientSearchQuery.toLowerCase();
+                            return (
+                              (c.name && c.name.toLowerCase().includes(q)) ||
+                              (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
+                              (c.document && c.document.includes(q)) ||
+                              (c.city && c.city.toLowerCase().includes(q))
+                            );
+                          })
+                          .slice(0, 15)
+                          .map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                setEditClientId(c.id);
+                                setEditClientSearchQuery(c.tradeName || c.name);
+                                setEditClientDropdownOpen(false);
+                                if (!editAddress) {
+                                  const addr = [c.address, c.number, c.neighborhood, c.city].filter(Boolean).join(', ');
+                                  setEditAddress(addr);
+                                }
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
+                                editClientId === c.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
+                              }`}
+                            >
+                              <div>
+                                <span className="font-extrabold block">{c.tradeName || c.name}</span>
+                                <span className="text-[10px] text-slate-400 block font-normal">{c.city || ''} {c.document ? `• CNPJ: ${c.document}` : ''}</span>
+                              </div>
+                              {editClientId === c.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -1595,7 +1683,7 @@ export default function PedidosPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Data de Entrega</label>
                     <input
@@ -1637,157 +1725,116 @@ export default function PedidosPage() {
                 </div>
 
                 {/* Items */}
-                <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 space-y-2">
+                <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="font-black text-purple-950">Barris de Chopp Solicitados</span>
+                    <span className="font-black text-purple-950 flex items-center gap-1 text-xs">
+                      🍺 Itens do Pedido ({editItems.length})
+                    </span>
                     <button
                       type="button"
                       onClick={handleAddEditItemRow}
-                      className="text-xs font-bold text-purple-700 hover:text-purple-900"
+                      className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs hover:bg-purple-100/50 transition-colors"
                     >
-                      + Adicionar Estilo
+                      + Adicionar Item
                     </button>
                   </div>
 
-                  {editItems.map((item, idx) => {
-                    const stock = getStockAvailability(item.recipeId, 50, selectedOrder?.id);
-                    const isOutOfStock = stock.available <= 0;
-                    const isInsufficient = item.quantity > stock.available;
+                  <div className="space-y-2">
+                    {editItems.map((item, idx) => {
+                      const selectedRecipe = recipes.find((r) => r.id === item.recipeId);
 
-                    return (
-                      <div key={idx} className="space-y-1 bg-white p-2.5 rounded-xl border border-purple-200 text-xs">
-                        <div className="grid grid-cols-12 gap-2 items-center">
-                          <div className="col-span-5">
-                            <select
-                              value={item.recipeId}
-                              onChange={(e) => {
-                                const updated = [...editItems];
-                                updated[idx].recipeId = e.target.value;
-                                const r = recipes.find((rec) => rec.id === e.target.value);
-                                if (r) {
-                                  updated[idx].description = `Barril - ${r.name}`;
-                                  updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * 50;
-                                  updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
-                                }
-                                setEditItems(updated);
-                              }}
-                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                            >
-                              {recipes.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.name} ({formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L)
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                      return (
+                        <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
+                          <div className="grid grid-cols-12 gap-2 items-center">
+                            {/* Busca Digitada de Cerveja */}
+                            <div className="col-span-5">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
+                              <input
+                                type="text"
+                                list="recipes-datalist-edit"
+                                placeholder="🔍 Digite a cerveja..."
+                                value={selectedRecipe?.name || item.description?.replace(/^Barril - /, '') || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const matched = recipes.find(
+                                    (r) => r.name.toLowerCase() === val.toLowerCase() || r.name.toLowerCase().includes(val.toLowerCase())
+                                  );
+                                  if (matched) {
+                                    const updated = [...editItems];
+                                    updated[idx].recipeId = matched.id;
+                                    updated[idx].description = `Barril - ${matched.name}`;
+                                    updated[idx].unitPrice = (matched.salePricePerLiter || matched.suggestedPricePerLiter || 20) * 50;
+                                    updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                    setEditItems(updated);
+                                  }
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                              />
+                            </div>
 
-                          <div className="col-span-2">
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const updated = [...editItems];
-                                const qty = parseInt(e.target.value, 10) || 1;
-                                updated[idx].quantity = qty;
-                                updated[idx].totalPrice = qty * updated[idx].unitPrice;
-                                setEditItems(updated);
-                              }}
-                              className={`w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs border ${
-                                isInsufficient || isOutOfStock
-                                  ? 'bg-rose-50 border-rose-300 text-rose-800'
-                                  : 'bg-slate-50 border-slate-300'
-                              }`}
-                              placeholder="Qtd"
-                            />
-                          </div>
+                            {/* Quantidade */}
+                            <div className="col-span-3">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-center">Qtd</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const updated = [...editItems];
+                                  const qty = parseInt(e.target.value, 10) || 1;
+                                  updated[idx].quantity = qty;
+                                  updated[idx].totalPrice = qty * updated[idx].unitPrice;
+                                  setEditItems(updated);
+                                }}
+                                className="w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
+                                placeholder="Qtd"
+                              />
+                            </div>
 
-                          <div className="col-span-3">
-                            <input
-                              type="number"
-                              step="10"
-                              value={item.unitPrice}
-                              onChange={(e) => {
-                                const updated = [...editItems];
-                                const price = parseFloat(e.target.value) || 0;
-                                updated[idx].unitPrice = price;
-                                updated[idx].totalPrice = updated[idx].quantity * price;
-                                setEditItems(updated);
-                              }}
-                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs"
-                              placeholder="Preço Unit."
-                            />
-                          </div>
+                            {/* Preço Unitário */}
+                            <div className="col-span-3">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-right">Unitário (R$)</label>
+                              <input
+                                type="number"
+                                step="10"
+                                value={item.unitPrice}
+                                onChange={(e) => {
+                                  const updated = [...editItems];
+                                  const price = parseFloat(e.target.value) || 0;
+                                  updated[idx].unitPrice = price;
+                                  updated[idx].totalPrice = updated[idx].quantity * price;
+                                  setEditItems(updated);
+                                }}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                placeholder="Preço Unit."
+                              />
+                            </div>
 
-                          <div className="col-span-2 flex items-center justify-end gap-1">
-                            <span className="font-black text-slate-900 text-xs">
-                              {formatCurrency(item.quantity * item.unitPrice)}
-                            </span>
-                            {editItems.length > 1 && (
+                            {/* Botão de Excluir */}
+                            <div className="col-span-1 flex items-center justify-end gap-1 pt-3">
                               <button
                                 type="button"
-                                onClick={() => setEditItems(editItems.filter((_, i) => i !== idx))}
-                                className="text-slate-400 hover:text-rose-600 p-1"
+                                onClick={() => handleRemoveEditItemRow(idx)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Excluir este item"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Stock indicator in edit tab */}
-                        <div className="flex flex-col gap-1 text-[10px] pt-1 border-t border-purple-50">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              {isOutOfStock ? (
-                                stock.matchingTotal > 0 && stock.reserved > 0 ? (
-                                  <span className="font-black text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300 inline-flex items-center gap-1">
-                                    🔒 {stock.matchingTotal} barril(is) na câmara fria, porém 100% reservado(s)
-                                  </span>
-                                ) : (
-                                  <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
-                                    ⛔ Sem estoque na câmara fria (0 disponíveis)
-                                  </span>
-                                )
-                              ) : isInsufficient ? (
-                                <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
-                                  ⚠️ Quantidade solicitada ({item.quantity}) maior que o saldo livre ({stock.available} disponíveis)
-                                </span>
-                              ) : (
-                                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
-                                  ✓ {stock.available} barril(is) disponíveis em estoque
-                                </span>
-                              )}
                             </div>
-                            <span className="text-slate-400 font-medium">
-                              {stock.matchingTotal} cheios na câmara • {stock.reserved} reservados
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
+                            <span className="text-slate-500">
+                              Subtotal: <strong className="text-slate-900">{item.quantity} un</strong>
+                            </span>
+                            <span className="font-black text-purple-900 text-xs">
+                              {formatCurrency(item.quantity * item.unitPrice)}
                             </span>
                           </div>
-
-                          {/* List of Orders Reserving This Barrel in Edit */}
-                          {stock.reserved > 0 && stock.reservedOrders.length > 0 && (
-                            <div className="p-1.5 bg-amber-50/90 rounded-lg border border-amber-200 text-amber-950 font-medium space-y-0.5">
-                              <span className="font-black text-[9px] uppercase tracking-wider text-amber-800 block">
-                                📋 Reservas ativas deste barril em outros pedidos:
-                              </span>
-                              <div className="flex flex-wrap gap-1.5">
-                                {stock.reservedOrders.map((ro, rIdx) => (
-                                  <span
-                                    key={rIdx}
-                                    className="bg-white px-2 py-0.5 rounded border border-amber-200 text-[10px] text-amber-900 font-semibold inline-flex items-center gap-1"
-                                  >
-                                    <span>🔒 {ro.quantity}x no Pedido</span>
-                                    <strong className="text-slate-900 font-bold">#{ro.orderNumber}</strong>
-                                    <span className="text-slate-600">({ro.clientName})</span>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Comodato de Chopeiras */}
@@ -2161,20 +2208,89 @@ export default function PedidosPage() {
             <p className="text-xs text-slate-500 mb-4">Cadastre a venda, comodato de chopeiras e agendamento de entrega e recolha</p>
 
             <form onSubmit={handleCreateOrder} className="space-y-4 text-xs">
+              <datalist id="recipes-datalist-new">
+                {recipes.map((r) => (
+                  <option key={r.id} value={r.name}>
+                    {r.style ? `${r.style} • ` : ''}{formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L
+                  </option>
+                ))}
+              </datalist>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block font-bold text-slate-700 mb-1">Cliente</label>
-                  <select
-                    value={clientId}
-                    onChange={(e) => handleClientSelectForNewOrder(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                  >
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.tradeName || c.name} ({c.city})
-                      </option>
-                    ))}
-                  </select>
+                {/* Busca Digitada de Cliente */}
+                <div className="col-span-2 sm:col-span-1 relative">
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Cliente / Ponto de Venda <span className="text-amber-600">*</span>
+                  </label>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="🔍 Digite para buscar cliente..."
+                      value={clientSearchQuery || (clients.find(c => c.id === clientId)?.tradeName || clients.find(c => c.id === clientId)?.name || '')}
+                      onChange={(e) => {
+                        setClientSearchQuery(e.target.value);
+                        setClientDropdownOpen(true);
+                      }}
+                      onFocus={() => setClientDropdownOpen(true)}
+                      className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none shadow-xs"
+                    />
+                    {(clientSearchQuery || clientId) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClientSearchQuery('');
+                          setClientId('');
+                          setDeliveryAddress('');
+                          setClientDropdownOpen(true);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown de Clientes Filtrados */}
+                  {clientDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100">
+                      {clients
+                        .filter((c) => {
+                          if (!clientSearchQuery) return true;
+                          const q = clientSearchQuery.toLowerCase();
+                          return (
+                            (c.name && c.name.toLowerCase().includes(q)) ||
+                            (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
+                            (c.document && c.document.includes(q)) ||
+                            (c.city && c.city.toLowerCase().includes(q)) ||
+                            (c.phone && c.phone.includes(q))
+                          );
+                        })
+                        .slice(0, 15)
+                        .map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              handleClientSelectForNewOrder(c.id);
+                              setClientSearchQuery(c.tradeName || c.name);
+                              setClientDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
+                              clientId === c.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
+                            }`}
+                          >
+                            <div>
+                              <span className="font-extrabold block">{c.tradeName || c.name}</span>
+                              <span className="text-[10px] text-slate-400 block font-normal">
+                                {c.city ? `${c.city}/${c.state || ''}` : ''} {c.document ? `• CNPJ: ${c.document}` : ''}
+                              </span>
+                            </div>
+                            {clientId === c.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
+                          </button>
+                        ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2184,7 +2300,7 @@ export default function PedidosPage() {
                     required
                     value={deliveryDate}
                     onChange={(e) => setDeliveryDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs"
                   />
                 </div>
               </div>
@@ -2196,7 +2312,7 @@ export default function PedidosPage() {
                     type="date"
                     value={estimatedReturnDate}
                     onChange={(e) => setEstimatedReturnDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs"
                   />
                 </div>
 
@@ -2208,7 +2324,7 @@ export default function PedidosPage() {
                     value={deliveryAddress}
                     onChange={(e) => setDeliveryAddress(e.target.value)}
                     placeholder="Rua, número, bairro, cidade..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-xs"
                   />
                 </div>
               </div>
@@ -2216,149 +2332,133 @@ export default function PedidosPage() {
               {/* Itens */}
               <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-black text-purple-950">Barris de Chopp Solicitados</span>
+                  <span className="font-black text-purple-950 flex items-center gap-1.5 text-xs">
+                    🍺 Itens do Pedido ({orderItems.length})
+                  </span>
                   <button
                     type="button"
                     onClick={handleAddItemRow}
-                    className="text-xs font-bold text-purple-700 hover:text-purple-900"
+                    className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs hover:bg-purple-100/50 transition-colors"
                   >
-                    + Adicionar Estilo
+                    + Adicionar Item
                   </button>
                 </div>
 
-                {orderItems.map((item, idx) => {
-                  const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
-                  const isOutOfStock = stock.available <= 0;
-                  const isInsufficient = item.quantity > stock.available;
+                <div className="space-y-2">
+                  {orderItems.map((item, idx) => {
+                    const selectedRecipe = recipes.find((r) => r.id === item.recipeId);
 
-                  return (
-                    <div key={idx} className="space-y-1 bg-white p-2.5 rounded-xl border border-purple-200 text-xs">
-                      <div className="grid grid-cols-12 gap-2 items-center">
-                        <div className="col-span-5">
-                          <select
-                            value={item.recipeId}
-                            onChange={(e) => {
-                              const newItems = [...orderItems];
-                              newItems[idx].recipeId = e.target.value;
-                              const r = recipes.find((rec) => rec.id === e.target.value);
-                              if (r) {
-                                newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * (item.kegCapacity || 50);
-                              }
-                              setOrderItems(newItems);
-                            }}
-                            className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                          >
-                            {recipes.map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.name} ({formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L)
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Capacity Preset Selector */}
-                        <div className="col-span-3">
-                          <select
-                            value={item.kegCapacity || 50}
-                            onChange={(e) => {
-                              const cap = parseInt(e.target.value, 10) || 50;
-                              const newItems = [...orderItems];
-                              newItems[idx].kegCapacity = cap;
-                              const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
-                              if (r) {
-                                newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
-                              }
-                              setOrderItems(newItems);
-                            }}
-                            className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                          >
-                            <option value="50">50 Litros</option>
-                            <option value="30">30 Litros</option>
-                            <option value="20">20 Litros</option>
-                            <option value="15">15 Litros</option>
-                            <option value="10">10 Litros</option>
-                            <option value="5">5 Litros</option>
-                          </select>
-                        </div>
-
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            min="1"
-                            max={stock.available > 0 ? stock.available : 1}
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const newItems = [...orderItems];
-                              newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
-                              setOrderItems(newItems);
-                            }}
-                            className={`w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs border ${
-                              isInsufficient || isOutOfStock
-                                ? 'bg-rose-50 border-rose-300 text-rose-800'
-                                : 'bg-slate-50 border-slate-300'
-                            }`}
-                            placeholder="Qtd"
-                          />
-                        </div>
-
-                        <div className="col-span-2 font-black text-right pr-1 text-slate-900 text-xs">
-                          {formatCurrency(item.unitPrice * item.quantity)}
-                        </div>
-                      </div>
-
-                      {/* Real-Time Stock Status Badge */}
-                      <div className="flex flex-col gap-1 text-[10px] pt-1 border-t border-purple-50">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            {isOutOfStock ? (
-                              stock.matchingTotal > 0 && stock.reserved > 0 ? (
-                                <span className="font-black text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300 inline-flex items-center gap-1">
-                                  🔒 {stock.matchingTotal} barril(is) na câmara fria, porém 100% reservado(s)
-                                </span>
-                              ) : (
-                                <span className="font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
-                                  ⛔ Sem estoque na câmara fria (0 barris de {item.kegCapacity || 50}L envasados)
-                                </span>
-                              )
-                            ) : isInsufficient ? (
-                              <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
-                                ⚠️ Quantidade solicitada ({item.quantity}) maior que o saldo livre ({stock.available} disponíveis)
-                              </span>
-                            ) : (
-                              <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
-                                ✓ {stock.available} barril(is) de {item.kegCapacity || 50}L livres para venda
-                              </span>
-                            )}
+                    return (
+                      <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          {/* Busca Digitada de Cerveja */}
+                          <div className="col-span-5">
+                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
+                            <input
+                              type="text"
+                              list="recipes-datalist-new"
+                              placeholder="🔍 Digite a cerveja..."
+                              value={selectedRecipe?.name || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const matched = recipes.find(
+                                  (r) => r.name.toLowerCase() === val.toLowerCase() || r.name.toLowerCase().includes(val.toLowerCase())
+                                );
+                                if (matched) {
+                                  const newItems = [...orderItems];
+                                  newItems[idx].recipeId = matched.id;
+                                  const cap = item.kegCapacity || 50;
+                                  newItems[idx].unitPrice = (matched.salePricePerLiter || matched.suggestedPricePerLiter || 20) * cap;
+                                  setOrderItems(newItems);
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                            />
                           </div>
-                          <span className="text-slate-400 font-medium">
-                            {stock.matchingTotal} cheios na câmara • {stock.reserved} reservados
+
+                          {/* Capacidade */}
+                          <div className="col-span-2">
+                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Tamanho</label>
+                            <select
+                              value={item.kegCapacity || 50}
+                              onChange={(e) => {
+                                const cap = parseInt(e.target.value, 10) || 50;
+                                const newItems = [...orderItems];
+                                newItems[idx].kegCapacity = cap;
+                                const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
+                                if (r) {
+                                  newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                }
+                                setOrderItems(newItems);
+                              }}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                            >
+                              <option value="50">50 Litros</option>
+                              <option value="30">30 Litros</option>
+                              <option value="20">20 Litros</option>
+                              <option value="15">15 Litros</option>
+                              <option value="10">10 Litros</option>
+                              <option value="5">5 Litros</option>
+                            </select>
+                          </div>
+
+                          {/* Quantidade */}
+                          <div className="col-span-2">
+                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-center">Qtd</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newItems = [...orderItems];
+                                newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
+                                setOrderItems(newItems);
+                              }}
+                              className="w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Preço Unitário */}
+                          <div className="col-span-2">
+                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-right">Unitário (R$)</label>
+                            <input
+                              type="number"
+                              step="5"
+                              value={item.unitPrice}
+                              onChange={(e) => {
+                                const newItems = [...orderItems];
+                                newItems[idx].unitPrice = parseFloat(e.target.value) || 0;
+                                setOrderItems(newItems);
+                              }}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Botão de Excluir */}
+                          <div className="col-span-1 flex items-center justify-end gap-1 pt-3">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItemRow(idx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Excluir este item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
+                          <span className="text-slate-500">
+                            Subtotal: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
+                          </span>
+                          <span className="font-black text-purple-900 text-xs">
+                            {formatCurrency(item.unitPrice * item.quantity)}
                           </span>
                         </div>
-
-                        {/* List of Orders Reserving This Barrel */}
-                        {stock.reserved > 0 && stock.reservedOrders.length > 0 && (
-                          <div className="p-1.5 bg-amber-50/90 rounded-lg border border-amber-200 text-amber-950 font-medium space-y-0.5">
-                            <span className="font-black text-[9px] uppercase tracking-wider text-amber-800 block">
-                              📋 Reservas ativas deste barril em outros pedidos:
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {stock.reservedOrders.map((ro, rIdx) => (
-                                <span
-                                  key={rIdx}
-                                  className="bg-white px-2 py-0.5 rounded border border-amber-200 text-[10px] text-amber-900 font-semibold inline-flex items-center gap-1"
-                                >
-                                  <span>🔒 {ro.quantity}x no Pedido</span>
-                                  <strong className="text-slate-900 font-bold">#{ro.orderNumber}</strong>
-                                  <span className="text-slate-600">({ro.clientName})</span>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Comodato de Chopeiras */}
