@@ -47,7 +47,19 @@ import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMEN
 import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 
-// Componente de Busca Digitada de Cerveja / Chopp
+// Função para sanitizar e extrair apenas o nome puro do produto/cerveja (sem lotes, barris ou datas)
+function cleanProductName(name: string): string {
+  if (!name) return '';
+  return name
+    .replace(/\s*-\s*barril\s*\d+l?(\s*-\s*[\w\d]+)?/gi, '')
+    .replace(/\s*-\s*lote\s*[\w\d]+/gi, '')
+    .replace(/\s*-\s*[\d]{4,8}$/gi, '')
+    .replace(/\s*\(\d+l\)/gi, '')
+    .replace(/\s*-\s*\d+l$/gi, '')
+    .trim();
+}
+
+// Componente de Busca Digitada de Cerveja / Chopp (Exibe somente o produto sem lotes)
 function RecipeSearchSelect({
   recipeId,
   recipes,
@@ -59,25 +71,38 @@ function RecipeSearchSelect({
   onSelectRecipe: (recipe: any) => void;
   placeholder?: string;
 }) {
+  // Deduplicar e agrupar estilos por nome limpo (ex: "Saxônia - Pilsen")
+  const uniqueProductsMap = new Map<string, any>();
+  recipes.forEach((r) => {
+    const cleaned = cleanProductName(r.name);
+    if (cleaned && !uniqueProductsMap.has(cleaned.toLowerCase())) {
+      uniqueProductsMap.set(cleaned.toLowerCase(), {
+        ...r,
+        displayName: cleaned,
+      });
+    }
+  });
+  const uniqueProducts = Array.from(uniqueProductsMap.values());
+
   const selectedRecipe = recipes.find((r) => r.id === recipeId);
-  const [query, setQuery] = useState(selectedRecipe?.name || '');
+  const selectedDisplayName = selectedRecipe ? cleanProductName(selectedRecipe.name) : '';
+  const [query, setQuery] = useState(selectedDisplayName);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     if (selectedRecipe) {
-      setQuery(selectedRecipe.name);
+      setQuery(cleanProductName(selectedRecipe.name));
     } else {
       setQuery('');
     }
   }, [recipeId, selectedRecipe]);
 
-  const filtered = recipes.filter((r) => {
+  const filtered = uniqueProducts.filter((r) => {
     if (!query) return true;
     const q = query.toLowerCase();
     return (
-      r.name?.toLowerCase().includes(q) ||
-      r.style?.toLowerCase().includes(q) ||
-      (r.description && r.description.toLowerCase().includes(q))
+      r.displayName?.toLowerCase().includes(q) ||
+      r.style?.toLowerCase().includes(q)
     );
   });
 
@@ -115,7 +140,7 @@ function RecipeSearchSelect({
             className="fixed inset-0 z-40"
             onClick={() => {
               setIsOpen(false);
-              if (selectedRecipe) setQuery(selectedRecipe.name);
+              if (selectedRecipe) setQuery(cleanProductName(selectedRecipe.name));
             }}
           />
           <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
@@ -129,7 +154,7 @@ function RecipeSearchSelect({
                   key={r.id}
                   type="button"
                   onClick={() => {
-                    setQuery(r.name);
+                    setQuery(r.displayName);
                     setIsOpen(false);
                     onSelectRecipe(r);
                   }}
@@ -137,7 +162,7 @@ function RecipeSearchSelect({
                     recipeId === r.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
                   }`}
                 >
-                  <span className="font-extrabold block text-slate-900">{r.name}</span>
+                  <span className="font-extrabold block text-slate-900">{r.displayName}</span>
                   {recipeId === r.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
                 </button>
               ))
@@ -2111,53 +2136,22 @@ export default function PedidosPage() {
                   );
                 })()}
 
-                {/* Stock Insufficiency Warning Banner in Edit */}
-                {(() => {
-                  const hasStockErrors = editItems.some((it) => {
-                    const stock = getStockAvailability(it.recipeId, 50, selectedOrder?.id);
-                    return it.quantity > stock.available;
-                  });
-
-                  return (
-                    hasStockErrors && (
-                      <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-600" />
-                        <span>
-                          Não é possível salvar: Há itens sem estoque disponível suficiente na câmara fria.
-                        </span>
-                      </div>
-                    )
-                  );
-                })()}
-
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setOrderModalTab('DETAILS')}
-                    className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                    className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl text-xs transition-all"
                   >
                     Voltar aos Detalhes
                   </button>
-                  {(() => {
-                    const hasStockErrors = editItems.some((it) => {
-                      const stock = getStockAvailability(it.recipeId, 50, selectedOrder?.id);
-                      return it.quantity > stock.available;
-                    });
-
-                    return (
-                      <button
-                        type="submit"
-                        disabled={savingOrder || hasStockErrors}
-                        className={`px-5 py-2.5 font-bold rounded-xl shadow-sm transition-all ${
-                          hasStockErrors
-                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                            : 'bg-amber-500 hover:bg-amber-600 text-white'
-                        }`}
-                      >
-                        {savingOrder ? 'Salvando...' : hasStockErrors ? 'Estoque Insuficiente' : 'Salvar Alterações do Pedido'}
-                      </button>
-                    );
-                  })()}
+                  <button
+                    type="submit"
+                    disabled={savingOrder}
+                    className="px-5 py-2.5 font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{savingOrder ? 'Salvando...' : 'Salvar Alterações do Pedido'}</span>
+                  </button>
                 </div>
               </form>
             )}
@@ -2658,25 +2652,6 @@ export default function PedidosPage() {
                 />
               </div>
 
-              {/* Stock Insufficiency Warning Banner */}
-              {(() => {
-                const hasStockErrors = orderItems.some((it) => {
-                  const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
-                  return it.quantity > stock.available;
-                });
-
-                return (
-                  hasStockErrors && (
-                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-600" />
-                      <span>
-                        Não é possível gerar o pedido: Há itens sem estoque disponível suficiente na câmara fria.
-                      </span>
-                    </div>
-                  )
-                );
-              })()}
-
               {/* Prévia do Total */}
               {(() => {
                 const sub = orderItems.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0);
@@ -2686,7 +2661,7 @@ export default function PedidosPage() {
                 const tot = Math.max(0, sub + fee + caut - disc);
 
                 return (
-                  <div className="p-3 bg-slate-900 text-white rounded-2xl flex items-center justify-between">
+                  <div className="p-3 bg-slate-900 text-white rounded-2xl flex items-center justify-between shadow-sm">
                     <div>
                       <span className="text-[10px] text-slate-400 block font-bold">Valor Total Previsto:</span>
                       <span className="text-xs text-slate-300">Subtotal {formatCurrency(sub)} + Frete {formatCurrency(fee)}</span>
@@ -2700,30 +2675,17 @@ export default function PedidosPage() {
                 <button
                   type="button"
                   onClick={() => setNewModalOpen(false)}
-                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all text-xs"
                 >
                   Cancelar
                 </button>
-                {(() => {
-                  const hasStockErrors = orderItems.some((it) => {
-                    const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
-                    return it.quantity > stock.available;
-                  });
-
-                  return (
-                    <button
-                      type="submit"
-                      disabled={hasStockErrors}
-                      className={`px-5 py-2.5 font-bold rounded-xl shadow-sm transition-all ${
-                        hasStockErrors
-                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                          : 'bg-amber-500 hover:bg-amber-600 text-white'
-                      }`}
-                    >
-                      {hasStockErrors ? 'Estoque Insuficiente' : 'Gerar Pedido'}
-                    </button>
-                  );
-                })()}
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Gerar Pedido</span>
+                </button>
               </div>
             </form>
           </div>

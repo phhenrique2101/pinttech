@@ -70,60 +70,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const processedItems: any[] = [];
 
     if (Array.isArray(items)) {
-      // Validate stock availability for each beer item
-      for (const item of items) {
-        if (item.recipeId) {
-          const cap = parseInt(item.kegCapacity, 10) || 50;
-          const qty = parseFloat(item.quantity) || 1;
-          const recipe = await prisma.beerRecipe.findUnique({ where: { id: item.recipeId } });
-          if (!recipe) {
-            return NextResponse.json({ error: 'Receita de chopp não encontrada' }, { status: 400 });
-          }
-
-          // Find filled kegs in stock matching this recipe and capacity
-          const matchingKegs = await prisma.keg.findMany({
-            where: {
-              breweryId: session.breweryId,
-              capacity: cap,
-              status: { in: ['EM_ESTOQUE', 'ENVASADO'] },
-              OR: [
-                { currentBatch: { recipeId: item.recipeId } },
-                { currentBeerName: { equals: recipe.name, mode: 'insensitive' } },
-              ],
-            },
-          });
-
-          // Active orders excluding this order
-          const activeOrders = await prisma.order.findMany({
-            where: {
-              breweryId: session.breweryId,
-              id: { not: params.id },
-              status: { in: ['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'] },
-            },
-            include: { items: true },
-          });
-
-          let reservedCount = 0;
-          for (const actOrder of activeOrders) {
-            for (const actItem of actOrder.items) {
-              if (actItem.recipeId === item.recipeId) {
-                reservedCount += actItem.quantity;
-              }
-            }
-          }
-
-          const availableCount = Math.max(0, matchingKegs.length - reservedCount);
-
-          if (availableCount < qty) {
-            return NextResponse.json(
-              {
-                error: `Estoque insuficiente: O produto "${recipe.name} (${cap}L)" possui apenas ${availableCount} barril(is) disponível(is) na câmara fria (Solicitado: ${qty}).`,
-              },
-              { status: 400 }
-            );
-          }
-        }
-      }
+      // Process items and compute subtotal
 
       for (const item of items) {
         let desc = item.description;
