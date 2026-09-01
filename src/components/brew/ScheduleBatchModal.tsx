@@ -16,7 +16,7 @@ import {
   Clock,
   DollarSign,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getLocalDateString, addDaysToDateString, formatDate } from '@/lib/utils';
 
 interface ScheduleBatchModalProps {
   recipe: any;
@@ -33,7 +33,7 @@ export default function ScheduleBatchModal({
   onClose,
   onScheduled,
 }: ScheduleBatchModalProps) {
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const tomorrowStr = addDaysToDateString(new Date(), 1);
   const [scheduledDate, setScheduledDate] = useState<string>(tomorrowStr);
   const [batchNumber, setBatchNumber] = useState<string>(`PLAN-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
   const [volumePlannedLiters, setVolumePlannedLiters] = useState<number>(recipe?.batchYieldLiters || 500);
@@ -139,8 +139,8 @@ export default function ScheduleBatchModal({
         tankId: tankId || null,
         status: 'PLANEJADO',
         volumePlannedLiters: volumePlannedLiters,
-        brewDate: new Date(scheduledDate).toISOString(),
-        notes: notes.trim() || `Brassagem planejada para ${new Date(scheduledDate).toLocaleDateString('pt-BR')} (${recipe.name})`,
+        brewDate: new Date(`${scheduledDate}T12:00:00`).toISOString(),
+        notes: notes.trim() || `Brassagem planejada para ${formatDate(scheduledDate)} (${recipe.name})`,
         costPerLiter: recipe.costPerLiter || 0,
         totalCost: (recipe.costPerLiter || 0) * volumePlannedLiters,
         deductStock: false, // não deduz estoque imediatamente pois é agendamento futuro

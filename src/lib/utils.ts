@@ -12,9 +12,68 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+export function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function addDaysToDateString(baseDateStr: string | Date | undefined | null, daysToAdd: number): string {
+  let year: number;
+  let month: number;
+  let day: number;
+
+  if (!baseDateStr) {
+    const now = new Date();
+    year = now.getFullYear();
+    month = now.getMonth();
+    day = now.getDate();
+  } else if (typeof baseDateStr === 'string') {
+    const match = baseDateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      year = parseInt(match[1], 10);
+      month = parseInt(match[2], 10) - 1;
+      day = parseInt(match[3], 10);
+    } else {
+      const d = new Date(baseDateStr);
+      year = d.getFullYear();
+      month = d.getMonth();
+      day = d.getDate();
+    }
+  } else {
+    year = baseDateStr.getFullYear();
+    month = baseDateStr.getMonth();
+    day = baseDateStr.getDate();
+  }
+
+  const result = new Date(year, month, day + daysToAdd, 12, 0, 0);
+  const resYear = result.getFullYear();
+  const resMonth = String(result.getMonth() + 1).padStart(2, '0');
+  const resDay = String(result.getDate()).padStart(2, '0');
+  return `${resYear}-${resMonth}-${resDay}`;
+}
+
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '-';
+  if (typeof date === 'string') {
+    const trimmed = date.trim();
+    // Se for formato apenas YYYY-MM-DD (ex: 2026-09-15)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    // Se tiver T00:00:00 (sem hora específica relevante)
+    if (/^\d{4}-\d{2}-\d{2}T00:00:00(\.000)?Z?$/.test(trimmed)) {
+      const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        const [_, year, month, day] = match;
+        return `${day}/${month}/${year}`;
+      }
+    }
+  }
   const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '-';
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: '2-digit',
@@ -26,7 +85,15 @@ export function formatDate(date: string | Date | null | undefined): string {
 
 export function formatDateShort(date: string | Date | null | undefined): string {
   if (!date) return '-';
+  if (typeof date === 'string') {
+    const match = date.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [_, year, month, day] = match;
+      return `${day}/${month}/${year}`;
+    }
+  }
   const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '-';
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: '2-digit',

@@ -39,7 +39,7 @@ import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import BrewDayModal from '@/components/brew/BrewDayModal';
 import ScheduleBatchModal from '@/components/brew/ScheduleBatchModal';
 import LiveBatchManagerModal, { TankTaskItem } from '@/components/brew/LiveBatchManagerModal';
-import { formatCurrency, formatDateShort, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDateShort, formatDate, getLocalDateString, addDaysToDateString } from '@/lib/utils';
 import { srmToHex } from '@/lib/brewing/calculations';
 
 export default function BrewStudioPage() {
@@ -137,7 +137,6 @@ export default function BrewStudioPage() {
 
   // TODAS AS TAREFAS DE TANQUE CONSOLIDADAS DE TODOS OS LOTES ATIVOS
   const allTankTasks = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
     const taskList: Array<TankTaskItem & { batchId: string; batchNumber: string; beerName: string; tankName: string }> = [];
 
     for (const batch of batches) {
@@ -151,12 +150,11 @@ export default function BrewStudioPage() {
           parsedTasks = JSON.parse(batch.tankTasksJson);
         } catch (e) {}
       } else if (batch.status === 'FERMENTANDO' || batch.status === 'MATURANDO') {
-        const brewTime = batch.brewDate ? new Date(batch.brewDate).getTime() : Date.now();
-        const dayMs = 86400000;
+        const brewDateRef = batch.brewDate ? batch.brewDate : new Date();
         parsedTasks = [
-          { id: `${batch.id}-1`, title: 'Medição de Densidade & Subida Diacetil', type: 'MEASUREMENT', dueDate: new Date(brewTime + 4 * dayMs).toISOString().split('T')[0], completed: false },
-          { id: `${batch.id}-2`, title: 'Adição de Dry Hopping', type: 'DRY_HOPPING', dueDate: new Date(brewTime + 6 * dayMs).toISOString().split('T')[0], completed: false, amount: 2.0, unit: 'KG' },
-          { id: `${batch.id}-3`, title: 'Dosagem de Antioxidante & Início Cold Crash', type: 'ANTIOXIDANT', dueDate: new Date(brewTime + 10 * dayMs).toISOString().split('T')[0], completed: false },
+          { id: `${batch.id}-1`, title: 'Medição de Densidade & Subida Diacetil', type: 'MEASUREMENT', dueDate: addDaysToDateString(brewDateRef, 4), completed: false },
+          { id: `${batch.id}-2`, title: 'Adição de Dry Hopping', type: 'DRY_HOPPING', dueDate: addDaysToDateString(brewDateRef, 6), completed: false, amount: 2.0, unit: 'KG' },
+          { id: `${batch.id}-3`, title: 'Dosagem de Antioxidante & Início Cold Crash', type: 'ANTIOXIDANT', dueDate: addDaysToDateString(brewDateRef, 10), completed: false },
         ];
       }
 
@@ -171,12 +169,13 @@ export default function BrewStudioPage() {
       }
     }
 
-    taskList.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    taskList.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     return taskList;
   }, [batches]);
 
+  const todayStr = getLocalDateString();
   const pendingTasks = allTankTasks.filter((t) => !t.completed);
-  const todayTasks = pendingTasks.filter((t) => t.dueDate === new Date().toISOString().split('T')[0]);
+  const todayTasks = pendingTasks.filter((t) => t.dueDate === todayStr);
 
   // Alternar conclusão de tarefa diretamente no calendário
   const handleToggleGlobalTask = async (batchId: string, taskId: string) => {
@@ -659,8 +658,8 @@ export default function BrewStudioPage() {
               ) : (
                 <div className="space-y-3">
                   {allTankTasks.map((task) => {
-                    const isLate = !task.completed && new Date(task.dueDate).getTime() < new Date().setHours(0,0,0,0);
-                    const isToday = !task.completed && task.dueDate === new Date().toISOString().split('T')[0];
+                    const isLate = !task.completed && task.dueDate < todayStr;
+                    const isToday = !task.completed && task.dueDate === todayStr;
 
                     return (
                       <div

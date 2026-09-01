@@ -25,7 +25,7 @@ import {
   Package,
   DollarSign,
 } from 'lucide-react';
-import { formatCurrency, formatDate, formatDateShort } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateShort, getLocalDateString, addDaysToDateString } from '@/lib/utils';
 
 export interface TankTaskItem {
   id: string;
@@ -104,14 +104,13 @@ export default function LiveBatchManagerModal({
         if (Array.isArray(parsed)) return parsed;
       } catch (e) {}
     }
-    const brewTime = batch.brewDate ? new Date(batch.brewDate).getTime() : Date.now();
-    const dayMs = 86400000;
+    const brewDateRef = batch.brewDate ? batch.brewDate : new Date();
     return [
       {
         id: 't-1',
         title: 'Medição de Densidade & Subida Diacetil',
         type: 'MEASUREMENT',
-        dueDate: new Date(brewTime + 4 * dayMs).toISOString().split('T')[0],
+        dueDate: addDaysToDateString(brewDateRef, 4),
         completed: false,
         notes: 'Verificar atenuação e elevar temperatura para descanso de diacetil',
       },
@@ -119,7 +118,7 @@ export default function LiveBatchManagerModal({
         id: 't-2',
         title: 'Adição de Dry Hopping (Citra / Mosaic)',
         type: 'DRY_HOPPING',
-        dueDate: new Date(brewTime + 6 * dayMs).toISOString().split('T')[0],
+        dueDate: addDaysToDateString(brewDateRef, 6),
         completed: false,
         amount: 2.5,
         unit: 'KG',
@@ -129,7 +128,7 @@ export default function LiveBatchManagerModal({
         id: 't-3',
         title: 'Dosagem de Antioxidante & Início do Cold Crash',
         type: 'ANTIOXIDANT',
-        dueDate: new Date(brewTime + 10 * dayMs).toISOString().split('T')[0],
+        dueDate: addDaysToDateString(brewDateRef, 10),
         completed: false,
         notes: 'Dosar antioxidante e baixar rampa térmica para 0°C - 1°C',
       },
@@ -137,7 +136,7 @@ export default function LiveBatchManagerModal({
         id: 't-4',
         title: 'Purga de Levedura & Clarificação',
         type: 'PURGE',
-        dueDate: new Date(brewTime + 12 * dayMs).toISOString().split('T')[0],
+        dueDate: addDaysToDateString(brewDateRef, 12),
         completed: false,
         notes: 'Purgar cone do tanque para clarificação antes do envase',
       },
@@ -148,7 +147,7 @@ export default function LiveBatchManagerModal({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   // Formulário de Nova / Edição de Tarefa
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   const [taskFormTitle, setTaskFormTitle] = useState<string>('');
   const [taskFormType, setTaskFormType] = useState<TankTaskItem['type']>('DRY_HOPPING');
   const [taskFormDueDate, setTaskFormDueDate] = useState<string>(todayStr);
@@ -536,7 +535,7 @@ export default function LiveBatchManagerModal({
               {/* Lista de Tarefas */}
               <div className="space-y-2.5">
                 {tasks.map((task) => {
-                  const isLate = !task.completed && new Date(task.dueDate).getTime() < new Date().setHours(0,0,0,0);
+                  const isLate = !task.completed && task.dueDate < todayStr;
                   const isToday = !task.completed && task.dueDate === todayStr;
                   const isBeingEdited = editingTaskId === task.id;
 
