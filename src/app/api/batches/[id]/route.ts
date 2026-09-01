@@ -109,8 +109,157 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // If ingredients array is explicitly provided, sync them
+      // Sincronização Bidirecional de Estoque (Saída/Devolução de Insumos)
       if (Array.isArray(ingredients)) {
+        // 1. Mapear consumo anterior por item de estoque
+        const prevStockMap = new Map<string, { qty: number; lotId?: string | null; unit: string }>();
+        for (const prev of existing.ingredients) {
+          if (prev.inventoryItemId) {
+            const current = prevStockMap.get(prev.inventoryItemId) || { qty: 0, lotId: prev.inventoryLotId, unit: prev.unit };
+            // Normalizar quantidade para a unidade base
+            current.qty += prev.quantityUsed;
+            prevStockMap.set(prev.inventoryItemId, current);
+          }
+        }
+
+        // 2. Mapear novo consumo por item de estoque
+        const newStockMap = new Map<string, { qty: number; lotId?: string | null; supplierLot?: string | null; unit: string; costPerUnit: number; name: string }>();
+        for (const next of ingredients) {
+          const invId = next.inventoryItemId;
+          const nextQty = parseFloat(next.quantityUsed || next.amount) || 0;
+          if (invId && nextQty > 0) {
+            const current = newStockMap.get(invId) || {
+              qty: 0,
+              lotId: next.inventoryLotId,
+              supplierLot: next.supplierLot,
+              unit: (next.unit || 'KG').toUpperCase(),
+              costPerUnit: parseFloat(next.costPerUnit) || 0,
+              name: next.name || 'Insumo',
+            };
+            current.qty += nextQty;
+            newStockMap.set(invId, current);
+          }
+        }
+
+        // 3. Processar deltas para todos os itens afetados (anteriores e novos)
+        const allItemIds = new Set([...Array.from(prevStockMap.keys()), ...Array.from(newStockMap.keys())]);
+
+        for (const itemId of Array.from(allItemIds)) {
+          const item = await tx.inventoryItem.findUnique({
+            where: { id: itemId },
+            include: {
+              lots: {
+                orderBy: [{ expirationDate: 'asc' }, { createdAt: 'asc' }],
+              },
+            },
+          });
+
+          if (!item) continue;
+
+          const prevData = prevStockMap.get(itemId);
+          const newData = newStockMap.get(itemId);
+
+          // Converter para a unidade de medida do inventário (ex: G -> KG)
+          let prevQty = prevData?.qty || 0;
+          if (prevData?.unit === 'G' && item.unit === 'KG') prevQty = prevQty / 1000;
+
+          let newQty = newData?.qty || 0;
+          if (newData?.unit === 'G' && item.unit === 'KG') newQty = newQty / 1000;
+
+          const delta = Math.round((newQty - prevQty) * 10000) / 10000;
+
+          if (delta > 0) {
+            // AUMENTOU CONSUMO -> Baixar do estoque (Saída)
+            const qtyToDeduct = delta;
+            let targetLot: any = null;
+
+            if (newData?.lotId) {
+              targetLot = item.lots.find((l) => l.id === newData.lotId);
+            } else if (newData?.supplierLot) {
+              targetLot = item.lots.find((l) => l.lotNumber === newData.supplierLot?.trim());
+            }
+            if (!targetLot) {
+              targetLot = item.lots.find((l) => l.currentQuantity > 0) || item.lots[0];
+            }
+
+            if (targetLot) {
+              const updatedLotQty = Math.max(0, targetLot.currentQuantity - qtyToDeduct);
+              await tx.inventoryLot.update({
+                where: { id: targetLot.id },
+                data: {
+                  currentQuantity: updatedLotQty,
+                  status: updatedLotQty <= 0 ? 'ESGOTADO' : 'ATIVO',
+                },
+              });
+            }
+
+            const updatedItemQty = Math.max(0, item.currentQuantity - qtyToDeduct);
+            await tx.inventoryItem.update({
+              where: { id: item.id },
+              data: { currentQuantity: updatedItemQty },
+            });
+
+            await tx.inventoryMovement.create({
+              data: {
+                breweryId: existing.breweryId,
+                inventoryItemId: item.id,
+                inventoryLotId: targetLot?.id || null,
+                type: 'SAIDA_BRASSAGEM',
+                quantity: -qtyToDeduct,
+                costPerUnit: item.costPerUnit,
+                supplierLot: targetLot?.lotNumber || newData?.supplierLot || null,
+                batchId: existing.id,
+                userId: session.userId,
+                userName: session.name,
+                notes: `Consumo ajustado no lote ${existing.batchNumber} (${qtyToDeduct.toFixed(2)} ${item.unit})`,
+              },
+            });
+          } else if (delta < 0) {
+            // REDUZIU CONSUMO OU REMOVEU INSUMO -> Devolver ao estoque (Entrada)
+            const qtyToReturn = Math.abs(delta);
+            let targetLot: any = null;
+
+            if (prevData?.lotId) {
+              targetLot = item.lots.find((l) => l.id === prevData.lotId);
+            }
+            if (!targetLot) {
+              targetLot = item.lots[0];
+            }
+
+            if (targetLot) {
+              await tx.inventoryLot.update({
+                where: { id: targetLot.id },
+                data: {
+                  currentQuantity: targetLot.currentQuantity + qtyToReturn,
+                  status: 'ATIVO',
+                },
+              });
+            }
+
+            await tx.inventoryItem.update({
+              where: { id: item.id },
+              data: { currentQuantity: item.currentQuantity + qtyToReturn },
+            });
+
+            await tx.inventoryMovement.create({
+              data: {
+                breweryId: existing.breweryId,
+                inventoryItemId: item.id,
+                inventoryLotId: targetLot?.id || null,
+                type: 'ENTRADA',
+                quantity: qtyToReturn,
+                costPerUnit: item.costPerUnit,
+                supplierLot: targetLot?.lotNumber || null,
+                batchId: existing.id,
+                userId: session.userId,
+                userName: session.name,
+                notes: `Devolução / estorno de insumo no lote ${existing.batchNumber} (${qtyToReturn.toFixed(2)} ${item.unit})`,
+              },
+            });
+          }
+        }
+
+        // Recriar registros de insumos do lote
         await tx.batchIngredient.deleteMany({
           where: { batchId: params.id },
         });
@@ -120,6 +269,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             data: ingredients.map((ing: any) => ({
               batchId: params.id,
               inventoryItemId: ing.inventoryItemId || null,
+              inventoryLotId: ing.inventoryLotId || null,
               supplierId: ing.supplierId || null,
               name: ing.name?.trim() || 'Insumo',
               category: ing.category || 'MALTE',

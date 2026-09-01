@@ -893,13 +893,40 @@ export default function RecipeDesignerModal({
                       return (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
                           <td className="p-3">
-                            <input
-                              type="text"
-                              value={f.name}
-                              onChange={(e) => updateFermentable(idx, { name: e.target.value })}
-                              placeholder="Nome do Malte"
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-amber-500 focus:bg-white"
-                            />
+                            <div className="space-y-1">
+                              {inventoryItems && inventoryItems.filter((i) => i.category === 'MALTE' || i.category === 'ADJUNTO').length > 0 && (
+                                <select
+                                  value={f.inventoryItemId || ''}
+                                  onChange={(e) => {
+                                    const inv = inventoryItems.find((item) => item.id === e.target.value);
+                                    if (inv) {
+                                      updateFermentable(idx, {
+                                        name: inv.name,
+                                        costPerKg: inv.costPerUnit || f.costPerKg,
+                                        inventoryItemId: inv.id,
+                                      });
+                                    }
+                                  }}
+                                  className="w-full bg-amber-50/60 border border-amber-200 rounded-lg px-2 py-0.5 text-[10px] font-bold text-amber-950 focus:outline-none focus:bg-white"
+                                >
+                                  <option value="">-- Selecionar do Estoque --</option>
+                                  {inventoryItems
+                                    .filter((i) => i.category === 'MALTE' || i.category === 'ADJUNTO')
+                                    .map((inv) => (
+                                      <option key={inv.id} value={inv.id}>
+                                        📦 {inv.name} (Saldo: {inv.currentQuantity} {inv.unit})
+                                      </option>
+                                    ))}
+                                </select>
+                              )}
+                              <input
+                                type="text"
+                                value={f.name}
+                                onChange={(e) => updateFermentable(idx, { name: e.target.value })}
+                                placeholder="Nome do Malte"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-amber-500 focus:bg-white"
+                              />
+                            </div>
                           </td>
                           <td className="p-3">
                             <input
@@ -1043,13 +1070,40 @@ export default function RecipeDesignerModal({
                       return (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
                           <td className="p-3">
-                            <input
-                              type="text"
-                              value={h.name}
-                              onChange={(e) => updateHop(idx, { name: e.target.value })}
-                              placeholder="Nome do Lúpulo"
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-emerald-500 focus:bg-white"
-                            />
+                            <div className="space-y-1">
+                              {inventoryItems && inventoryItems.filter((i) => i.category === 'LUPULO').length > 0 && (
+                                <select
+                                  value={h.inventoryItemId || ''}
+                                  onChange={(e) => {
+                                    const inv = inventoryItems.find((item) => item.id === e.target.value);
+                                    if (inv) {
+                                      updateHop(idx, {
+                                        name: inv.name,
+                                        costPerGram: inv.costPerUnit ? (inv.unit === 'KG' ? inv.costPerUnit / 1000 : inv.costPerUnit) : h.costPerGram,
+                                        inventoryItemId: inv.id,
+                                      });
+                                    }
+                                  }}
+                                  className="w-full bg-emerald-50/60 border border-emerald-200 rounded-lg px-2 py-0.5 text-[10px] font-bold text-emerald-950 focus:outline-none focus:bg-white"
+                                >
+                                  <option value="">-- Selecionar do Estoque --</option>
+                                  {inventoryItems
+                                    .filter((i) => i.category === 'LUPULO')
+                                    .map((inv) => (
+                                      <option key={inv.id} value={inv.id}>
+                                        🌿 {inv.name} (Saldo: {inv.unit === 'KG' ? inv.currentQuantity * 1000 : inv.currentQuantity}g)
+                                      </option>
+                                    ))}
+                                </select>
+                              )}
+                              <input
+                                type="text"
+                                value={h.name}
+                                onChange={(e) => updateHop(idx, { name: e.target.value })}
+                                placeholder="Nome do Lúpulo"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-emerald-500 focus:bg-white"
+                              />
+                            </div>
                           </td>
                           <td className="p-3">
                             <input

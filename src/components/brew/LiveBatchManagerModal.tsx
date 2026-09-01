@@ -24,6 +24,8 @@ import {
   Edit3,
   Package,
   DollarSign,
+  Boxes,
+  RotateCcw,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateShort, getLocalDateString, addDaysToDateString } from '@/lib/utils';
 
@@ -51,6 +53,7 @@ export interface FermentationLogItem {
 export interface LiveBatchIngredient {
   id?: string;
   inventoryItemId?: string | null;
+  inventoryLotId?: string | null;
   name: string;
   category: 'MALTE' | 'LUPULO' | 'LEVEDURA' | 'ADJUNTO' | 'AGUA_SAIS' | 'QUIMICO_LIMPEZA' | 'OUTRO';
   amount: number;
@@ -176,7 +179,6 @@ export default function LiveBatchManagerModal({
     if (!taskFormTitle.trim()) return;
 
     if (editingTaskId) {
-      // Atualizar tarefa existente
       setTasks(
         tasks.map((t) =>
           t.id === editingTaskId
@@ -194,7 +196,6 @@ export default function LiveBatchManagerModal({
       );
       setEditingTaskId(null);
     } else {
-      // Criar nova tarefa
       const newTask: TankTaskItem = {
         id: `task-${Date.now()}`,
         title: taskFormTitle.trim(),
@@ -238,6 +239,7 @@ export default function LiveBatchManagerModal({
       return batch.ingredients.map((ing: any) => ({
         id: ing.id,
         inventoryItemId: ing.inventoryItemId,
+        inventoryLotId: ing.inventoryLotId,
         name: ing.name,
         category: (ing.category || 'MALTE') as any,
         amount: ing.quantityUsed || ing.amount || 0,
@@ -250,7 +252,6 @@ export default function LiveBatchManagerModal({
       }));
     }
 
-    // Se não tiver gravado em BatchIngredient, puxa da receita base escalonada
     const baseRecipe = batch.recipe;
     if (baseRecipe?.recipeDataJson) {
       try {
@@ -301,9 +302,49 @@ export default function LiveBatchManagerModal({
 
   const [batchIngredients, setBatchIngredients] = useState<LiveBatchIngredient[]>(initialIngredients);
 
-  const addBatchIngredient = (category: LiveBatchIngredient['category'] = 'MALTE') => {
+  // Vincular item do estoque ao ingrediente do lote
+  const handleSelectInventoryItem = (index: number, inventoryItemId: string) => {
+    const stockItem = inventoryItems.find((i) => i.id === inventoryItemId);
+    if (!stockItem) return;
+
+    const availableLot = stockItem.lots?.find((l: any) => l.currentQuantity > 0) || stockItem.lots?.[0];
+
+    const next = [...batchIngredients];
+    next[index] = {
+      ...next[index],
+      inventoryItemId: stockItem.id,
+      inventoryLotId: availableLot?.id || null,
+      name: stockItem.name,
+      category: stockItem.category as any,
+      unit: stockItem.unit,
+      costPerUnit: stockItem.costPerUnit || availableLot?.costPerUnit || 0,
+      supplierLot: availableLot?.lotNumber || stockItem.supplierLot || '',
+      supplierName: stockItem.supplier?.name || availableLot?.supplierName || '',
+    };
+    setBatchIngredients(next);
+  };
+
+  const addBatchIngredient = (category: LiveBatchIngredient['category'] = 'MALTE', fromStockItem?: any) => {
+    if (fromStockItem) {
+      const lot = fromStockItem.lots?.find((l: any) => l.currentQuantity > 0) || fromStockItem.lots?.[0];
+      const newItem: LiveBatchIngredient = {
+        inventoryItemId: fromStockItem.id,
+        inventoryLotId: lot?.id || null,
+        name: fromStockItem.name,
+        category: fromStockItem.category as any,
+        amount: fromStockItem.category === 'LUPULO' ? 1000 : fromStockItem.category === 'MALTE' ? 25 : 1,
+        unit: fromStockItem.unit || 'KG',
+        stage: fromStockItem.category === 'LUPULO' ? 'DRY_HOPPING' : fromStockItem.category === 'ADJUNTO' ? 'MATURACAO' : 'MOSTURA',
+        costPerUnit: fromStockItem.costPerUnit || 0,
+        supplierLot: lot?.lotNumber || fromStockItem.supplierLot || '',
+        supplierName: fromStockItem.supplier?.name || '',
+      };
+      setBatchIngredients([...batchIngredients, newItem]);
+      return;
+    }
+
     const newItem: LiveBatchIngredient = {
-      name: category === 'LUPULO' ? 'Novo Lúpulo (Dry Hop / Whirlpool)' : category === 'ADJUNTO' ? 'Novo Adjunto / Fruta' : 'Novo Malte',
+      name: category === 'LUPULO' ? 'Novo Lúpulo' : category === 'ADJUNTO' ? 'Novo Adjunto / Fruta' : 'Novo Malte',
       category,
       amount: category === 'LUPULO' ? 1000 : category === 'MALTE' ? 25 : 1,
       unit: category === 'LUPULO' ? 'G' : category === 'MALTE' ? 'KG' : 'KG',
@@ -375,7 +416,7 @@ export default function LiveBatchManagerModal({
     setLogs(logs.filter((l) => l.id !== id));
   };
 
-  // SALVAR TUDO (LOTE + INSUMOS + TAREFAS + MEDIÇÕES)
+  // SALVAR TUDO (LOTE + INSUMOS + TAREFAS + MEDIÇÕES COM SINCRONIZAÇÃO AUTOMÁTICA DE ESTOQUE)
   const handleSaveChanges = async () => {
     setLoading(true);
     setError('');
@@ -400,6 +441,8 @@ export default function LiveBatchManagerModal({
         tankTasksJson: JSON.stringify(tasks),
         fermentationLogsJson: JSON.stringify(logs),
         ingredients: batchIngredients.map((item) => ({
+          inventoryItemId: item.inventoryItemId || null,
+          inventoryLotId: item.inventoryLotId || null,
           name: item.name,
           category: item.category,
           quantityUsed: item.amount,
@@ -451,7 +494,7 @@ export default function LiveBatchManagerModal({
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium">
-                  Acompanhamento ao vivo: tarefas editáveis, troca e adição de insumos, curva de atenuação
+                  Acompanhamento ao vivo: edição de tarefas e insumos com sincronização de estoque automática
                 </p>
               </div>
             </div>
@@ -483,7 +526,7 @@ export default function LiveBatchManagerModal({
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Insumos & Adições do Lote ({batchIngredients.length})</span>
+              <span>Insumos do Lote & Estoque ({batchIngredients.length})</span>
             </button>
 
             <button
@@ -527,7 +570,7 @@ export default function LiveBatchManagerModal({
                     <span>Cronograma de Tarefas & Lembretes da Adega</span>
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Você pode alterar datas, quantidades, editar ou adicionar novas tarefas a qualquer momento.
+                    Você pode alterar datas, dosagens, editar tarefas salvas ou cadastrar novas a qualquer momento.
                   </p>
                 </div>
               </div>
@@ -757,17 +800,17 @@ export default function LiveBatchManagerModal({
             </div>
           )}
 
-          {/* ABA 2: INSUMOS & ADIÇÕES DO LOTE (EDITÁVEIS POR LOTE) */}
+          {/* ABA 2: INSUMOS & ADIÇÕES DO LOTE (VINCULADOS AO ESTOQUE FÍSICO COM ATUALIZAÇÃO AUTOMÁTICA) */}
           {activeTab === 'INGREDIENTS' && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-emerald-600" />
-                    <span>Insumos Utilizados Neste Lote Específico</span>
+                    <Boxes className="w-4 h-4 text-emerald-600" />
+                    <span>Insumos e Lotes do Estoque Utilizados Neste Lote</span>
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Ajuste maltes, lúpulos ou adicione insumos no tanque (ex: Dry Hopping, Frutas, Clarificantes) exclusivamente para este lote.
+                    Selecione preferencialmente os insumos disponíveis no seu estoque. Todas as alterações darão baixa ou devolução automática.
                   </p>
                 </div>
 
@@ -797,114 +840,173 @@ export default function LiveBatchManagerModal({
                 </div>
               </div>
 
+              {/* Informação de Sincronização Bidirecional */}
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-xs text-emerald-900">
+                <RotateCcw className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>
+                  <strong>Controle de Estoque Ativo:</strong> Ao salvar, aumentos de quantidade darão baixa no estoque físico e reduções/exclusões farão a <strong>devolução automática</strong> para o inventário da cervejaria.
+                </span>
+              </div>
+
               {/* Tabela de Insumos do Lote */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-sm">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
-                      <th className="p-3">Insumo</th>
+                      <th className="p-3">Insumo do Estoque / Nome</th>
                       <th className="p-3 w-28">Categoria</th>
                       <th className="p-3 w-28">Qtd Real</th>
-                      <th className="p-3 w-24">Unidade</th>
-                      <th className="p-3 w-36">Etapa de Uso</th>
+                      <th className="p-3 w-20">Unidade</th>
+                      <th className="p-3 w-32">Etapa de Uso</th>
                       <th className="p-3 w-32">Lote Fornecedor</th>
                       <th className="p-3 w-28 text-right">Custo Unit (R$)</th>
+                      <th className="p-3">Saldo em Estoque</th>
                       <th className="p-3 w-12 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {batchIngredients.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3">
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => updateBatchIngredient(idx, { name: e.target.value })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:bg-white"
-                          />
-                        </td>
-                        <td className="p-3">
-                          <select
-                            value={item.category}
-                            onChange={(e) => updateBatchIngredient(idx, { category: e.target.value as any })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none"
-                          >
-                            <option value="MALTE">Malte</option>
-                            <option value="LUPULO">Lúpulo</option>
-                            <option value="LEVEDURA">Levedura</option>
-                            <option value="ADJUNTO">Adjunto/Fruta</option>
-                            <option value="AGUA_SAIS">Sais/Química</option>
-                            <option value="OUTRO">Outro</option>
-                          </select>
-                        </td>
-                        <td className="p-3">
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={item.amount}
-                            onChange={(e) => updateBatchIngredient(idx, { amount: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-amber-700 font-black focus:outline-none text-right"
-                          />
-                        </td>
-                        <td className="p-3">
-                          <select
-                            value={item.unit}
-                            onChange={(e) => updateBatchIngredient(idx, { unit: e.target.value })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none"
-                          >
-                            <option value="KG">KG</option>
-                            <option value="G">G</option>
-                            <option value="L">L</option>
-                            <option value="ML">ML</option>
-                            <option value="PACOTE">Pacote</option>
-                            <option value="UN">UN</option>
-                          </select>
-                        </td>
-                        <td className="p-3">
-                          <select
-                            value={item.stage}
-                            onChange={(e) => updateBatchIngredient(idx, { stage: e.target.value as any })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none"
-                          >
-                            <option value="MOSTURA">Mostura</option>
-                            <option value="FERVURA_60MIN">Fervura (60m)</option>
-                            <option value="FERVURA_15MIN">Fervura (15m)</option>
-                            <option value="WHIRLPOOL">Whirlpool</option>
-                            <option value="FERMENTACAO">Fermentação</option>
-                            <option value="DRY_HOPPING">🌿 Dry Hopping</option>
-                            <option value="MATURACAO">❄️ Maturação / Tanque</option>
-                            <option value="OUTRO">Outro</option>
-                          </select>
-                        </td>
-                        <td className="p-3">
-                          <input
-                            type="text"
-                            value={item.supplierLot || ''}
-                            onChange={(e) => updateBatchIngredient(idx, { supplierLot: e.target.value })}
-                            placeholder="ex: Lote 24A-99"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none"
-                          />
-                        </td>
-                        <td className="p-3 text-right">
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={item.costPerUnit || 0}
-                            onChange={(e) => updateBatchIngredient(idx, { costPerUnit: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-emerald-700 font-bold focus:outline-none text-right"
-                          />
-                        </td>
-                        <td className="p-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => removeBatchIngredient(idx)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {batchIngredients.map((item, idx) => {
+                      const stockMatch = inventoryItems.find((i) =>
+                        i.id === item.inventoryItemId ||
+                        i.name.toLowerCase() === item.name.toLowerCase()
+                      );
+
+                      const stockQty = stockMatch ? stockMatch.currentQuantity : null;
+                      const stockUnit = stockMatch ? stockMatch.unit : item.unit;
+                      const isStockSuff = stockMatch ? (item.unit === 'G' && stockUnit === 'KG' ? stockMatch.currentQuantity * 1000 >= item.amount : stockMatch.currentQuantity >= item.amount) : false;
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3">
+                            <div className="space-y-1">
+                              {inventoryItems.length > 0 && (
+                                <select
+                                  value={item.inventoryItemId || ''}
+                                  onChange={(e) => handleSelectInventoryItem(idx, e.target.value)}
+                                  className="w-full bg-amber-50/60 border border-amber-200 rounded-lg px-2 py-1 text-[11px] font-bold text-amber-950 focus:outline-none focus:bg-white"
+                                >
+                                  <option value="">-- Vincular ao Estoque Disponível --</option>
+                                  {inventoryItems.map((inv) => (
+                                    <option key={inv.id} value={inv.id}>
+                                      📦 {inv.name} (Saldo: {inv.currentQuantity} {inv.unit} {inv.supplierLot ? `| Lote: ${inv.supplierLot}` : ''})
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={(e) => updateBatchIngredient(idx, { name: e.target.value })}
+                                placeholder="Nome do insumo"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:bg-white"
+                              />
+                            </div>
+                          </td>
+
+                          <td className="p-3">
+                            <select
+                              value={item.category}
+                              onChange={(e) => updateBatchIngredient(idx, { category: e.target.value as any })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none"
+                            >
+                              <option value="MALTE">Malte</option>
+                              <option value="LUPULO">Lúpulo</option>
+                              <option value="LEVEDURA">Levedura</option>
+                              <option value="ADJUNTO">Adjunto/Fruta</option>
+                              <option value="AGUA_SAIS">Sais/Química</option>
+                              <option value="OUTRO">Outro</option>
+                            </select>
+                          </td>
+
+                          <td className="p-3">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={item.amount}
+                              onChange={(e) => updateBatchIngredient(idx, { amount: parseFloat(e.target.value) || 0 })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-amber-700 font-black focus:outline-none text-right"
+                            />
+                          </td>
+
+                          <td className="p-3">
+                            <select
+                              value={item.unit}
+                              onChange={(e) => updateBatchIngredient(idx, { unit: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none"
+                            >
+                              <option value="KG">KG</option>
+                              <option value="G">G</option>
+                              <option value="L">L</option>
+                              <option value="ML">ML</option>
+                              <option value="PACOTE">Pacote</option>
+                              <option value="UN">UN</option>
+                            </select>
+                          </td>
+
+                          <td className="p-3">
+                            <select
+                              value={item.stage}
+                              onChange={(e) => updateBatchIngredient(idx, { stage: e.target.value as any })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none"
+                            >
+                              <option value="MOSTURA">Mostura</option>
+                              <option value="FIRST_WORT">First Wort</option>
+                              <option value="FERVURA_60MIN">Fervura (60m)</option>
+                              <option value="FERVURA_15MIN">Fervura (15m)</option>
+                              <option value="WHIRLPOOL">Whirlpool</option>
+                              <option value="FERMENTACAO">Fermentação</option>
+                              <option value="DRY_HOPPING">🌿 Dry Hopping</option>
+                              <option value="MATURACAO">❄️ Maturação / Tanque</option>
+                              <option value="OUTRO">Outro</option>
+                            </select>
+                          </td>
+
+                          <td className="p-3">
+                            <input
+                              type="text"
+                              value={item.supplierLot || ''}
+                              onChange={(e) => updateBatchIngredient(idx, { supplierLot: e.target.value })}
+                              placeholder="ex: Lote 24A-99"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none"
+                            />
+                          </td>
+
+                          <td className="p-3 text-right">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={item.costPerUnit || 0}
+                              onChange={(e) => updateBatchIngredient(idx, { costPerUnit: parseFloat(e.target.value) || 0 })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-emerald-700 font-bold focus:outline-none text-right"
+                            />
+                          </td>
+
+                          <td className="p-3">
+                            {stockMatch ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2.5 h-2.5 rounded-full ${isStockSuff ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                <span className={`text-[11px] font-bold ${isStockSuff ? 'text-slate-700' : 'text-rose-700'}`}>
+                                  {stockMatch.currentQuantity} {stockMatch.unit}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">Não vinculado</span>
+                            )}
+                          </td>
+
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeBatchIngredient(idx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1170,7 +1272,7 @@ export default function LiveBatchManagerModal({
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                <span>Salvar Atualizações do Lote & Tarefas</span>
+                <span>Salvar & Sincronizar Estoque</span>
               </>
             )}
           </button>
