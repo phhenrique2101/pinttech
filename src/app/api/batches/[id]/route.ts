@@ -82,6 +82,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       packagingDate,
       fermentationStartDate,
       maturationStartDate,
+      tankTasksJson,
+      fermentationLogsJson,
+      customRecipeDataJson,
+      brewDate,
       ingredients,
     } = body;
 
@@ -144,6 +148,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           volumeProducedLiters: volProd,
           costPerLiter: numCostPerLiter,
           totalCost: numTotalCost,
+          brewDate: brewDate !== undefined ? (brewDate ? new Date(brewDate) : existing.brewDate) : existing.brewDate,
           tankId: tankId !== undefined ? tankId : existing.tankId,
           notes: notes !== undefined ? notes : existing.notes,
           measuredOg: numOg,
@@ -169,6 +174,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           packagingDate: packagingDate !== undefined ? (packagingDate ? new Date(packagingDate) : null) : existing.packagingDate,
           fermentationStartDate: fermentationStartDate !== undefined ? (fermentationStartDate ? new Date(fermentationStartDate) : null) : existing.fermentationStartDate,
           maturationStartDate: maturationStartDate !== undefined ? (maturationStartDate ? new Date(maturationStartDate) : null) : existing.maturationStartDate,
+          tankTasksJson: tankTasksJson !== undefined ? (tankTasksJson ? (typeof tankTasksJson === 'string' ? tankTasksJson : JSON.stringify(tankTasksJson)) : null) : existing.tankTasksJson,
+          fermentationLogsJson: fermentationLogsJson !== undefined ? (fermentationLogsJson ? (typeof fermentationLogsJson === 'string' ? fermentationLogsJson : JSON.stringify(fermentationLogsJson)) : null) : existing.fermentationLogsJson,
+          customRecipeDataJson: customRecipeDataJson !== undefined ? (customRecipeDataJson ? (typeof customRecipeDataJson === 'string' ? customRecipeDataJson : JSON.stringify(customRecipeDataJson)) : null) : existing.customRecipeDataJson,
         },
         include: {
           recipe: true,

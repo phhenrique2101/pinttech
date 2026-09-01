@@ -317,8 +317,13 @@ model ProductionBatch {
   commercialDenomination String?       // Denominação Legal / Comercial MAPA
   technicalResponsible  String?        // Responsável Técnico / Cervejeiro (CRQ/Nome)
   sensoryNotes          String?        // Análise Sensorial / Degustação / Liberação
-
   notes                 String?
+
+  // Acompanhamento de Processos de Tanque & Tarefas (Brew Studio)
+  tankTasksJson         String?        // JSON de tarefas de adega/tanque (Dry Hopping, Antioxidante, etc.)
+  fermentationLogsJson  String?        // JSON de medições diárias (Densidade, Temperatura, pH)
+  customRecipeDataJson  String?        // Snapshot e edições customizadas da receita em tempo de execução
+
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 

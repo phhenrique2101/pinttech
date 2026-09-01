@@ -31,11 +31,14 @@ import {
   ShoppingCart,
   Copy,
   Check,
+  CalendarDays,
+  Edit3,
 } from 'lucide-react';
 import RecipeDesignerModal from '@/components/brew/RecipeDesignerModal';
 import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import BrewDayModal from '@/components/brew/BrewDayModal';
 import ScheduleBatchModal from '@/components/brew/ScheduleBatchModal';
+import LiveBatchManagerModal, { TankTaskItem } from '@/components/brew/LiveBatchManagerModal';
 import { formatCurrency, formatDateShort, formatDate } from '@/lib/utils';
 import { srmToHex } from '@/lib/brewing/calculations';
 
@@ -46,7 +49,7 @@ export default function BrewStudioPage() {
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'RECIPES' | 'PLANNING' | 'BATCHES' | 'STOCK'>('RECIPES');
+  const [activeTab, setActiveTab] = useState<'RECIPES' | 'PLANNING' | 'CELLAR_CALENDAR' | 'BATCHES' | 'STOCK'>('RECIPES');
   const [copiedShoppingList, setCopiedShoppingList] = useState<boolean>(false);
 
   // Modals
@@ -57,6 +60,8 @@ export default function BrewStudioPage() {
   const [selectedRecipeForBrew, setSelectedRecipeForBrew] = useState<any | null>(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState<boolean>(false);
   const [selectedRecipeForSchedule, setSelectedRecipeForSchedule] = useState<any | null>(null);
+  const [liveBatchModalOpen, setLiveBatchModalOpen] = useState<boolean>(false);
+  const [selectedBatchForLive, setSelectedBatchForLive] = useState<any | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -130,7 +135,80 @@ export default function BrewStudioPage() {
   const activeBatches = batches.filter((b) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO' && b.status !== 'PLANEJADO');
   const totalVolumeInTanks = activeBatches.reduce((acc, b) => acc + (b.volumePlannedLiters || 0), 0);
 
-  // MOTOR DE CÁLCULO DE DÉFICIT CONSOLIDADO DE ESTOQUE PARA TODAS AS PRODUÇÕES PLANEJADAS
+  // TODAS AS TAREFAS DE TANQUE CONSOLIDADAS DE TODOS OS LOTES ATIVOS
+  const allTankTasks = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const taskList: Array<TankTaskItem & { batchId: string; batchNumber: string; beerName: string; tankName: string }> = [];
+
+    for (const batch of batches) {
+      if (batch.status === 'FINALIZADO' || batch.status === 'ENVASADO') continue;
+      const tName = batch.tank?.name || 'Tanque não atribuído';
+      const bName = batch.recipe?.name || 'Cerveja';
+
+      let parsedTasks: TankTaskItem[] = [];
+      if (batch.tankTasksJson) {
+        try {
+          parsedTasks = JSON.parse(batch.tankTasksJson);
+        } catch (e) {}
+      } else if (batch.status === 'FERMENTANDO' || batch.status === 'MATURANDO') {
+        const brewTime = batch.brewDate ? new Date(batch.brewDate).getTime() : Date.now();
+        const dayMs = 86400000;
+        parsedTasks = [
+          { id: `${batch.id}-1`, title: 'Medição de Densidade & Subida Diacetil', type: 'MEASUREMENT', dueDate: new Date(brewTime + 4 * dayMs).toISOString().split('T')[0], completed: false },
+          { id: `${batch.id}-2`, title: 'Adição de Dry Hopping', type: 'DRY_HOPPING', dueDate: new Date(brewTime + 6 * dayMs).toISOString().split('T')[0], completed: false, amount: 2.0, unit: 'KG' },
+          { id: `${batch.id}-3`, title: 'Dosagem de Antioxidante & Início Cold Crash', type: 'ANTIOXIDANT', dueDate: new Date(brewTime + 10 * dayMs).toISOString().split('T')[0], completed: false },
+        ];
+      }
+
+      for (const t of parsedTasks) {
+        taskList.push({
+          ...t,
+          batchId: batch.id,
+          batchNumber: batch.batchNumber,
+          beerName: bName,
+          tankName: tName,
+        });
+      }
+    }
+
+    taskList.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    return taskList;
+  }, [batches]);
+
+  const pendingTasks = allTankTasks.filter((t) => !t.completed);
+  const todayTasks = pendingTasks.filter((t) => t.dueDate === new Date().toISOString().split('T')[0]);
+
+  // Alternar conclusão de tarefa diretamente no calendário
+  const handleToggleGlobalTask = async (batchId: string, taskId: string) => {
+    const targetBatch = batches.find((b) => b.id === batchId);
+    if (!targetBatch) return;
+
+    let tasksArr: TankTaskItem[] = [];
+    if (targetBatch.tankTasksJson) {
+      try {
+        tasksArr = JSON.parse(targetBatch.tankTasksJson);
+      } catch (e) {}
+    } else {
+      tasksArr = allTankTasks.filter((t) => t.batchId === batchId);
+    }
+
+    const updatedTasks = tasksArr.map((t) =>
+      t.id === taskId
+        ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : undefined }
+        : t
+    );
+
+    try {
+      await fetch(`/api/batches/${batchId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankTasksJson: JSON.stringify(updatedTasks) }),
+      });
+      fetchData();
+    } catch (e) {}
+  };
+
+  // MOTOR DE CÁLCULO DE DÉFICIT CONSOLIDADO DE ESTOQUE
   const consolidatedDeficitPlan = useMemo(() => {
     const ingredientDemandMap: Record<string, { name: string; category: string; totalRequired: number; unit: string }> = {};
 
@@ -142,7 +220,6 @@ export default function BrewStudioPage() {
         ? (batch.volumePlannedLiters || 500) / rec.batchYieldLiters
         : 1;
 
-      // Se tiver recipeDataJson
       if (rec.recipeDataJson) {
         try {
           const parsed = JSON.parse(rec.recipeDataJson);
@@ -165,8 +242,7 @@ export default function BrewStudioPage() {
         for (const ing of rec.ingredients) {
           const cat = ing.category === 'LUPULO' ? 'LUPULO' : 'MALTE';
           const key = `${cat}_${ing.name.toLowerCase().trim()}`;
-          const isKg = ing.unit === 'KG';
-          const amount = isKg ? (ing.amount || 0) : (ing.amount || 0);
+          const amount = ing.amount || 0;
           if (!ingredientDemandMap[key]) {
             ingredientDemandMap[key] = { name: ing.name, category: cat, totalRequired: 0, unit: ing.unit || 'KG' };
           }
@@ -175,7 +251,6 @@ export default function BrewStudioPage() {
       }
     }
 
-    // Compara com o inventário da cervejaria
     const items = Object.values(ingredientDemandMap).map((d) => {
       const lower = d.name.toLowerCase();
       const match = inventoryItems.find((i) => i.name.toLowerCase().includes(lower) || lower.includes(i.name.toLowerCase()));
@@ -204,7 +279,6 @@ export default function BrewStudioPage() {
     };
   }, [plannedBatches, recipes, inventoryItems]);
 
-  // Copiar Lista de Compras para Área de Transferência
   const copyShoppingListText = () => {
     if (consolidatedDeficitPlan.missingList.length === 0) return;
     let text = `📋 *LISTA DE COMPRAS DE INSUMOS - PINTTECH*\n`;
@@ -229,10 +303,10 @@ export default function BrewStudioPage() {
                 <span>PintTech Brew Studio — Designer & Planejador Cervejeiro</span>
               </div>
               <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                Elaboração de Receitas & Planejamento de Produção
+                Elaboração de Receitas & Gestão da Adega
               </h1>
               <p className="text-slate-600 text-xs sm:text-sm max-w-2xl font-medium">
-                Crie receitas técnicas com cálculo em tempo real de IBU (Tinseth), OG/FG, ABV, cor EBC, agende datas futuras de brassagem e veja o que falta comprar no estoque.
+                Crie receitas, edite parâmetros ao vivo durante a fermentação, agende lembretes de Dry Hopping/Antioxidante e acompanhe o que falta comprar no estoque.
               </p>
             </div>
 
@@ -269,8 +343,8 @@ export default function BrewStudioPage() {
             </div>
 
             <div className="p-3.5 bg-amber-50/60 rounded-2xl border border-amber-200/80">
-              <span className="text-[11px] font-bold text-amber-800 block">Produções Agendadas</span>
-              <span className="text-xl sm:text-2xl font-black text-amber-700 mt-1 block">{plannedBatches.length} lotes</span>
+              <span className="text-[11px] font-bold text-amber-800 block">Tarefas de Tanque Pendentes</span>
+              <span className="text-xl sm:text-2xl font-black text-amber-700 mt-1 block">{pendingTasks.length} tarefas</span>
             </div>
 
             <div className="p-3.5 bg-cyan-50/60 rounded-2xl border border-cyan-200/80">
@@ -302,6 +376,18 @@ export default function BrewStudioPage() {
             >
               <Beer className="w-4 h-4" />
               <span>Minhas Receitas ({recipes.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('CELLAR_CALENDAR')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'CELLAR_CALENDAR'
+                  ? 'bg-amber-500 text-white font-black shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <CalendarDays className="w-4 h-4" />
+              <span>Tarefas da Adega & Lembretes ({pendingTasks.length})</span>
             </button>
 
             <button
@@ -406,7 +492,6 @@ export default function BrewStudioPage() {
                         {/* Header do Card */}
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            {/* Color Swatch / Glass */}
                             <div
                               className="w-8 h-10 rounded-lg border border-slate-300 shadow-inner flex items-center justify-center relative overflow-hidden"
                               style={{ backgroundColor: hex }}
@@ -541,6 +626,140 @@ export default function BrewStudioPage() {
               </div>
             )}
           </div>
+        ) : activeTab === 'CELLAR_CALENDAR' ? (
+          /* ABA: CALENDÁRIO DE TAREFAS DA ADEGA & LEMBRETES DE TANQUE */
+          <div className="space-y-6">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="w-5 h-5 text-amber-600" />
+                    <h3 className="text-base font-black text-slate-900">
+                      Quadro de Tarefas da Adega & Lembretes de Tanque
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Acompanhe as tarefas diárias programadas para cada fermentador (Dry Hopping, Antioxidante, Cold Crash, Purgas).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-black rounded-xl border border-amber-300">
+                    {todayTasks.length} tarefa(s) para hoje
+                  </span>
+                </div>
+              </div>
+
+              {allTankTasks.length === 0 ? (
+                <div className="p-12 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <Clock className="w-10 h-10 text-slate-400 mx-auto" />
+                  <p className="text-xs font-bold text-slate-600">Nenhuma tarefa programada nos tanques no momento.</p>
+                  <p className="text-[11px] text-slate-400">Ao iniciar ou acompanhar qualquer lote, você pode programar tarefas de adega personalizadas.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {allTankTasks.map((task) => {
+                    const isLate = !task.completed && new Date(task.dueDate).getTime() < new Date().setHours(0,0,0,0);
+                    const isToday = !task.completed && task.dueDate === new Date().toISOString().split('T')[0];
+
+                    return (
+                      <div
+                        key={task.id}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          task.completed
+                            ? 'bg-slate-50/70 border-slate-200 opacity-60'
+                            : isLate
+                            ? 'bg-rose-50 border-rose-200'
+                            : isToday
+                            ? 'bg-amber-50/80 border-amber-300 shadow-sm'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGlobalTask(task.batchId, task.id)}
+                            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-colors mt-0.5 ${
+                              task.completed
+                                ? 'bg-emerald-500 border-emerald-500 text-white'
+                                : 'bg-white border-slate-300 hover:border-amber-500'
+                            }`}
+                            title="Marcar como concluída"
+                          >
+                            {task.completed && <Check className="w-4 h-4 stroke-[3]" />}
+                          </button>
+
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`text-sm font-black ${task.completed ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+                                {task.title}
+                              </span>
+
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                                🏺 {task.tankName}
+                              </span>
+
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                                Lote: {task.batchNumber} ({task.beerName})
+                              </span>
+
+                              {task.type === 'DRY_HOPPING' && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                                  🌿 Dry Hopping
+                                </span>
+                              )}
+                              {task.type === 'ANTIOXIDANT' && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-100 text-cyan-800">
+                                  🧪 Antioxidante
+                                </span>
+                              )}
+                              {task.type === 'COLD_CRASH' && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                                  ❄️ Cold Crash
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
+                              <span className="flex items-center gap-1 font-bold">
+                                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                Data Programada: {formatDate(task.dueDate)}
+                              </span>
+                              {task.amount && (
+                                <span>Dosagem: <strong>{task.amount} {task.unit}</strong></span>
+                              )}
+                              {task.completedAt && (
+                                <span className="text-emerald-700 font-bold">✓ Concluída em {formatDateShort(task.completedAt)}</span>
+                              )}
+                            </div>
+
+                            {task.notes && (
+                              <p className="text-xs text-slate-600 bg-slate-100/60 p-2 rounded-lg mt-1">{task.notes}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const b = batches.find((item) => item.id === task.batchId);
+                            if (b) {
+                              setSelectedBatchForLive(b);
+                              setLiveBatchModalOpen(true);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 transition-all self-end sm:self-center flex items-center gap-1"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Abrir Tanque</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         ) : activeTab === 'PLANNING' ? (
           /* ABA: PLANEJAMENTO & CRONOGRAMA DE PRODUÇÃO */
           <div className="space-y-6">
@@ -579,7 +798,7 @@ export default function BrewStudioPage() {
               {consolidatedDeficitPlan.allRequirements.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
                   <p className="text-xs font-bold text-slate-500">Nenhum lote futuro agendado no momento.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Clique em &quot;Planejar Produção&quot; em qualquer receita para agendar datas futuras.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Clique em &quot;Planejar&quot; em qualquer receita para agendar datas futuras.</p>
                 </div>
               ) : (
                 <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-x-auto">
@@ -706,7 +925,7 @@ export default function BrewStudioPage() {
             <div className="p-6 bg-white border border-slate-200 rounded-3xl shadow-sm">
               <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
                 <Flame className="w-4 h-4 text-amber-600" />
-                <span>Tanques de Fermentação & Lotes em Andamento</span>
+                <span>Tanques de Fermentação & Lotes em Andamento (Clique para Gerenciar Tarefas)</span>
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -717,37 +936,56 @@ export default function BrewStudioPage() {
                   return (
                     <div
                       key={tank.id}
-                      className={`p-4 rounded-2xl border transition-all ${
+                      className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
                         isBusy
-                          ? 'bg-amber-50/70 border-amber-300 text-slate-800'
+                          ? 'bg-amber-50/70 border-amber-300 text-slate-800 shadow-sm'
                           : 'bg-slate-50 border-slate-200 text-slate-500'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Cylinder className={`w-5 h-5 ${isBusy ? 'text-amber-600' : 'text-slate-400'}`} />
-                          <span className="text-sm font-black text-slate-900">{tank.name}</span>
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Cylinder className={`w-5 h-5 ${isBusy ? 'text-amber-600' : 'text-slate-400'}`} />
+                            <span className="text-sm font-black text-slate-900">{tank.name}</span>
+                          </div>
+                          <span className="text-xs font-bold text-slate-500">{tank.capacityLiters}L</span>
                         </div>
-                        <span className="text-xs font-bold text-slate-500">{tank.capacityLiters}L</span>
+
+                        {currentBatch ? (
+                          <div className="mt-3 pt-3 border-t border-amber-200/80 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span className="text-slate-900">{currentBatch.recipe?.name || 'Cerveja'}</span>
+                              <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full text-[10px] font-black">{currentBatch.status}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-600">
+                              Lote: <span className="font-bold text-slate-800">{currentBatch.batchNumber}</span> | {currentBatch.volumePlannedLiters}L
+                            </p>
+                            {currentBatch.measuredOg && (
+                              <p className="text-[11px] text-slate-600">
+                                OG: <span className="font-bold text-amber-700">{currentBatch.measuredOg}</span> {currentBatch.measuredFg ? `→ FG: ${currentBatch.measuredFg}` : ''}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400 mt-3 italic">Tanque livre para brassagem</p>
+                        )}
                       </div>
 
-                      {currentBatch ? (
-                        <div className="mt-3 pt-3 border-t border-amber-200/80 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs font-bold">
-                            <span className="text-slate-900">{currentBatch.recipe?.name || 'Cerveja'}</span>
-                            <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full text-[10px] font-black">{currentBatch.status}</span>
-                          </div>
-                          <p className="text-[11px] text-slate-600">
-                            Lote: <span className="font-bold text-slate-800">{currentBatch.batchNumber}</span> | {currentBatch.volumePlannedLiters}L
-                          </p>
-                          {currentBatch.measuredOg && (
-                            <p className="text-[11px] text-slate-600">
-                              OG Medida: <span className="font-bold text-cyan-700">{currentBatch.measuredOg}</span>
-                            </p>
-                          )}
+                      {currentBatch && (
+                        <div className="mt-4 pt-3 border-t border-amber-200/80 flex items-center justify-between">
+                          <span className="text-[11px] text-slate-500 font-bold">Tarefas & Medições</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedBatchForLive(currentBatch);
+                              setLiveBatchModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center gap-1"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Gerenciar Tanque</span>
+                          </button>
                         </div>
-                      ) : (
-                        <p className="text-xs text-slate-400 mt-3 italic">Tanque livre para brassagem</p>
                       )}
                     </div>
                   );
@@ -815,6 +1053,22 @@ export default function BrewStudioPage() {
           onScheduled={() => {
             fetchData();
             setActiveTab('PLANNING');
+          }}
+        />
+      )}
+
+      {/* MODAL: GERENCIAMENTO DE TANQUE / LOTE AO VIVO & TAREFAS */}
+      {liveBatchModalOpen && selectedBatchForLive && (
+        <LiveBatchManagerModal
+          batch={selectedBatchForLive}
+          tanks={tanks}
+          inventoryItems={inventoryItems}
+          onClose={() => {
+            setLiveBatchModalOpen(false);
+            setSelectedBatchForLive(null);
+          }}
+          onSaved={() => {
+            fetchData();
           }}
         />
       )}

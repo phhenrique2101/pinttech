@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
       commercialDenomination,
       technicalResponsible,
       sensoryNotes,
+      tankTasksJson,
+      fermentationLogsJson,
+      customRecipeDataJson,
+      brewDate,
       ingredients,
       deductStock,
     } = body;
@@ -128,6 +132,7 @@ export async function POST(req: NextRequest) {
           volumeProducedLiters: volProd,
           costPerLiter: numCostPerLiter,
           totalCost: numTotalCost,
+          brewDate: brewDate ? new Date(brewDate) : new Date(),
           measuredOg: numOg,
           measuredFg: numFg,
           measuredAbv: calcAbv,
@@ -148,6 +153,9 @@ export async function POST(req: NextRequest) {
           commercialDenomination: commercialDenomination?.trim() || null,
           technicalResponsible: technicalResponsible?.trim() || null,
           sensoryNotes: sensoryNotes?.trim() || null,
+          tankTasksJson: tankTasksJson ? (typeof tankTasksJson === 'string' ? tankTasksJson : JSON.stringify(tankTasksJson)) : null,
+          fermentationLogsJson: fermentationLogsJson ? (typeof fermentationLogsJson === 'string' ? fermentationLogsJson : JSON.stringify(fermentationLogsJson)) : null,
+          customRecipeDataJson: customRecipeDataJson ? (typeof customRecipeDataJson === 'string' ? customRecipeDataJson : JSON.stringify(customRecipeDataJson)) : null,
           notes: notes ? String(notes).trim() : null,
           ingredients: Array.isArray(ingredients) && ingredients.length > 0
             ? {
