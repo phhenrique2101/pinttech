@@ -1,38 +1,36 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import Link from 'next/link';
 import {
-  Flame,
-  Plus,
   Beer,
-  Layers,
-  Thermometer,
-  Sparkles,
-  Droplets,
-  Trash2,
-  Cylinder,
-  DollarSign,
+  Plus,
   Search,
-  ArrowRight,
-  UploadCloud,
+  Upload,
   Download,
-  CheckCircle2,
-  RefreshCw,
-  Activity,
-  Package,
   Calendar,
-  Zap,
-  Sliders,
-  Filter,
+  Flame,
+  Layers,
+  Cylinder,
+  Sparkles,
+  DollarSign,
+  Package,
+  Trash2,
+  CheckCircle2,
   AlertTriangle,
-  AlertCircle,
+  Play,
+  ArrowRight,
   Clock,
   ShoppingCart,
   Copy,
   Check,
   CalendarDays,
   Edit3,
+  LayoutGrid,
+  List,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  SlidersHorizontal,
 } from 'lucide-react';
 import RecipeDesignerModal from '@/components/brew/RecipeDesignerModal';
 import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
@@ -51,6 +49,11 @@ export default function BrewStudioPage() {
   const [search, setSearch] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'RECIPES' | 'PLANNING' | 'CELLAR_CALENDAR' | 'BATCHES' | 'STOCK'>('RECIPES');
   const [copiedShoppingList, setCopiedShoppingList] = useState<boolean>(false);
+
+  // Layout e Ordenação
+  const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
+  const [sortField, setSortField] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Modals
   const [designerModalOpen, setDesignerModalOpen] = useState<boolean>(false);
@@ -95,6 +98,15 @@ export default function BrewStudioPage() {
     fetchData();
   }, []);
 
+  // Resetar campo padrão de ordenação ao mudar de aba
+  useEffect(() => {
+    if (activeTab === 'RECIPES') setSortField('name');
+    else if (activeTab === 'CELLAR_CALENDAR') setSortField('dueDate');
+    else if (activeTab === 'PLANNING') setSortField('brewDate');
+    else if (activeTab === 'BATCHES') setSortField('brewDate');
+    else if (activeTab === 'STOCK') setSortField('name');
+  }, [activeTab]);
+
   const handleDeleteRecipe = async (id: string, name: string) => {
     if (!confirm(`Tem certeza que deseja excluir a receita "${name}"?`)) return;
     try {
@@ -119,23 +131,48 @@ export default function BrewStudioPage() {
     } catch (e) {}
   };
 
-  // Filtragem de receitas
-  const filteredRecipes = recipes.filter((r) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      r.name?.toLowerCase().includes(q) ||
-      r.style?.toLowerCase().includes(q) ||
-      r.bjcpStyleCode?.toLowerCase().includes(q)
-    );
-  });
+  const toggleSortOrder = () => {
+    setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+  };
 
-  // Lotes Planejados / Futuros e Ativos
+  // 1. Filtragem e Ordenação de Receitas
+  const filteredAndSortedRecipes = useMemo(() => {
+    let list = recipes.filter((r) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        r.name?.toLowerCase().includes(q) ||
+        r.style?.toLowerCase().includes(q) ||
+        r.bjcpStyleCode?.toLowerCase().includes(q)
+      );
+    });
+
+    list.sort((a, b) => {
+      let valA: any = a[sortField] ?? '';
+      let valB: any = b[sortField] ?? '';
+
+      if (sortField === 'costPerLiter' || sortField === 'abv' || sortField === 'ibu' || sortField === 'ebc' || sortField === 'og') {
+        valA = parseFloat(valA) || 0;
+        valB = parseFloat(valB) || 0;
+      } else if (typeof valA === 'string') {
+        valA = valA.toLowerCase();
+        valB = String(valB).toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [recipes, search, sortField, sortOrder]);
+
+  // Lotes Planejados e Ativos
   const plannedBatches = batches.filter((b) => b.status === 'PLANEJADO');
   const activeBatches = batches.filter((b) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO' && b.status !== 'PLANEJADO');
   const totalVolumeInTanks = activeBatches.reduce((acc, b) => acc + (b.volumePlannedLiters || 0), 0);
 
-  // TODAS AS TAREFAS DE TANQUE CONSOLIDADAS DE TODOS OS LOTES ATIVOS
+  // 2. Tarefas de Tanque Consolidadas
   const allTankTasks = useMemo(() => {
     const taskList: Array<TankTaskItem & { batchId: string; batchNumber: string; beerName: string; tankName: string }> = [];
 
@@ -169,9 +206,37 @@ export default function BrewStudioPage() {
       }
     }
 
-    taskList.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    return taskList;
-  }, [batches]);
+    let filtered = taskList;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          t.beerName.toLowerCase().includes(q) ||
+          t.batchNumber.toLowerCase().includes(q) ||
+          t.tankName.toLowerCase().includes(q)
+      );
+    }
+
+    filtered.sort((a, b) => {
+      let valA: any = (a as any)[sortField] ?? '';
+      let valB: any = (b as any)[sortField] ?? '';
+
+      if (sortField === 'dueDate') {
+        valA = a.dueDate;
+        valB = b.dueDate;
+      } else if (typeof valA === 'string') {
+        valA = valA.toLowerCase();
+        valB = String(valB).toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [batches, search, sortField, sortOrder]);
 
   const todayStr = getLocalDateString();
   const pendingTasks = allTankTasks.filter((t) => !t.completed);
@@ -182,34 +247,129 @@ export default function BrewStudioPage() {
     const targetBatch = batches.find((b) => b.id === batchId);
     if (!targetBatch) return;
 
-    let tasksArr: TankTaskItem[] = [];
+    let currentTasks: TankTaskItem[] = [];
     if (targetBatch.tankTasksJson) {
       try {
-        tasksArr = JSON.parse(targetBatch.tankTasksJson);
+        currentTasks = JSON.parse(targetBatch.tankTasksJson);
       } catch (e) {}
     } else {
-      tasksArr = allTankTasks.filter((t) => t.batchId === batchId);
+      const brewDateRef = targetBatch.brewDate ? targetBatch.brewDate : new Date();
+      currentTasks = [
+        { id: `${targetBatch.id}-1`, title: 'Medição de Densidade & Subida Diacetil', type: 'MEASUREMENT', dueDate: addDaysToDateString(brewDateRef, 4), completed: false },
+        { id: `${targetBatch.id}-2`, title: 'Adição de Dry Hopping', type: 'DRY_HOPPING', dueDate: addDaysToDateString(brewDateRef, 6), completed: false, amount: 2.0, unit: 'KG' },
+        { id: `${targetBatch.id}-3`, title: 'Dosagem de Antioxidante & Início Cold Crash', type: 'ANTIOXIDANT', dueDate: addDaysToDateString(brewDateRef, 10), completed: false },
+      ];
     }
 
-    const updatedTasks = tasksArr.map((t) =>
+    const updatedTasks = currentTasks.map((t) =>
       t.id === taskId
         ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : undefined }
         : t
     );
 
     try {
-      await fetch(`/api/batches/${batchId}`, {
+      const res = await fetch(`/api/batches/${batchId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tankTasksJson: JSON.stringify(updatedTasks) }),
       });
-      fetchData();
+      if (res.ok) {
+        setBatches(
+          batches.map((b) => (b.id === batchId ? { ...b, tankTasksJson: JSON.stringify(updatedTasks) } : b))
+        );
+      }
     } catch (e) {}
   };
 
-  // MOTOR DE CÁLCULO DE DÉFICIT CONSOLIDADO DE ESTOQUE
+  // 3. Filtragem e Ordenação de Lotes Planejados
+  const filteredAndSortedPlannedBatches = useMemo(() => {
+    let list = plannedBatches.filter((b) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      const rName = b.recipe?.name || '';
+      return b.batchNumber?.toLowerCase().includes(q) || rName.toLowerCase().includes(q);
+    });
+
+    list.sort((a, b) => {
+      let valA: any = a[sortField] ?? '';
+      let valB: any = b[sortField] ?? '';
+
+      if (sortField === 'name' || sortField === 'recipe') {
+        valA = (a.recipe?.name || '').toLowerCase();
+        valB = (b.recipe?.name || '').toLowerCase();
+      } else if (sortField === 'volumePlannedLiters') {
+        valA = a.volumePlannedLiters || 0;
+        valB = b.volumePlannedLiters || 0;
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [plannedBatches, search, sortField, sortOrder]);
+
+  // 4. Filtragem e Ordenação de Tanques e Fermentação
+  const filteredAndSortedTanks = useMemo(() => {
+    let list = tanks.filter((t) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      const currentBatch = batches.find((b) => b.tankId === t.id && b.status !== 'FINALIZADO' && b.status !== 'PLANEJADO');
+      return t.name.toLowerCase().includes(q) || (currentBatch?.recipe?.name || '').toLowerCase().includes(q);
+    });
+
+    list.sort((a, b) => {
+      let valA: any = a[sortField] ?? '';
+      let valB: any = b[sortField] ?? '';
+
+      if (sortField === 'capacityLiters') {
+        valA = a.capacityLiters || 0;
+        valB = b.capacityLiters || 0;
+      } else if (typeof valA === 'string') {
+        valA = valA.toLowerCase();
+        valB = String(valB).toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [tanks, batches, search, sortField, sortOrder]);
+
+  // 5. Filtragem e Ordenação do Estoque Físico
+  const filteredAndSortedStock = useMemo(() => {
+    let list = inventoryItems.filter((item) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
+    });
+
+    list.sort((a, b) => {
+      let valA: any = a[sortField] ?? '';
+      let valB: any = b[sortField] ?? '';
+
+      if (sortField === 'currentQuantity' || sortField === 'costPerUnit') {
+        valA = parseFloat(valA) || 0;
+        valB = parseFloat(valB) || 0;
+      } else if (typeof valA === 'string') {
+        valA = valA.toLowerCase();
+        valB = String(valB).toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [inventoryItems, search, sortField, sortOrder]);
+
+  // CÁLCULO CONSOLIDADO DE DEMANDA DE INSUMOS FUTUROS VS ESTOQUE FÍSICO
   const consolidatedDeficitPlan = useMemo(() => {
-    const ingredientDemandMap: Record<string, { name: string; category: string; totalRequired: number; unit: string }> = {};
+    const demandMap: Record<string, { name: string; category: string; totalRequired: number; unit: string }> = {};
 
     for (const batch of plannedBatches) {
       const rec = recipes.find((r) => r.id === batch.recipeId) || batch.recipe;
@@ -219,60 +379,79 @@ export default function BrewStudioPage() {
         ? (batch.volumePlannedLiters || 500) / rec.batchYieldLiters
         : 1;
 
+      let recipeData: any = null;
       if (rec.recipeDataJson) {
         try {
-          const parsed = JSON.parse(rec.recipeDataJson);
-          for (const f of parsed.fermentables || []) {
-            const key = `MALTE_${f.name.toLowerCase().trim()}`;
-            if (!ingredientDemandMap[key]) {
-              ingredientDemandMap[key] = { name: f.name, category: 'MALTE', totalRequired: 0, unit: 'KG' };
-            }
-            ingredientDemandMap[key].totalRequired += (f.amountKg || 0) * scale;
-          }
-          for (const h of parsed.hops || []) {
-            const key = `LUPULO_${h.name.toLowerCase().trim()}`;
-            if (!ingredientDemandMap[key]) {
-              ingredientDemandMap[key] = { name: h.name, category: 'LUPULO', totalRequired: 0, unit: 'G' };
-            }
-            ingredientDemandMap[key].totalRequired += (h.amountGrams || 0) * scale;
-          }
+          recipeData = JSON.parse(rec.recipeDataJson);
         } catch (e) {}
-      } else if (Array.isArray(rec.ingredients)) {
-        for (const ing of rec.ingredients) {
-          const cat = ing.category === 'LUPULO' ? 'LUPULO' : 'MALTE';
-          const key = `${cat}_${ing.name.toLowerCase().trim()}`;
-          const amount = ing.amount || 0;
-          if (!ingredientDemandMap[key]) {
-            ingredientDemandMap[key] = { name: ing.name, category: cat, totalRequired: 0, unit: ing.unit || 'KG' };
+      }
+
+      if (recipeData) {
+        for (const f of recipeData.fermentables || []) {
+          const key = `malte_${f.name.toLowerCase().trim()}`;
+          const amount = (f.amountKg || 0) * scale;
+          if (!demandMap[key]) {
+            demandMap[key] = { name: f.name, category: 'MALTE', totalRequired: 0, unit: 'KG' };
           }
-          ingredientDemandMap[key].totalRequired += amount * scale;
+          demandMap[key].totalRequired += amount;
+        }
+
+        for (const h of recipeData.hops || []) {
+          const key = `hop_${h.name.toLowerCase().trim()}`;
+          const amountKg = ((h.amountGrams || 0) * scale) / 1000;
+          if (!demandMap[key]) {
+            demandMap[key] = { name: h.name, category: 'LUPULO', totalRequired: 0, unit: 'KG' };
+          }
+          demandMap[key].totalRequired += amountKg;
+        }
+
+        if (recipeData.yeast) {
+          const key = `yeast_${recipeData.yeast.name.toLowerCase().trim()}`;
+          if (!demandMap[key]) {
+            demandMap[key] = { name: recipeData.yeast.name, category: 'LEVEDURA', totalRequired: 0, unit: 'UN' };
+          }
+          demandMap[key].totalRequired += 1;
         }
       }
     }
 
-    const items = Object.values(ingredientDemandMap).map((d) => {
-      const lower = d.name.toLowerCase();
-      const match = inventoryItems.find((i) => i.name.toLowerCase().includes(lower) || lower.includes(i.name.toLowerCase()));
-      let avail = match ? match.currentQuantity : 0;
-      if (d.unit === 'G' && match?.unit === 'KG') {
-        avail = avail * 1000;
+    const allRequirements: Array<{
+      name: string;
+      category: string;
+      totalRequired: number;
+      available: number;
+      deficit: number;
+      unit: string;
+      isMissing: boolean;
+    }> = [];
+
+    for (const key of Object.keys(demandMap)) {
+      const item = demandMap[key];
+      const stockMatch = inventoryItems.find((inv) =>
+        inv.name.toLowerCase().includes(item.name.toLowerCase()) ||
+        item.name.toLowerCase().includes(inv.name.toLowerCase())
+      );
+
+      let availableQty = 0;
+      if (stockMatch) {
+        availableQty = stockMatch.unit === 'G' ? stockMatch.currentQuantity / 1000 : stockMatch.currentQuantity;
       }
 
-      const deficit = d.totalRequired - avail;
-      return {
-        name: d.name,
-        category: d.category,
-        totalRequired: Math.round(d.totalRequired * 10) / 10,
-        available: Math.round(avail * 10) / 10,
-        deficit: deficit > 0 ? Math.round(deficit * 10) / 10 : 0,
-        unit: d.unit,
-        isMissing: deficit > 0,
-      };
-    });
+      const diff = Math.round((item.totalRequired - availableQty) * 100) / 100;
+      allRequirements.push({
+        name: item.name,
+        category: item.category,
+        totalRequired: Math.round(item.totalRequired * 100) / 100,
+        available: Math.round(availableQty * 100) / 100,
+        deficit: diff > 0 ? diff : 0,
+        unit: item.unit,
+        isMissing: diff > 0,
+      });
+    }
 
-    const missingList = items.filter((i) => i.isMissing);
+    const missingList = allRequirements.filter((i) => i.isMissing);
     return {
-      allRequirements: items,
+      allRequirements,
       missingList,
       hasDeficit: missingList.length > 0,
     };
@@ -280,43 +459,89 @@ export default function BrewStudioPage() {
 
   const copyShoppingListText = () => {
     if (consolidatedDeficitPlan.missingList.length === 0) return;
-    let text = `📋 *LISTA DE COMPRAS DE INSUMOS - PINTTECH*\n`;
-    text += `Para atender o planejamento de produção (${plannedBatches.length} lotes futuros):\n\n`;
+    let txt = `🛒 LISTA DE COMPRAS DE INSUMOS - PINTTECH BREW\n`;
+    txt += `Demanda consolidada para os próximos ${plannedBatches.length} lotes de produção:\n\n`;
     for (const item of consolidatedDeficitPlan.missingList) {
-      text += `• ${item.name} (${item.category}): Falta comprar *${item.deficit} ${item.unit}* (Necessário: ${item.totalRequired} ${item.unit} | Saldo: ${item.available} ${item.unit})\n`;
+      txt += `• [${item.category}] ${item.name}: ${item.deficit} ${item.unit} (Estoque atual: ${item.available} ${item.unit} | Demanda: ${item.totalRequired} ${item.unit})\n`;
     }
-    navigator.clipboard.writeText(text);
+    txt += `\nGerado automaticamente via PintTech Brew Studio (${new Date().toLocaleDateString('pt-BR')})`;
+
+    navigator.clipboard.writeText(txt);
     setCopiedShoppingList(true);
     setTimeout(() => setCopiedShoppingList(false), 3000);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8 -m-4 md:-m-6 lg:-m-8">
-      {/* TOPBAR BANNER LIGHT */}
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm relative overflow-hidden">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-black">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>PintTech Brew Studio — Designer & Planejador Cervejeiro</span>
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans">
+      {/* TOP HEADER LIGHT */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 font-black text-xl">
+              🍺
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-black text-slate-900 tracking-tight">PintTech</span>
+                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                  Brew Studio
+                </span>
               </div>
-              <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                Elaboração de Receitas & Gestão da Adega
+              <p className="text-[11px] text-slate-500 font-medium leading-none">
+                Engenharia Cervejeira, Planejamento & Controle de Estoque
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setXmlImporterOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-all shadow-xs"
+            >
+              <Upload className="w-3.5 h-3.5 text-amber-600" />
+              <span>Importar BeerXML</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRecipeForEdit(null);
+                setDesignerModalOpen(true);
+              }}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nova Receita</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* MAIN CONTAINER */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6">
+        {/* BANNER / STATUS DA CERVEJARIA */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                <span>Cockpit de Produção & Adega</span>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  Sincronizado
+                </span>
               </h1>
-              <p className="text-slate-600 text-xs sm:text-sm max-w-2xl font-medium">
-                Crie receitas, edite parâmetros ao vivo durante a fermentação, agende lembretes de Dry Hopping/Antioxidante e acompanhe o que falta comprar no estoque.
+              <p className="text-xs text-slate-500 mt-1">
+                Ambiente de elaboração de receitas, cálculo BJCP 2021, curvas de maturação e baixa bidirecional de estoque.
               </p>
             </div>
 
-            {/* Quick Actions */}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setXmlImporterOpen(true)}
-                className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
+                className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5"
               >
-                <UploadCloud className="w-4 h-4 text-amber-600" />
+                <Upload className="w-4 h-4 text-amber-600" />
                 <span>Importar BeerXML</span>
               </button>
 
@@ -334,7 +559,7 @@ export default function BrewStudioPage() {
             </div>
           </div>
 
-          {/* Quick Metrics Bar Light */}
+          {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 mt-6 border-t border-slate-100">
             <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
               <span className="text-[11px] font-bold text-slate-500 block">Receitas Elaboradas</span>
@@ -362,7 +587,7 @@ export default function BrewStudioPage() {
           </div>
         </div>
 
-        {/* NAVEGAÇÃO ENTRE ABAS LIGHT */}
+        {/* NAVEGAÇÃO ENTRE ABAS */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-2 border-b border-slate-200">
           <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm w-full sm:w-auto overflow-x-auto">
             <button
@@ -386,7 +611,7 @@ export default function BrewStudioPage() {
               }`}
             >
               <CalendarDays className="w-4 h-4" />
-              <span>Tarefas da Adega & Lembretes ({pendingTasks.length})</span>
+              <span>Tarefas da Adega ({pendingTasks.length})</span>
             </button>
 
             <button
@@ -426,30 +651,160 @@ export default function BrewStudioPage() {
             </button>
           </div>
 
-          {/* Search bar */}
-          {activeTab === 'RECIPES' && (
-            <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar receita ou estilo..."
-                className="w-full pl-10 pr-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-amber-500 shadow-sm"
-              />
-            </div>
-          )}
+          {/* Search bar & Global Controls */}
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar em tempo real..."
+              className="w-full pl-10 pr-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-amber-500 shadow-sm"
+            />
+          </div>
         </div>
 
-        {/* CONTEÚDO PRINCIPAL (LIGHT THEME) */}
+        {/* BARRA DE CONTROLE UNIVERSAL: MODO DE EXIBIÇÃO (GRADE / LINHAS) & ORDENAÇÃO (CRESCENTE / DECRESCENTE) */}
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          {/* Seletor de Ordenação Dinâmico por Aba */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
+              <span>Ordenar por:</span>
+            </span>
+
+            {activeTab === 'RECIPES' && (
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="name">Nome da Receita</option>
+                <option value="style">Estilo Cervejeiro</option>
+                <option value="abv">Teor Alcoólico (ABV)</option>
+                <option value="ibu">Amargor (IBU)</option>
+                <option value="ebc">Cor (EBC/SRM)</option>
+                <option value="costPerLiter">Custo por Litro (R$/L)</option>
+                <option value="createdAt">Data de Criação</option>
+              </select>
+            )}
+
+            {activeTab === 'CELLAR_CALENDAR' && (
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="dueDate">Data Programada</option>
+                <option value="title">Título da Tarefa</option>
+                <option value="batchNumber">Número do Lote</option>
+                <option value="tankName">Tanque</option>
+              </select>
+            )}
+
+            {activeTab === 'PLANNING' && (
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="brewDate">Data Prevista</option>
+                <option value="batchNumber">Número do Lote</option>
+                <option value="name">Nome da Cerveja</option>
+                <option value="volumePlannedLiters">Volume Planejado</option>
+              </select>
+            )}
+
+            {activeTab === 'BATCHES' && (
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="name">Nome do Tanque</option>
+                <option value="capacityLiters">Capacidade (L)</option>
+                <option value="status">Status</option>
+              </select>
+            )}
+
+            {activeTab === 'STOCK' && (
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="name">Nome do Insumo</option>
+                <option value="currentQuantity">Saldo em Estoque</option>
+                <option value="category">Categoria</option>
+                <option value="costPerUnit">Custo Unitário</option>
+              </select>
+            )}
+
+            {/* Botão de Toggle Crescente / Decrescente */}
+            <button
+              type="button"
+              onClick={toggleSortOrder}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+              title={sortOrder === 'asc' ? 'Ordem Crescente (A-Z, Menor-Maior)' : 'Ordem Decrescente (Z-A, Maior-Menor)'}
+            >
+              {sortOrder === 'asc' ? (
+                <>
+                  <ArrowUp className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Crescente (A-Z)</span>
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Decrescente (Z-A)</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Seletor de Modo de Exibição: GRADE (CARDS) vs LINHAS (TABELA) */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-300">
+            <button
+              type="button"
+              onClick={() => setViewMode('GRID')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'GRID'
+                  ? 'bg-white text-slate-900 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="Exibir em Grade (Cards)"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Grade</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setViewMode('LIST')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'LIST'
+                  ? 'bg-white text-slate-900 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="Exibir em Linhas (Tabela)"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Linhas</span>
+            </button>
+          </div>
+        </div>
+
+        {/* CONTEÚDO PRINCIPAL */}
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
             <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs font-bold">Carregando dados cervejeiros...</span>
           </div>
         ) : activeTab === 'RECIPES' ? (
+          /* ========================================================================= */
+          /* ABA 1: MINHAS RECEITAS (GRADE OU LINHAS)                                  */
+          /* ========================================================================= */
           <div className="space-y-4">
-            {filteredRecipes.length === 0 ? (
+            {filteredAndSortedRecipes.length === 0 ? (
               <div className="p-12 text-center bg-white border border-dashed border-slate-300 rounded-3xl space-y-3 shadow-sm">
                 <div className="w-14 h-14 rounded-3xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto">
                   <Beer className="w-7 h-7" />
@@ -476,9 +831,10 @@ export default function BrewStudioPage() {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : viewMode === 'GRID' ? (
+              /* MODO GRADE: RECEITAS */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredRecipes.map((r) => {
+                {filteredAndSortedRecipes.map((r) => {
                   const srm = r.ebc ? Math.round(r.ebc / 1.97) : 4;
                   const hex = srmToHex(srm);
 
@@ -623,10 +979,116 @@ export default function BrewStudioPage() {
                   );
                 })}
               </div>
+            ) : (
+              /* MODO LINHAS (TABELA): RECEITAS */
+              <div className="bg-white rounded-3xl border border-slate-200 overflow-x-auto shadow-sm">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="p-4">Receita / Cor</th>
+                      <th className="p-4">Estilo BJCP</th>
+                      <th className="p-4 text-center">OG</th>
+                      <th className="p-4 text-center">ABV</th>
+                      <th className="p-4 text-center">IBU</th>
+                      <th className="p-4 text-center">EBC</th>
+                      <th className="p-4 text-right">Rendimento</th>
+                      <th className="p-4 text-right">Custo / Litro</th>
+                      <th className="p-4 text-center">Ações Rápidas</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredAndSortedRecipes.map((r) => {
+                      const srm = r.ebc ? Math.round(r.ebc / 1.97) : 4;
+                      const hex = srmToHex(srm);
+
+                      return (
+                        <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-4 h-6 rounded border border-slate-300 shadow-inner flex-shrink-0"
+                                style={{ backgroundColor: hex }}
+                              />
+                              <div>
+                                <span className="font-black text-slate-900 block text-sm">{r.name}</span>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  {r._count?.batches || 0} lote(s) produzidos
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="p-4 font-bold text-slate-700">
+                            {r.style} {r.bjcpStyleCode ? `(${r.bjcpStyleCode})` : ''}
+                          </td>
+
+                          <td className="p-4 text-center font-bold text-slate-900">{r.og ? r.og.toFixed(3) : '-'}</td>
+                          <td className="p-4 text-center font-black text-amber-700">{r.abv ? `${r.abv.toFixed(1)}%` : '-'}</td>
+                          <td className="p-4 text-center font-black text-emerald-700">{r.ibu ?? '-'}</td>
+                          <td className="p-4 text-center font-black text-cyan-700">{r.ebc ? Math.round(r.ebc) : '-'}</td>
+                          <td className="p-4 text-right font-black text-slate-900">{r.batchYieldLiters || 500} L</td>
+                          <td className="p-4 text-right font-black text-purple-700">
+                            {r.costPerLiter ? `R$ ${r.costPerLiter.toFixed(2)}` : 'R$ 0,00'}
+                          </td>
+
+                          <td className="p-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRecipeForSchedule(r);
+                                  setScheduleModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-lg border border-amber-200"
+                                title="Planejar Brassagem Futura"
+                              >
+                                Planejar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRecipeForEdit(r);
+                                  setDesignerModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg border border-slate-300"
+                              >
+                                Editar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRecipeForBrew(r);
+                                  setBrewDayModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-lg shadow-xs"
+                              >
+                                Brassar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRecipe(r.id, r.name)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded-lg"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         ) : activeTab === 'CELLAR_CALENDAR' ? (
-          /* ABA: CALENDÁRIO DE TAREFAS DA ADEGA & LEMBRETES DE TANQUE */
+          /* ========================================================================= */
+          /* ABA 2: TAREFAS DA ADEGA & LEMBRETES (GRADE OU LINHAS)                     */
+          /* ========================================================================= */
           <div className="space-y-6">
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -655,7 +1117,8 @@ export default function BrewStudioPage() {
                   <p className="text-xs font-bold text-slate-600">Nenhuma tarefa programada nos tanques no momento.</p>
                   <p className="text-[11px] text-slate-400">Ao iniciar ou acompanhar qualquer lote, você pode programar tarefas de adega personalizadas.</p>
                 </div>
-              ) : (
+              ) : viewMode === 'LIST' ? (
+                /* MODO LINHAS: TAREFAS */
                 <div className="space-y-3">
                   {allTankTasks.map((task) => {
                     const isLate = !task.completed && task.dueDate < todayStr;
@@ -756,11 +1219,95 @@ export default function BrewStudioPage() {
                     );
                   })}
                 </div>
+              ) : (
+                /* MODO GRADE: TAREFAS */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {allTankTasks.map((task) => {
+                    const isLate = !task.completed && task.dueDate < todayStr;
+                    const isToday = !task.completed && task.dueDate === todayStr;
+
+                    return (
+                      <div
+                        key={task.id}
+                        className={`p-5 rounded-3xl border transition-all flex flex-col justify-between space-y-3 ${
+                          task.completed
+                            ? 'bg-slate-50/70 border-slate-200 opacity-60'
+                            : isLate
+                            ? 'bg-rose-50 border-rose-200 shadow-sm'
+                            : isToday
+                            ? 'bg-amber-50 border-amber-300 shadow-md'
+                            : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+                        }`}
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                              🏺 {task.tankName}
+                            </span>
+                            <span className="text-xs font-bold text-slate-600">
+                              {formatDate(task.dueDate)}
+                            </span>
+                          </div>
+
+                          <h4 className={`text-sm font-black ${task.completed ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+                            {task.title}
+                          </h4>
+
+                          <p className="text-xs font-bold text-amber-800">
+                            Lote: {task.batchNumber} ({task.beerName})
+                          </p>
+
+                          {task.amount && (
+                            <p className="text-xs text-slate-600 font-medium">
+                              Dosagem: <strong>{task.amount} {task.unit}</strong>
+                            </p>
+                          )}
+
+                          {task.notes && (
+                            <p className="text-xs text-slate-500 bg-slate-100 p-2 rounded-xl">{task.notes}</p>
+                          )}
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGlobalTask(task.batchId, task.id)}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all ${
+                              task.completed
+                                ? 'bg-slate-200 text-slate-700'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{task.completed ? 'Concluída' : 'Marcar Feito'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const b = batches.find((item) => item.id === task.batchId);
+                              if (b) {
+                                setSelectedBatchForLive(b);
+                                setLiveBatchModalOpen(true);
+                              }
+                            }}
+                            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl"
+                            title="Gerenciar Tanque"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
         ) : activeTab === 'PLANNING' ? (
-          /* ABA: PLANEJAMENTO & CRONOGRAMA DE PRODUÇÃO */
+          /* ========================================================================= */
+          /* ABA 3: PLANEJAMENTO & ESTOQUE FUTURO (GRADE OU LINHAS)                    */
+          /* ========================================================================= */
           <div className="space-y-6">
             {/* CARD 1: DIAGNÓSTICO DE INSUMOS E LISTA DE COMPRAS */}
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
@@ -853,7 +1400,7 @@ export default function BrewStudioPage() {
                 <div className="space-y-1">
                   <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-amber-600" />
-                    <span>Cronograma de Brassagens Futuras ({plannedBatches.length} Lotes)</span>
+                    <span>Cronograma de Brassagens Futuras ({filteredAndSortedPlannedBatches.length} Lotes)</span>
                   </h3>
                   <p className="text-xs text-slate-500">
                     Acompanhe as datas programadas e inicie a brassagem no dia previsto com 1 clique.
@@ -861,13 +1408,14 @@ export default function BrewStudioPage() {
                 </div>
               </div>
 
-              {plannedBatches.length === 0 ? (
+              {filteredAndSortedPlannedBatches.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
                   <p className="text-xs font-bold text-slate-500">Nenhum lote agendado.</p>
                 </div>
-              ) : (
+              ) : viewMode === 'GRID' ? (
+                /* MODO GRADE: PLANEJAMENTO */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {plannedBatches.map((batch) => {
+                  {filteredAndSortedPlannedBatches.map((batch) => {
                     const rec = recipes.find((r) => r.id === batch.recipeId) || batch.recipe;
                     const dateFormatted = batch.brewDate ? formatDate(batch.brewDate) : 'Data a definir';
 
@@ -915,11 +1463,70 @@ export default function BrewStudioPage() {
                     );
                   })}
                 </div>
+              ) : (
+                /* MODO LINHAS: PLANEJAMENTO */
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Data Prevista</th>
+                        <th className="p-3">Lote</th>
+                        <th className="p-3">Cerveja / Receita</th>
+                        <th className="p-3 text-right">Volume</th>
+                        <th className="p-3 text-center">Status</th>
+                        <th className="p-3 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredAndSortedPlannedBatches.map((batch) => {
+                        const rec = recipes.find((r) => r.id === batch.recipeId) || batch.recipe;
+                        const dateFormatted = batch.brewDate ? formatDate(batch.brewDate) : 'Data a definir';
+
+                        return (
+                          <tr key={batch.id} className="hover:bg-slate-50">
+                            <td className="p-3 font-bold text-slate-900">{dateFormatted}</td>
+                            <td className="p-3 font-black text-amber-800">{batch.batchNumber}</td>
+                            <td className="p-3 font-bold text-slate-800">{rec?.name || 'Cerveja'}</td>
+                            <td className="p-3 text-right font-black text-slate-900">{batch.volumePlannedLiters} L</td>
+                            <td className="p-3 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                PLANEJADO
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedRecipeForBrew(rec || { name: batch.batchNumber, batchYieldLiters: batch.volumePlannedLiters, id: batch.recipeId });
+                                    setBrewDayModalOpen(true);
+                                  }}
+                                  className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-lg"
+                                >
+                                  Brassar Hoje
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBatch(batch.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
         ) : activeTab === 'BATCHES' ? (
-          /* ABA: TANQUES E FERMENTAÇÃO */
+          /* ========================================================================= */
+          /* ABA 4: TANQUES E FERMENTAÇÃO (GRADE OU LINHAS)                            */
+          /* ========================================================================= */
           <div className="space-y-4">
             <div className="p-6 bg-white border border-slate-200 rounded-3xl shadow-sm">
               <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
@@ -927,102 +1534,197 @@ export default function BrewStudioPage() {
                 <span>Tanques de Fermentação & Lotes em Andamento (Clique para Gerenciar Tarefas)</span>
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {tanks.map((tank) => {
-                  const currentBatch = batches.find((b) => b.tankId === tank.id && b.status !== 'FINALIZADO' && b.status !== 'PLANEJADO');
-                  const isBusy = tank.status === 'OCUPADO' || currentBatch;
+              {viewMode === 'GRID' ? (
+                /* MODO GRADE: TANQUES */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredAndSortedTanks.map((tank) => {
+                    const currentBatch = batches.find((b) => b.tankId === tank.id && b.status !== 'FINALIZADO' && b.status !== 'PLANEJADO');
+                    const isBusy = tank.status === 'OCUPADO' || currentBatch;
 
-                  return (
-                    <div
-                      key={tank.id}
-                      className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
-                        isBusy
-                          ? 'bg-amber-50/70 border-amber-300 text-slate-800 shadow-sm'
-                          : 'bg-slate-50 border-slate-200 text-slate-500'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Cylinder className={`w-5 h-5 ${isBusy ? 'text-amber-600' : 'text-slate-400'}`} />
-                            <span className="text-sm font-black text-slate-900">{tank.name}</span>
+                    return (
+                      <div
+                        key={tank.id}
+                        className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
+                          isBusy
+                            ? 'bg-amber-50/70 border-amber-300 text-slate-800 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-500'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Cylinder className={`w-5 h-5 ${isBusy ? 'text-amber-600' : 'text-slate-400'}`} />
+                              <span className="text-sm font-black text-slate-900">{tank.name}</span>
+                            </div>
+                            <span className="text-xs font-bold text-slate-500">{tank.capacityLiters}L</span>
                           </div>
-                          <span className="text-xs font-bold text-slate-500">{tank.capacityLiters}L</span>
+
+                          {currentBatch ? (
+                            <div className="mt-3 pt-3 border-t border-amber-200/80 space-y-1.5">
+                              <div className="flex items-center justify-between text-xs font-bold">
+                                <span className="text-slate-900">{currentBatch.recipe?.name || 'Cerveja'}</span>
+                                <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full text-[10px] font-black">{currentBatch.status}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-600">
+                                Lote: <span className="font-bold text-slate-800">{currentBatch.batchNumber}</span> | {currentBatch.volumePlannedLiters}L
+                              </p>
+                              {currentBatch.measuredOg && (
+                                <p className="text-[11px] text-slate-600">
+                                  OG: <span className="font-bold text-amber-700">{currentBatch.measuredOg}</span> {currentBatch.measuredFg ? `→ FG: ${currentBatch.measuredFg}` : ''}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 mt-3 italic">Tanque livre para brassagem</p>
+                          )}
                         </div>
 
-                        {currentBatch ? (
-                          <div className="mt-3 pt-3 border-t border-amber-200/80 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs font-bold">
-                              <span className="text-slate-900">{currentBatch.recipe?.name || 'Cerveja'}</span>
-                              <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full text-[10px] font-black">{currentBatch.status}</span>
-                            </div>
-                            <p className="text-[11px] text-slate-600">
-                              Lote: <span className="font-bold text-slate-800">{currentBatch.batchNumber}</span> | {currentBatch.volumePlannedLiters}L
-                            </p>
-                            {currentBatch.measuredOg && (
-                              <p className="text-[11px] text-slate-600">
-                                OG: <span className="font-bold text-amber-700">{currentBatch.measuredOg}</span> {currentBatch.measuredFg ? `→ FG: ${currentBatch.measuredFg}` : ''}
-                              </p>
-                            )}
+                        {currentBatch && (
+                          <div className="mt-4 pt-3 border-t border-amber-200/80 flex items-center justify-between">
+                            <span className="text-[11px] text-slate-500 font-bold">Tarefas & Medições</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedBatchForLive(currentBatch);
+                                setLiveBatchModalOpen(true);
+                              }}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center gap-1"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Gerenciar Tanque</span>
+                            </button>
                           </div>
-                        ) : (
-                          <p className="text-xs text-slate-400 mt-3 italic">Tanque livre para brassagem</p>
                         )}
                       </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* MODO LINHAS: TANQUES */
+                <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Tanque</th>
+                        <th className="p-3 text-right">Capacidade</th>
+                        <th className="p-3">Cerveja Atual</th>
+                        <th className="p-3">Lote</th>
+                        <th className="p-3 text-center">Status</th>
+                        <th className="p-3 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {filteredAndSortedTanks.map((tank) => {
+                        const currentBatch = batches.find((b) => b.tankId === tank.id && b.status !== 'FINALIZADO' && b.status !== 'PLANEJADO');
 
-                      {currentBatch && (
-                        <div className="mt-4 pt-3 border-t border-amber-200/80 flex items-center justify-between">
-                          <span className="text-[11px] text-slate-500 font-bold">Tarefas & Medições</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedBatchForLive(currentBatch);
-                              setLiveBatchModalOpen(true);
-                            }}
-                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center gap-1"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span>Gerenciar Tanque</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                        return (
+                          <tr key={tank.id} className="hover:bg-white">
+                            <td className="p-3 font-bold text-slate-900 flex items-center gap-2">
+                              <Cylinder className="w-4 h-4 text-amber-600" />
+                              <span>{tank.name}</span>
+                            </td>
+                            <td className="p-3 text-right font-black text-slate-800">{tank.capacityLiters} L</td>
+                            <td className="p-3 font-bold text-slate-900">{currentBatch?.recipe?.name || '-'}</td>
+                            <td className="p-3 font-bold text-amber-800">{currentBatch?.batchNumber || '-'}</td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                                currentBatch ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {currentBatch ? currentBatch.status : 'LIVRE'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              {currentBatch && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedBatchForLive(currentBatch);
+                                    setLiveBatchModalOpen(true);
+                                  }}
+                                  className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg"
+                                >
+                                  Gerenciar
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         ) : (
-          /* ABA: ESTOQUE FÍSICO */
+          /* ========================================================================= */
+          /* ABA 5: ESTOQUE FÍSICO (GRADE OU LINHAS)                                   */
+          /* ========================================================================= */
           <div className="space-y-4">
             <div className="p-6 bg-white border border-slate-200 rounded-3xl shadow-sm">
               <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
                 <Package className="w-4 h-4 text-emerald-600" />
-                <span>Estoque Físico de Insumos da Cervejaria</span>
+                <span>Estoque Físico de Insumos da Cervejaria ({filteredAndSortedStock.length} Itens)</span>
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {inventoryItems.map((item) => (
-                  <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">{item.category}</span>
-                      <h4 className="text-xs font-black text-slate-900 mt-0.5">{item.name}</h4>
+              {viewMode === 'GRID' ? (
+                /* MODO GRADE: ESTOQUE */
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {filteredAndSortedStock.map((item) => (
+                    <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">{item.category}</span>
+                        <h4 className="text-xs font-black text-slate-900 mt-0.5">{item.name}</h4>
+                        {item.supplierLot && (
+                          <span className="text-[10px] text-slate-400 font-bold block mt-1">Lote: {item.supplierLot}</span>
+                        )}
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">
+                        <span className="text-xs font-black text-emerald-700">
+                          {item.currentQuantity} {item.unit}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-500">
+                          {formatCurrency(item.costPerUnit || 0)}/{item.unit}
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">
-                      <span className="text-xs font-black text-emerald-700">
-                        {item.currentQuantity} {item.unit}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-500">
-                        {formatCurrency(item.costPerUnit || 0)}/{item.unit}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                /* MODO LINHAS: ESTOQUE */
+                <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Insumo</th>
+                        <th className="p-3">Categoria</th>
+                        <th className="p-3">Lote do Fornecedor</th>
+                        <th className="p-3 text-right">Saldo Atual</th>
+                        <th className="p-3 text-right">Custo Unitário</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {filteredAndSortedStock.map((item) => (
+                        <tr key={item.id} className="hover:bg-white">
+                          <td className="p-3 font-bold text-slate-900">{item.name}</td>
+                          <td className="p-3 text-slate-500 font-medium">{item.category}</td>
+                          <td className="p-3 text-slate-600 font-bold">{item.supplierLot || '-'}</td>
+                          <td className="p-3 text-right font-black text-emerald-700">
+                            {item.currentQuantity} {item.unit}
+                          </td>
+                          <td className="p-3 text-right font-black text-slate-700">
+                            {formatCurrency(item.costPerUnit || 0)} / {item.unit}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
-      </div>
+      </main>
 
       {/* MODAL: DESIGNER / CALCULADORA DE RECEITA */}
       {designerModalOpen && (
