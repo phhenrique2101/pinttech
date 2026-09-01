@@ -62,6 +62,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       pricingModel,
       profitMarginPercent,
       styleCategory,
+      boilTimeMinutes,
+      efficiencyPercent,
+      waterProfileJson,
+      mashScheduleJson,
+      bjcpStyleCode,
+      recipeDataJson,
       ingredients,
     } = body;
 
@@ -123,6 +129,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           pricingModel: model,
           profitMarginPercent: margin,
           styleCategory: styleCategory ?? existing.styleCategory,
+          boilTimeMinutes: boilTimeMinutes !== undefined ? (boilTimeMinutes ? parseInt(boilTimeMinutes, 10) : 60) : existing.boilTimeMinutes,
+          efficiencyPercent: efficiencyPercent !== undefined ? (efficiencyPercent ? parseFloat(efficiencyPercent) : 75.0) : existing.efficiencyPercent,
+          waterProfileJson: waterProfileJson !== undefined ? (waterProfileJson ? (typeof waterProfileJson === 'string' ? waterProfileJson : JSON.stringify(waterProfileJson)) : null) : existing.waterProfileJson,
+          mashScheduleJson: mashScheduleJson !== undefined ? (mashScheduleJson ? (typeof mashScheduleJson === 'string' ? mashScheduleJson : JSON.stringify(mashScheduleJson)) : null) : existing.mashScheduleJson,
+          bjcpStyleCode: bjcpStyleCode !== undefined ? (bjcpStyleCode?.trim() || null) : existing.bjcpStyleCode,
+          recipeDataJson: recipeDataJson !== undefined ? (recipeDataJson ? (typeof recipeDataJson === 'string' ? recipeDataJson : JSON.stringify(recipeDataJson)) : null) : existing.recipeDataJson,
         },
         include: {
           ingredients: {

@@ -20,6 +20,7 @@ import {
   CreditCard,
   FileSpreadsheet,
   Download,
+  Sparkles,
 } from 'lucide-react';
 import { CurrentUser } from './Navbar';
 
@@ -58,6 +59,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Controle de Barris', href: '/barris', icon: Cylinder, moduleKey: 'BARRIS', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
     { label: 'Equipamentos & Chopeiras', href: '/equipamentos', icon: Wrench, moduleKey: 'EQUIPAMENTOS', roles: ['SUPER_ADMIN', 'ADMIN', 'LOGISTICS', 'SALES'] },
     { label: 'Scanner Mobile (Câmera)', href: '/scanner', icon: QrCode, badge: 'PWA', highlight: true, moduleKey: 'SCANNER', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
+    { label: 'Brew Studio (Receitas)', href: '/brew', icon: Sparkles, badge: 'NEW', highlight: true, moduleKey: 'PRODUCAO', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Produção & Tanques', href: '/producao', icon: Flame, moduleKey: 'PRODUCAO', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Estoque & Insumos', href: '/estoque', icon: Package, moduleKey: 'ESTOQUE', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Pedidos & Comodato', href: '/pedidos', icon: ShoppingCart, moduleKey: 'PEDIDOS', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },

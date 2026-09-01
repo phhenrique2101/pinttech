@@ -61,6 +61,12 @@ export async function POST(req: NextRequest) {
       pricingModel,
       profitMarginPercent,
       styleCategory,
+      boilTimeMinutes,
+      efficiencyPercent,
+      waterProfileJson,
+      mashScheduleJson,
+      bjcpStyleCode,
+      recipeDataJson,
       ingredients,
     } = body;
 
@@ -106,6 +112,12 @@ export async function POST(req: NextRequest) {
         pricingModel: model,
         profitMarginPercent: margin,
         styleCategory: styleCategory || 'STANDARD',
+        boilTimeMinutes: boilTimeMinutes !== undefined ? parseInt(boilTimeMinutes, 10) : 60,
+        efficiencyPercent: efficiencyPercent !== undefined ? parseFloat(efficiencyPercent) : 75.0,
+        waterProfileJson: waterProfileJson ? (typeof waterProfileJson === 'string' ? waterProfileJson : JSON.stringify(waterProfileJson)) : null,
+        mashScheduleJson: mashScheduleJson ? (typeof mashScheduleJson === 'string' ? mashScheduleJson : JSON.stringify(mashScheduleJson)) : null,
+        bjcpStyleCode: bjcpStyleCode?.trim() || null,
+        recipeDataJson: recipeDataJson ? (typeof recipeDataJson === 'string' ? recipeDataJson : JSON.stringify(recipeDataJson)) : null,
         ingredients: Array.isArray(ingredients) && ingredients.length > 0
           ? {
               create: ingredients.map((ing: any) => ({

@@ -228,6 +228,15 @@ model BeerRecipe {
   pricingModel          String            @default("MANUAL") // MANUAL, MARKUP, AT_COST, BY_STYLE
   profitMarginPercent   Float?            @default(50.0)
   styleCategory         String?           @default("STANDARD") // STANDARD, PREMIUM, ESPECIAL, HIGH_GRAVITY
+
+  // PintTech Brew Studio Extended Fields
+  boilTimeMinutes       Int?              @default(60)
+  efficiencyPercent     Float?            @default(75.0)
+  waterProfileJson      String?           // Perfil de água e sais em JSON
+  mashScheduleJson      String?           // Rampas de mostura em JSON
+  bjcpStyleCode         String?           // Código oficial BJCP (ex: 21A, 5D, 18B)
+  recipeDataJson        String?           // Dados estendidos completos (estilo Brewfather)
+
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
