@@ -1,0 +1,166 @@
+// ==============================================================================
+// PINTTECH - POWER QUERY (M) SCRIPTS PARA MICROSOFT POWER BI
+// Copie e cole os códigos abaixo no 'Editor Avançado' (Advanced Editor) do Power BI
+// ==============================================================================
+
+// ------------------------------------------------------------------------------
+// MÉTODO 1: CONEXÃO VIA WEB FEED / API REST (RECOMENDADO PARA NUVEM / POWERBI.COM)
+// Permite atualização agendada automática sem Gateway!
+// ------------------------------------------------------------------------------
+
+/*
+PASSO A PASSO:
+1. No Power BI Desktop, vá em "Página Inicial" > "Transformar Dados".
+2. Crie um Parâmetro chamado 'PintTechBaseUrl':
+   - Tipo: Texto
+   - Valor Atual: https://seu-dominio.vercel.app (ou http://localhost:3000)
+3. Crie um Parâmetro chamado 'PintTechToken':
+   - Tipo: Texto
+   - Valor Atual: Cole o seu token gerado na tela Relatórios > Power BI
+4. Vá em "Nova Fonte" > "Consulta Nula", clique em "Editor Avançado" e cole cada bloco abaixo:
+*/
+
+// --- CONSULTA 1: Fato_Vendas_Pedidos (API) ---
+let
+    Url = PintTechBaseUrl & "/api/bi?dataset=vendas&token=" & PintTechToken,
+    Source = Json.Document(Web.Contents(Url)),
+    #"Convertido para Tabela" = Table.FromList(Source, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Expanded Column1" = Table.ExpandRecordColumn(#"Convertido para Tabela", "Column1", 
+        {"order_item_id", "order_id", "brewery_id", "brewery_name", "order_number", "order_status", "payment_status", "payment_method", "order_date", "order_timestamp", "delivery_date", "estimated_return_date", "actual_return_date", "client_id", "client_name", "client_trade_name", "client_city", "client_state", "driver_name", "recipe_id", "beer_name", "beer_style", "batch_id", "batch_number", "keg_id", "keg_code", "keg_capacity_liters", "item_description", "quantity_ordered", "total_volume_liters", "item_unit_price", "item_total_price", "estimated_cost", "estimated_gross_profit", "order_subtotal", "order_discount", "order_delivery_fee", "order_caution_deposit", "order_total_amount", "order_paid_amount", "order_remaining_amount"}),
+    #"Tipos Alterados" = Table.TransformColumnTypes(#"Expanded Column1",{
+        {"order_date", type date},
+        {"delivery_date", type date},
+        {"estimated_return_date", type date},
+        {"actual_return_date", type date},
+        {"quantity_ordered", type number},
+        {"keg_capacity_liters", Int64.Type},
+        {"total_volume_liters", type number},
+        {"item_unit_price", Currency.Type},
+        {"item_total_price", Currency.Type},
+        {"estimated_cost", Currency.Type},
+        {"estimated_gross_profit", Currency.Type},
+        {"order_total_amount", Currency.Type},
+        {"order_paid_amount", Currency.Type},
+        {"order_remaining_amount", Currency.Type}
+    })
+in
+    #"Tipos Alterados"
+
+
+// --- CONSULTA 2: Fato_Producao_Lotes (API) ---
+let
+    Url = PintTechBaseUrl & "/api/bi?dataset=producao&token=" & PintTechToken,
+    Source = Json.Document(Web.Contents(Url)),
+    #"Convertido para Tabela" = Table.FromList(Source, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Expanded Column1" = Table.ExpandRecordColumn(#"Convertido para Tabela", "Column1", 
+        {"batch_id", "brewery_id", "brewery_name", "batch_number", "recipe_id", "recipe_name", "beer_style", "tank_id", "tank_name", "batch_status", "volume_planned_liters", "volume_produced_liters", "effective_volume_liters", "cost_per_liter", "total_cost", "brew_date", "fermentation_start_date", "maturation_start_date", "packaging_date", "measured_og", "measured_fg", "measured_abv", "measured_ibu", "measured_ebc", "attenuation_percent", "ph_mash", "ph_boil", "ph_fermentation_start", "ph_final", "yeast_strain", "yeast_generation", "mapa_registration", "technical_responsible"}),
+    #"Tipos Alterados" = Table.TransformColumnTypes(#"Expanded Column1",{
+        {"brew_date", type date},
+        {"fermentation_start_date", type date},
+        {"maturation_start_date", type date},
+        {"packaging_date", type date},
+        {"volume_planned_liters", type number},
+        {"volume_produced_liters", type number},
+        {"effective_volume_liters", type number},
+        {"cost_per_liter", Currency.Type},
+        {"total_cost", Currency.Type},
+        {"measured_og", type number},
+        {"measured_fg", type number},
+        {"measured_abv", type number},
+        {"measured_ibu", Int64.Type},
+        {"measured_ebc", type number},
+        {"attenuation_percent", type number}
+    })
+in
+    #"Tipos Alterados"
+
+
+// --- CONSULTA 3: Fato_Barris_Posicao (API) ---
+let
+    Url = PintTechBaseUrl & "/api/bi?dataset=barris&token=" & PintTechToken,
+    Source = Json.Document(Web.Contents(Url)),
+    #"Convertido para Tabela" = Table.FromList(Source, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Expanded Column1" = Table.ExpandRecordColumn(#"Convertido para Tabela", "Column1", 
+        {"keg_id", "brewery_id", "brewery_name", "keg_code", "capacity_liters", "current_volume_liters", "keg_type", "current_status", "current_beer_name", "current_batch_number", "current_client_id", "current_client_name", "current_client_city", "last_delivered_date", "days_at_client", "last_sanitized_date", "last_filled_date", "last_returned_date", "purchase_date"}),
+    #"Tipos Alterados" = Table.TransformColumnTypes(#"Expanded Column1",{
+        {"capacity_liters", Int64.Type},
+        {"current_volume_liters", type number},
+        {"days_at_client", Int64.Type},
+        {"last_delivered_date", type date},
+        {"last_sanitized_date", type date},
+        {"last_filled_date", type date},
+        {"last_returned_date", type date},
+        {"purchase_date", type date}
+    })
+in
+    #"Tipos Alterados"
+
+
+// --- CONSULTA 4: Fato_Financeiro (API) ---
+let
+    Url = PintTechBaseUrl & "/api/bi?dataset=financeiro&token=" & PintTechToken,
+    Source = Json.Document(Web.Contents(Url)),
+    #"Convertido para Tabela" = Table.FromList(Source, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Expanded Column1" = Table.ExpandRecordColumn(#"Convertido para Tabela", "Column1", 
+        {"transaction_id", "brewery_id", "brewery_name", "order_id", "order_number", "transaction_type", "category", "description", "amount", "payment_status", "due_date", "payment_date", "payment_method", "document_number", "days_overdue", "created_date"}),
+    #"Tipos Alterados" = Table.TransformColumnTypes(#"Expanded Column1",{
+        {"amount", Currency.Type},
+        {"due_date", type date},
+        {"payment_date", type date},
+        {"created_date", type date},
+        {"days_overdue", Int64.Type}
+    })
+in
+    #"Tipos Alterados"
+
+
+// --- CONSULTA 5: Dim_Clientes (API) ---
+let
+    Url = PintTechBaseUrl & "/api/bi?dataset=clientes&token=" & PintTechToken,
+    Source = Json.Document(Web.Contents(Url)),
+    #"Convertido para Tabela" = Table.FromList(Source, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Expanded Column1" = Table.ExpandRecordColumn(#"Convertido para Tabela", "Column1", 
+        {"client_id", "brewery_id", "brewery_name", "client_name", "trade_name", "client_document", "client_email", "client_phone", "client_city", "client_state", "client_neighborhood", "client_address", "client_zip_code", "credit_limit", "retained_kegs_count", "created_at", "updated_at"}),
+    #"Tipos Alterados" = Table.TransformColumnTypes(#"Expanded Column1",{
+        {"credit_limit", Currency.Type},
+        {"retained_kegs_count", Int64.Type},
+        {"created_at", type datetimezone}
+    })
+in
+    #"Tipos Alterados"
+
+
+// --- CONSULTA 6: Dim_Receitas (API) ---
+let
+    Url = PintTechBaseUrl & "/api/bi?dataset=receitas&token=" & PintTechToken,
+    Source = Json.Document(Web.Contents(Url)),
+    #"Convertido para Tabela" = Table.FromList(Source, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Expanded Column1" = Table.ExpandRecordColumn(#"Convertido para Tabela", "Column1", 
+        {"recipe_id", "brewery_id", "brewery_name", "recipe_name", "beer_style", "style_category", "bjcp_code", "target_og", "target_fg", "target_abv", "target_ibu", "target_ebc", "batch_yield_liters", "cost_per_liter", "sale_price_per_liter", "suggested_price_per_liter", "profit_margin_percent", "pricing_model", "mapa_registration", "created_at"}),
+    #"Tipos Alterados" = Table.TransformColumnTypes(#"Expanded Column1",{
+        {"target_og", type number},
+        {"target_fg", type number},
+        {"target_abv", type number},
+        {"target_ibu", Int64.Type},
+        {"target_ebc", type number},
+        {"batch_yield_liters", type number},
+        {"cost_per_liter", Currency.Type},
+        {"sale_price_per_liter", Currency.Type},
+        {"suggested_price_per_liter", Currency.Type},
+        {"profit_margin_percent", type number}
+    })
+in
+    #"Tipos Alterados"
+
+
+// ==============================================================================
+// MÉTODO 2: CONEXÃO NATIVA POSTGRESQL (DIRETO NO BANCO NEON)
+// ==============================================================================
+/*
+PASSO A PASSO:
+1. No Power BI Desktop, vá em "Obter Dados" > "Banco de Dados PostgreSQL".
+2. Servidor: ep-proud-silence-axkarls5.us-east-2.aws.neon.tech
+3. Banco de dados: neondb
+4. Modo de conectividade: Importar (ou DirectQuery)
+5. Na tela de Navegador, selecione o schema 'public' e marque as views que começam com 'vw_bi_*'.
+*/

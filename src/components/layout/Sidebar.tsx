@@ -21,6 +21,8 @@ import {
   FileSpreadsheet,
   Download,
   Sparkles,
+  BarChart3,
+  ShieldCheck,
 } from 'lucide-react';
 import { CurrentUser } from './Navbar';
 
@@ -52,6 +54,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Faturamento & MRR', href: '/master/financeiro', icon: CreditCard },
     { label: 'Importar / Migrar Dados', href: '/master/importacao', icon: FileSpreadsheet },
     { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download },
+    { label: 'Integração Power BI', href: '/relatorios/powerbi', icon: BarChart3, highlight: true },
   ];
 
   const breweryNavItems = [
@@ -59,13 +62,14 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Controle de Barris', href: '/barris', icon: Cylinder, moduleKey: 'BARRIS', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
     { label: 'Equipamentos & Chopeiras', href: '/equipamentos', icon: Wrench, moduleKey: 'EQUIPAMENTOS', roles: ['SUPER_ADMIN', 'ADMIN', 'LOGISTICS', 'SALES'] },
     { label: 'Scanner Mobile (Câmera)', href: '/scanner', icon: QrCode, badge: 'PWA', highlight: true, moduleKey: 'SCANNER', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'LOGISTICS', 'SALES'] },
-    { label: 'Brew Studio (Receitas)', href: '/brew', icon: Sparkles, badge: 'NEW', highlight: true, moduleKey: 'PRODUCAO', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
+    { label: 'Rastreabilidade MAPA (XML)', href: '/brew', icon: ShieldCheck, badge: 'MAPA', highlight: true, moduleKey: 'PRODUCAO', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Produção & Tanques', href: '/producao', icon: Flame, moduleKey: 'PRODUCAO', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Estoque & Insumos', href: '/estoque', icon: Package, moduleKey: 'ESTOQUE', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Pedidos & Comodato', href: '/pedidos', icon: ShoppingCart, moduleKey: 'PEDIDOS', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, moduleKey: 'CLIENTES', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Financeiro Cervejaria', href: '/financeiro', icon: DollarSign, moduleKey: 'FINANCEIRO', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
     { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download, moduleKey: 'RELATORIOS', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES'] },
+    { label: 'Integração Power BI', href: '/relatorios/powerbi', icon: BarChart3, badge: 'BI', highlight: true, moduleKey: 'RELATORIOS', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES', 'BREWER'] },
     { label: 'Importar Planilha (Excel)', href: '/importacao', icon: FileSpreadsheet, moduleKey: 'USUARIOS', roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'Usuários da Cervejaria', href: '/usuarios', icon: UserCheck, moduleKey: 'USUARIOS', roles: ['ADMIN'] },
   ];

@@ -10,6 +10,7 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
+    "db:views": "node scripts/apply-powerbi-views.js",
     "db:studio": "prisma studio"
   },
   "dependencies": {

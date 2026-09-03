@@ -20,6 +20,10 @@ export function signJwtToken(payload: UserSession): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }
 
+export function signBiApiToken(payload: UserSession): string {
+  return jwt.sign({ ...payload, isBiToken: true }, JWT_SECRET, { expiresIn: '365d' });
+}
+
 export function verifyJwtToken(token: string): UserSession | null {
   try {
     return jwt.verify(token, JWT_SECRET) as UserSession;

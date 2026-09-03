@@ -5,6 +5,16 @@
 
 import { FermentableItem, HopItem, YeastItem, MashStep } from './calculations';
 
+export interface MiscItem {
+  name: string;
+  type: string;
+  use: string;
+  amount: number;
+  unit: string;
+  timeMinutes?: number;
+  notes?: string;
+}
+
 export interface ParsedBeerXmlRecipe {
   name: string;
   style: string;
@@ -19,16 +29,29 @@ export interface ParsedBeerXmlRecipe {
   ibu?: number;
   ebc?: number;
   notes?: string;
+  tasteNotes?: string;
   fermentables: FermentableItem[];
   hops: HopItem[];
   yeast?: YeastItem;
+  miscs: MiscItem[];
   mashSteps: MashStep[];
+}
+
+function decodeXmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .trim();
 }
 
 function extractTagValue(xml: string, tag: string): string | null {
   const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
   const match = xml.match(regex);
-  return match ? match[1].trim() : null;
+  return match ? decodeXmlEntities(match[1]) : null;
 }
 
 function extractAllBlocks(xml: string, blockTag: string): string[] {
@@ -131,6 +154,42 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
       };
     }
 
+    const tasteNotes = extractTagValue(block, 'TASTE_NOTES') || undefined;
+
+    // Miscs (Adjuntos, Sais, Clarificantes, Açúcares)
+    const miscs: MiscItem[] = [];
+    const miscBlocks = extractAllBlocks(block, 'MISC');
+    for (const mBlock of miscBlocks) {
+      const mName = extractTagValue(mBlock, 'NAME') || 'Adjunto';
+      const mType = extractTagValue(mBlock, 'TYPE') || 'Other';
+      const mUse = extractTagValue(mBlock, 'USE') || 'Boil';
+      const mAmountRaw = parseFloat(extractTagValue(mBlock, 'AMOUNT') || '0');
+      const mAmountIsWeight = extractTagValue(mBlock, 'AMOUNT_IS_WEIGHT')?.toLowerCase() === 'true';
+      const mTime = extractTagValue(mBlock, 'TIME') ? parseFloat(extractTagValue(mBlock, 'TIME')!) : undefined;
+      const mNotes = extractTagValue(mBlock, 'NOTES') || undefined;
+
+      // Se for peso e valor pequeno (< 1), geralmente está em kg no XML, converter para g
+      let displayAmount = mAmountRaw;
+      let displayUnit = mAmountIsWeight ? 'KG' : 'L';
+      if (mAmountIsWeight && mAmountRaw < 1 && mAmountRaw > 0) {
+        displayAmount = Math.round(mAmountRaw * 1000 * 10) / 10;
+        displayUnit = 'G';
+      } else if (!mAmountIsWeight && mAmountRaw < 1 && mAmountRaw > 0) {
+        displayAmount = Math.round(mAmountRaw * 1000 * 10) / 10;
+        displayUnit = 'ML';
+      }
+
+      miscs.push({
+        name: mName,
+        type: mType,
+        use: mUse,
+        amount: displayAmount,
+        unit: displayUnit,
+        timeMinutes: mTime,
+        notes: mNotes,
+      });
+    }
+
     // Mash Steps
     const mashSteps: MashStep[] = [];
     const mashStepBlocks = extractAllBlocks(block, 'MASH_STEP');
@@ -162,9 +221,11 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
       ibu,
       ebc,
       notes,
+      tasteNotes,
       fermentables,
       hops,
       yeast,
+      miscs,
       mashSteps,
     });
   }

@@ -4,7 +4,18 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🍺 Iniciando povoamento da Cervejaria Teste de Demonstração PintTech...');
+  console.log('🍺 Iniciando verificação de segurança do banco de dados...');
+
+  // Trava de segurança contra perda de dados acidental em produção/homologação
+  const existingBreweries = await prisma.brewery.count();
+  if (existingBreweries > 0 && process.env.ALLOW_DB_RESET !== 'true') {
+    console.warn('\n⚠️ [SEGURANÇA ATIVADA] O banco de dados já possui registros cadastrados!');
+    console.warn('⚠️ Operação cancelada para evitar qualquer perda de dados.');
+    console.warn('⚠️ Se você realmente desejar resetar e repovoar do zero, defina: ALLOW_DB_RESET=true node prisma/seed.js\n');
+    return;
+  }
+
+  console.log('🍺 Povoando a Cervejaria Teste de Demonstração PintTech...');
 
   // 0. Limpar tabelas existentes para garantir integridade e consistência
   await prisma.actionLog.deleteMany();
