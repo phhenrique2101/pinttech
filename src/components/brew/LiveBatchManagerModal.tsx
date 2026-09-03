@@ -103,39 +103,85 @@ export default function LiveBatchManagerModal({
   const [sensoryNotes, setSensoryNotes] = useState<string>(batch.sensoryNotes || '');
   const [notes, setNotes] = useState<string>(batch.notes || '');
 
-  // Múltiplas Mosturas (com botão +)
-  const initialMashPhList: { id: string; name: string; ph: string }[] = useMemo(() => {
+  // Múltiplas Mosturas (pH & Temperatura com botão +)
+  const initialMashList: { id: string; name: string; ph: string; tempCelsius: string }[] = useMemo(() => {
     if (batch.customRecipeDataJson) {
       try {
         const parsed = JSON.parse(batch.customRecipeDataJson);
+        if (Array.isArray(parsed.mashList) && parsed.mashList.length > 0) {
+          return parsed.mashList;
+        }
         if (Array.isArray(parsed.mashPhList) && parsed.mashPhList.length > 0) {
-          return parsed.mashPhList;
+          return parsed.mashPhList.map((m: any) => ({
+            id: m.id || `mash-${Date.now()}`,
+            name: m.name || 'Mostura',
+            ph: m.ph || '',
+            tempCelsius: m.tempCelsius || (batch.tempMash ? String(batch.tempMash) : ''),
+          }));
         }
       } catch (e) {}
     }
-    if (batch.phMash) {
-      return [{ id: 'mash-1', name: 'Mostura 1', ph: String(batch.phMash) }];
-    }
-    return [{ id: 'mash-1', name: 'Mostura 1', ph: '' }];
+    return [{
+      id: 'mash-1',
+      name: 'Mostura 1',
+      ph: batch.phMash ? String(batch.phMash) : '',
+      tempCelsius: batch.tempMash ? String(batch.tempMash) : '',
+    }];
   }, [batch]);
 
-  const [mashPhList, setMashPhList] = useState(initialMashPhList);
+  const [mashList, setMashList] = useState(initialMashList);
 
-  const handleAddMashPh = () => {
-    const num = mashPhList.length + 1;
-    setMashPhList([
-      ...mashPhList,
-      { id: `mash-${Date.now()}`, name: `Mostura ${num}`, ph: '' },
+  const handleAddMash = () => {
+    const num = mashList.length + 1;
+    setMashList([
+      ...mashList,
+      { id: `mash-${Date.now()}`, name: `Mostura ${num}`, ph: '', tempCelsius: '' },
     ]);
   };
 
-  const handleUpdateMashPh = (id: string, ph: string) => {
-    setMashPhList(mashPhList.map((m) => (m.id === id ? { ...m, ph } : m)));
+  const handleUpdateMash = (id: string, field: 'ph' | 'tempCelsius', value: string) => {
+    setMashList(mashList.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
   };
 
-  const handleRemoveMashPh = (id: string) => {
-    if (mashPhList.length <= 1) return;
-    setMashPhList(mashPhList.filter((m) => m.id !== id));
+  const handleRemoveMash = (id: string) => {
+    if (mashList.length <= 1) return;
+    setMashList(mashList.filter((m) => m.id !== id));
+  };
+
+  // Múltiplas Fervuras (pH da Fervura com botão +)
+  const initialBoilList: { id: string; name: string; ph: string }[] = useMemo(() => {
+    if (batch.customRecipeDataJson) {
+      try {
+        const parsed = JSON.parse(batch.customRecipeDataJson);
+        if (Array.isArray(parsed.boilPhList) && parsed.boilPhList.length > 0) {
+          return parsed.boilPhList;
+        }
+      } catch (e) {}
+    }
+    return [{
+      id: 'boil-1',
+      name: 'Fervura 1',
+      ph: batch.phBoil ? String(batch.phBoil) : '',
+    }];
+  }, [batch]);
+
+  const [boilList, setBoilList] = useState(initialBoilList);
+
+  const handleAddBoil = () => {
+    const num = boilList.length + 1;
+    setBoilList([
+      ...boilList,
+      { id: `boil-${Date.now()}`, name: `Fervura ${num}`, ph: '' },
+    ]);
+  };
+
+  const handleUpdateBoil = (id: string, ph: string) => {
+    setBoilList(boilList.map((b) => (b.id === id ? { ...b, ph } : b)));
+  };
+
+  const handleRemoveBoil = (id: string) => {
+    if (boilList.length <= 1) return;
+    setBoilList(boilList.filter((b) => b.id !== id));
   };
 
   // 1. TAREFAS DE TANQUE & EDIÇÃO
@@ -461,9 +507,19 @@ export default function LiveBatchManagerModal({
     setError('');
 
     try {
-      const validPhs = mashPhList.map((m) => parseFloat(m.ph)).filter((n) => !isNaN(n) && n > 0);
-      const computedMashPh = validPhs.length > 0
-        ? Math.round((validPhs.reduce((a, b) => a + b, 0) / validPhs.length) * 100) / 100
+      const validMashPhs = mashList.map((m) => parseFloat(m.ph)).filter((n) => !isNaN(n) && n > 0);
+      const computedMashPh = validMashPhs.length > 0
+        ? Math.round((validMashPhs.reduce((a, b) => a + b, 0) / validMashPhs.length) * 100) / 100
+        : null;
+
+      const validMashTemps = mashList.map((m) => parseFloat(m.tempCelsius)).filter((n) => !isNaN(n) && n > 0);
+      const computedMashTemp = validMashTemps.length > 0
+        ? Math.round((validMashTemps.reduce((a, b) => a + b, 0) / validMashTemps.length) * 10) / 10
+        : (tempMash ? parseFloat(tempMash) : null);
+
+      const validBoilPhs = boilList.map((b) => parseFloat(b.ph)).filter((n) => !isNaN(n) && n > 0);
+      const computedBoilPh = validBoilPhs.length > 0
+        ? Math.round((validBoilPhs.reduce((a, b) => a + b, 0) / validBoilPhs.length) * 100) / 100
         : null;
 
       let customObj: any = {};
@@ -472,7 +528,9 @@ export default function LiveBatchManagerModal({
           customObj = JSON.parse(batch.customRecipeDataJson);
         } catch (e) {}
       }
-      customObj.mashPhList = mashPhList;
+      customObj.mashList = mashList;
+      customObj.mashPhList = mashList;
+      customObj.boilPhList = boilList;
 
       const payload = {
         status,
@@ -484,10 +542,10 @@ export default function LiveBatchManagerModal({
         measuredOg: measuredOg ? parseFloat(measuredOg) : null,
         measuredFg: measuredFg ? parseFloat(measuredFg) : null,
         phMash: computedMashPh,
-        phBoil: phBoil ? parseFloat(phBoil) : null,
+        phBoil: computedBoilPh,
         phFermentationStart: phFermentationStart ? parseFloat(phFermentationStart) : null,
         phFinal: phFinal ? parseFloat(phFinal) : null,
-        tempMash: tempMash ? parseFloat(tempMash) : null,
+        tempMash: computedMashTemp,
         tempFermentation: tempFermentation ? parseFloat(tempFermentation) : null,
         tempMaturation: tempMaturation ? parseFloat(tempMaturation) : null,
         yeastStrain: yeastStrain.trim() || null,
@@ -552,7 +610,7 @@ export default function LiveBatchManagerModal({
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium">
-                  Acompanhamento ao vivo: edição de tarefas e insumos com sincronização de estoque automática
+                  Acompanhamento ao vivo: medições de adega, pH, temperaturas e parâmetros do lote
                 </p>
               </div>
             </div>
@@ -1286,22 +1344,22 @@ export default function LiveBatchManagerModal({
                   </div>
                 </div>
 
-                {/* pH DE MOSTURA COM SUPORTE A MÚLTIPLAS MOSTURAS (+) */}
-                <div className="bg-amber-50/60 border-2 border-amber-300/80 rounded-2xl p-4 space-y-3">
+                {/* MOSTURA: pH & TEMPERATURA COM SUPORTE A MÚLTIPLAS MOSTURAS (+) */}
+                <div className="bg-amber-50/70 border-2 border-amber-300/80 rounded-2xl p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div>
                       <span className="text-xs font-black text-amber-950 uppercase flex items-center gap-1.5">
                         <Beaker className="w-4 h-4 text-amber-700" />
-                        <span>pH de Mostura (Multi-Brassagens / Múltiplas Mosturas)</span>
+                        <span>Mostura: pH & Temperatura (Múltiplas Mosturas)</span>
                       </span>
                       <p className="text-[11px] text-amber-800/80">
-                        Adicione o pH de cada mostura/cozimento individual se a cervejaria fizer mais de uma brassagem para este lote.
+                        Adicione cada mostura individual para registrar o pH e a temperatura (°C) de cada brassagem deste lote.
                       </p>
                     </div>
 
                     <button
                       type="button"
-                      onClick={handleAddMashPh}
+                      onClick={handleAddMash}
                       className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition"
                     >
                       <Plus className="w-4 h-4" />
@@ -1309,29 +1367,99 @@ export default function LiveBatchManagerModal({
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                    {mashPhList.map((mash, idx) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                    {mashList.map((mash) => (
                       <div
                         key={mash.id}
-                        className="bg-white border border-amber-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-xs"
+                        className="bg-white border border-amber-200 rounded-xl p-3 space-y-2 shadow-xs"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                          <span className="text-xs font-bold text-slate-800">{mash.name}</span>
+                          {mashList.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMash(mash.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                              title="Excluir esta mostura"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">pH Mostura</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: 5.35"
+                              value={mash.ph}
+                              onChange={(e) => handleUpdateMash(mash.id, 'ph', e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Temp. (°C)</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: 66.0"
+                              value={mash.tempCelsius}
+                              onChange={(e) => handleUpdateMash(mash.id, 'tempCelsius', e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* FERVURA: pH DA FERVURA COM SUPORTE A MÚLTIPLAS FERVURAS (+) */}
+                <div className="bg-orange-50/70 border-2 border-orange-300/80 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-black text-orange-950 uppercase flex items-center gap-1.5">
+                        <Flame className="w-4 h-4 text-orange-700" />
+                        <span>pH da Fervura (Múltiplas Fervuras)</span>
+                      </span>
+                      <p className="text-[11px] text-orange-800/80">
+                        Adicione cada fervura individual se a cervejaria fizer mais de uma fervura para este lote.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddBoil}
+                      className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Adicionar Fervura (+)</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                    {boilList.map((boil) => (
+                      <div
+                        key={boil.id}
+                        className="bg-white border border-orange-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-xs"
                       >
                         <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
-                          {mash.name}:
+                          {boil.name}:
                         </span>
                         <div className="flex items-center gap-1.5">
                           <input
                             type="text"
-                            placeholder="Ex: 5.35"
-                            value={mash.ph}
-                            onChange={(e) => handleUpdateMashPh(mash.id, e.target.value)}
-                            className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-black text-amber-800 text-center focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                            placeholder="Ex: 5.10"
+                            value={boil.ph}
+                            onChange={(e) => handleUpdateBoil(boil.id, e.target.value)}
+                            className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-black text-orange-800 text-center focus:outline-none focus:ring-1 focus:ring-orange-500 font-mono"
                           />
-                          {mashPhList.length > 1 && (
+                          {boilList.length > 1 && (
                             <button
                               type="button"
-                              onClick={() => handleRemoveMashPh(mash.id)}
+                              onClick={() => handleRemoveBoil(boil.id)}
                               className="p-1 text-slate-400 hover:text-red-600 rounded transition"
-                              title="Excluir esta mostura"
+                              title="Excluir esta fervura"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1342,19 +1470,8 @@ export default function LiveBatchManagerModal({
                   </div>
                 </div>
 
-                {/* DEMAIS pHs DO PROCESSO */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">pH da Fervura</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 5.10"
-                      value={phBoil}
-                      onChange={(e) => setPhBoil(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-
+                {/* DEMAIS pHs & TEMPERATURAS DO PROCESSO */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">pH Início da Fermentação</label>
                     <input
@@ -1373,20 +1490,6 @@ export default function LiveBatchManagerModal({
                       placeholder="Ex: 4.30"
                       value={phFinal}
                       onChange={(e) => setPhFinal(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* TEMPERATURAS DO PROCESSO */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Mostura (°C)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 66.0"
-                      value={tempMash}
-                      onChange={(e) => setTempMash(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
                     />
                   </div>
@@ -1487,7 +1590,7 @@ export default function LiveBatchManagerModal({
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                <span>Salvar & Sincronizar Estoque</span>
+                <span>Salvar Parâmetros do Lote</span>
               </>
             )}
           </button>

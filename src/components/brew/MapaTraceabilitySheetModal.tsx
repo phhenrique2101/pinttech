@@ -256,36 +256,69 @@ export default function MapaTraceabilitySheetModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] pt-1 border-t border-slate-200">
-              <div className="sm:col-span-2">
-                <span className="text-slate-500 block">pH da Mostura:</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] pt-1.5 border-t border-slate-200">
+              <div>
+                <span className="text-slate-500 block">Mostura (pH & Temperatura):</span>
                 <span className="font-mono font-bold text-slate-900">
                   {(() => {
                     if (batch.customRecipeDataJson) {
                       try {
                         const parsed = JSON.parse(batch.customRecipeDataJson);
-                        if (Array.isArray(parsed.mashPhList) && parsed.mashPhList.length > 1) {
-                          const valid = parsed.mashPhList.filter((m: any) => m.ph);
-                          if (valid.length > 0) {
-                            return valid.map((m: any) => `${m.name}: ${m.ph}`).join(' • ');
+                        const list = parsed.mashList || parsed.mashPhList;
+                        if (Array.isArray(list) && list.length > 0) {
+                          const valid = list.filter((m: any) => m.ph || m.tempCelsius);
+                          if (valid.length > 1) {
+                            return valid.map((m: any) => `${m.name}: pH ${m.ph || '—'}${m.tempCelsius ? ` (${m.tempCelsius}°C)` : ''}`).join(' • ');
+                          } else if (valid.length === 1) {
+                            const single = valid[0];
+                            return `pH ${single.ph || batch.phMash || '5.30'}${single.tempCelsius ? ` (${single.tempCelsius}°C)` : ''}`;
                           }
                         }
                       } catch (e) {}
                     }
-                    return batch.phMash || '5.30';
+                    return `pH ${batch.phMash || '5.30'}${batch.tempMash ? ` (${batch.tempMash}°C)` : ''}`;
                   })()}
                 </span>
               </div>
+
               <div>
-                <span className="text-slate-500 block">pH Fervura / Envase:</span>
-                <span className="font-mono text-slate-900">
-                  {batch.phBoil ? `${batch.phBoil} (Fervura) / ` : ''}{batch.phFinal || '4.30'}
+                <span className="text-slate-500 block">Fervura (pH):</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {(() => {
+                    if (batch.customRecipeDataJson) {
+                      try {
+                        const parsed = JSON.parse(batch.customRecipeDataJson);
+                        if (Array.isArray(parsed.boilPhList) && parsed.boilPhList.length > 1) {
+                          const valid = parsed.boilPhList.filter((b: any) => b.ph);
+                          if (valid.length > 0) {
+                            return valid.map((b: any) => `${b.name}: pH ${b.ph}`).join(' • ');
+                          }
+                        }
+                      } catch (e) {}
+                    }
+                    return batch.phBoil ? `pH ${batch.phBoil}` : 'pH 5.10';
+                  })()}
                 </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] pt-1.5 border-t border-slate-200">
+              <div>
+                <span className="text-slate-500 block">pH Início Fermentação:</span>
+                <span className="font-mono text-slate-900">{batch.phFermentationStart || '5.05'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">pH Final / Envase:</span>
+                <span className="font-mono text-slate-900 font-bold">{batch.phFinal || '4.30'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Temp. Fermentação:</span>
+                <span className="font-mono text-slate-900">{batch.tempFermentation ? `${batch.tempFermentation}°C` : '19.0°C'}</span>
               </div>
               <div>
                 <span className="text-slate-500 block">Levedura (Cepa & Lote):</span>
-                <span className="font-bold text-slate-900">
-                  {batch.yeastStrain || 'Fermentis US-05'} {batch.yeastLot ? `(Lote: ${batch.yeastLot})` : ''}
+                <span className="font-bold text-slate-900 truncate block">
+                  {batch.yeastStrain || 'Fermentis US-05'} {batch.yeastLot ? `(Lt: ${batch.yeastLot})` : ''}
                 </span>
               </div>
             </div>
