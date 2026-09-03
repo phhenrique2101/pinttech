@@ -26,6 +26,7 @@ import {
   DollarSign,
   Boxes,
   RotateCcw,
+  ShieldCheck,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateShort, getLocalDateString, addDaysToDateString } from '@/lib/utils';
 
@@ -85,6 +86,13 @@ export default function LiveBatchManagerModal({
   const [error, setError] = useState<string>('');
 
   // Parâmetros do Lote
+  const [batchNumber, setBatchNumber] = useState<string>(batch.batchNumber || '');
+  const [brewDate, setBrewDate] = useState<string>(
+    batch.brewDate ? new Date(batch.brewDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+  );
+  const [mapaRegistration, setMapaRegistration] = useState<string>(batch.mapaRegistration || '');
+  const [commercialDenomination, setCommercialDenomination] = useState<string>(batch.commercialDenomination || '');
+  const [technicalResponsible, setTechnicalResponsible] = useState<string>(batch.technicalResponsible || '');
   const [status, setStatus] = useState<string>(batch.status || 'FERMENTANDO');
   const [tankId, setTankId] = useState<string>(batch.tankId || '');
   const [volumePlanned, setVolumePlanned] = useState<number>(batch.volumePlannedLiters || 500);
@@ -533,6 +541,11 @@ export default function LiveBatchManagerModal({
       customObj.boilPhList = boilList;
 
       const payload = {
+        batchNumber: batchNumber.trim() || undefined,
+        brewDate: brewDate ? new Date(brewDate).toISOString() : undefined,
+        mapaRegistration: mapaRegistration.trim() || null,
+        commercialDenomination: commercialDenomination.trim() || null,
+        technicalResponsible: technicalResponsible.trim() || null,
         status,
         tankId: tankId || null,
         volumePlannedLiters: volumePlanned,
@@ -586,6 +599,31 @@ export default function LiveBatchManagerModal({
     } catch (err: any) {
       setError(err.message || 'Erro ao salvar alterações');
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBatch = async () => {
+    if (
+      !confirm(
+        `Tem certeza que deseja excluir o lote ${batchNumber || batch.batchNumber}? Esta ação é permanente, o tanque será liberado e o histórico será removido.`
+      )
+    ) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch(`/api/batches/${batch.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao excluir lote');
+
+      onSaved(null);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao excluir lote');
       setLoading(false);
     }
   };
@@ -1265,6 +1303,71 @@ export default function LiveBatchManagerModal({
               </div>
 
               <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                {/* IDENTIFICAÇÃO DO LOTE & REGISTRO MAPA */}
+                <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-black text-amber-950">
+                    <ShieldCheck className="w-4 h-4 text-amber-700" />
+                    <span>Identificação Oficial, Nº do Lote & Exigências MAPA</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Nº do Lote</label>
+                      <input
+                        type="text"
+                        value={batchNumber}
+                        onChange={(e) => setBatchNumber(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Data de Brassagem</label>
+                      <input
+                        type="date"
+                        value={brewDate}
+                        onChange={(e) => setBrewDate(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Registro MAPA do Rótulo</label>
+                      <input
+                        type="text"
+                        value={mapaRegistration}
+                        onChange={(e) => setMapaRegistration(e.target.value)}
+                        placeholder="Ex: SP 001234-5.000001"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Denominação Legal / Comercial</label>
+                      <input
+                        type="text"
+                        value={commercialDenomination}
+                        onChange={(e) => setCommercialDenomination(e.target.value)}
+                        placeholder="Ex: Cerveja Clara Puro Malte"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Responsável Técnico / CRQ</label>
+                      <input
+                        type="text"
+                        value={technicalResponsible}
+                        onChange={(e) => setTechnicalResponsible(e.target.value)}
+                        placeholder="Ex: João da Silva - CRQ IV 04123456"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Status da Produção</label>
@@ -1570,14 +1673,27 @@ export default function LiveBatchManagerModal({
         </div>
 
         {/* FOOTER LIGHT */}
-        <div className="p-4 sm:p-6 border-t border-slate-200 bg-white flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800"
-          >
-            Cancelar
-          </button>
+        <div className="p-4 sm:p-6 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleDeleteBatch}
+              className="px-3 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-1.5 transition disabled:opacity-50"
+              title="Excluir lote permanentemente"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Excluir este Lote</span>
+            </button>
+          </div>
 
           <button
             type="button"

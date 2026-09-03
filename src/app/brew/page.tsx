@@ -27,10 +27,13 @@ import {
   Trash2,
   X,
   Activity,
+  Pencil,
+  Edit3,
 } from 'lucide-react';
 import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import MapaTraceabilitySheetModal from '@/components/brew/MapaTraceabilitySheetModal';
 import LiveBatchManagerModal from '@/components/brew/LiveBatchManagerModal';
+import EditRecipeModal from '@/components/brew/EditRecipeModal';
 import { formatDate, formatDateShort } from '@/lib/utils';
 
 export default function BrewStudioPage() {
@@ -46,6 +49,16 @@ export default function BrewStudioPage() {
   const [importerModalOpen, setImporterModalOpen] = useState<boolean>(false);
   const [selectedBatchForSheet, setSelectedBatchForSheet] = useState<any | null>(null);
   const [selectedBatchForManager, setSelectedBatchForManager] = useState<any | null>(null);
+  const [selectedRecipeForEdit, setSelectedRecipeForEdit] = useState<any | null>(null);
+
+  // Modal de Exclusão Unificado
+  const [itemToDelete, setItemToDelete] = useState<{
+    type: 'BATCH' | 'RECIPE';
+    id: string;
+    title: string;
+    subtitle?: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Status update modal / quick edit
   const [editingBatchStatus, setEditingBatchStatus] = useState<any | null>(null);
@@ -91,6 +104,25 @@ export default function BrewStudioPage() {
       console.error('Erro ao carregar dados do Brew Studio:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    try {
+      const url = itemToDelete.type === 'BATCH'
+        ? `/api/batches/${itemToDelete.id}`
+        : `/api/recipes/${itemToDelete.id}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao excluir registro');
+      setItemToDelete(null);
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -415,7 +447,7 @@ export default function BrewStudioPage() {
                         <span>Medições, pH & Adega</span>
                       </button>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => {
                             setEditingBatchStatus(batch);
@@ -431,10 +463,25 @@ export default function BrewStudioPage() {
 
                         <button
                           onClick={() => setSelectedBatchForSheet(batch)}
-                          className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow transition"
+                          className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow transition"
                         >
                           <Printer className="w-3.5 h-3.5" />
                           <span>Ficha MAPA</span>
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setItemToDelete({
+                              type: 'BATCH',
+                              id: batch.id,
+                              title: `Lote ${batch.batchNumber}`,
+                              subtitle: `${batch.recipe?.name || 'Cerveja'} • Tanque: ${batch.tank?.name || 'Sem tanque'}`,
+                            })
+                          }
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition"
+                          title="Excluir Lote"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -494,13 +541,39 @@ export default function BrewStudioPage() {
                         </span>
                       </td>
                       <td className="p-3 text-right">
-                        <button
-                          onClick={() => setSelectedBatchForSheet(batch)}
-                          className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold inline-flex items-center gap-1.5 transition"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>Reimprimir Ficha MAPA</span>
-                        </button>
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSelectedBatchForSheet(batch)}
+                            className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold inline-flex items-center gap-1.5 transition"
+                            title="Reimprimir Dossiê MAPA"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Ficha MAPA</span>
+                          </button>
+
+                          <button
+                            onClick={() => setSelectedBatchForManager(batch)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+                            title="Editar Dados do Lote"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              setItemToDelete({
+                                type: 'BATCH',
+                                id: batch.id,
+                                title: `Lote ${batch.batchNumber}`,
+                                subtitle: `${batch.recipe?.name || 'Cerveja'} • Data: ${formatDate(batch.brewDate)}`,
+                              })
+                            }
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition"
+                            title="Excluir Lote do Histórico"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -537,10 +610,40 @@ export default function BrewStudioPage() {
                 className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 flex flex-col justify-between hover:border-slate-700 transition"
               >
                 <div>
-                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                    {recipe.style}
-                  </span>
-                  <h4 className="text-base font-black text-white">{recipe.name}</h4>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                        {recipe.style}
+                      </span>
+                      <h4 className="text-base font-black text-white">{recipe.name}</h4>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setSelectedRecipeForEdit(recipe)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+                        title="Editar Receita"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          setItemToDelete({
+                            type: 'RECIPE',
+                            id: recipe.id,
+                            title: recipe.name,
+                            subtitle: `Estilo: ${recipe.style}`,
+                          })
+                        }
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition"
+                        title="Excluir Receita"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
                   <p className="text-xs text-slate-400 mt-1 line-clamp-2">
                     {recipe.description || 'Sem observações informadas.'}
                   </p>
@@ -565,10 +668,13 @@ export default function BrewStudioPage() {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800 flex justify-end">
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-slate-400 truncate max-w-[140px]">
+                    {recipe.mapaRegistration || 'Sem MAPA'}
+                  </span>
                   <button
                     onClick={() => setImporterModalOpen(true)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5"
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition"
                   >
                     <Plus className="w-3.5 h-3.5 text-amber-400" />
                     <span>Lançar Lote via XML</span>
@@ -681,6 +787,78 @@ export default function BrewStudioPage() {
                 className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-black text-slate-950"
               >
                 {savingStatus ? 'Salvando...' : 'Salvar Alteração'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDIÇÃO DE RECEITA TÉCNICA */}
+      {selectedRecipeForEdit && (
+        <EditRecipeModal
+          recipe={selectedRecipeForEdit}
+          onClose={() => setSelectedRecipeForEdit(null)}
+          onSaved={() => {
+            fetchData();
+            setSelectedRecipeForEdit(null);
+          }}
+        />
+      )}
+
+      {/* MODAL UNIFICADO DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-md p-6 space-y-4 text-white shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-black text-base text-white">
+                  Excluir {itemToDelete.type === 'BATCH' ? 'Lote de Produção' : 'Receita'}?
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Esta ação é irreversível e removerá o registro do sistema.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-xs font-bold text-amber-400 block">{itemToDelete.title}</span>
+              {itemToDelete.subtitle && (
+                <span className="text-[11px] text-slate-400 block">{itemToDelete.subtitle}</span>
+              )}
+              {itemToDelete.type === 'BATCH' && (
+                <p className="text-[11px] text-rose-400/90 pt-1 border-t border-slate-800/80">
+                  ⚠️ O tanque associado será liberado automaticamente.
+                </p>
+              )}
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setItemToDelete(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-rose-600/30 transition disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmar Exclusão</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

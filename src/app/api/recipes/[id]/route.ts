@@ -170,12 +170,38 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const session = getSessionFromRequest(req);
     if (!session || !session.breweryId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-    const existing = await prisma.beerRecipe.findUnique({ where: { id: params.id } });
+    const existing = await prisma.beerRecipe.findUnique({
+      where: { id: params.id },
+      include: { batches: true },
+    });
     if (!existing) return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 });
 
-    await prisma.beerRecipe.delete({ where: { id: params.id } });
+    if (existing.breweryId !== session.breweryId && session.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Acesso não permitido' }, { status: 403 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete recipe ingredients
+      await tx.recipeIngredient.deleteMany({ where: { recipeId: params.id } });
+
+      // 2. If batches exist for this recipe, handle related entities and delete
+      for (const b of existing.batches) {
+        await tx.batchIngredient.deleteMany({ where: { batchId: b.id } });
+        await tx.inventoryMovement.deleteMany({ where: { batchId: b.id } });
+        await tx.keg.updateMany({ where: { currentBatchId: b.id }, data: { currentBatchId: null } });
+        if (b.tankId) {
+          await tx.tank.update({ where: { id: b.tankId }, data: { status: 'LIVRE' } }).catch(() => {});
+        }
+        await tx.productionBatch.delete({ where: { id: b.id } });
+      }
+
+      // 3. Delete the recipe
+      await tx.beerRecipe.delete({ where: { id: params.id } });
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Erro ao excluir receita' }, { status: 500 });
+    console.error('Error deleting recipe:', error);
+    return NextResponse.json({ error: 'Erro ao excluir receita: ' + (error.message || '') }, { status: 500 });
   }
 }

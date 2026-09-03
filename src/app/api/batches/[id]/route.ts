@@ -52,6 +52,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const body = await req.json();
     const {
+      batchNumber,
       status,
       volumePlannedLiters,
       volumeProducedLiters,
@@ -293,6 +294,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return tx.productionBatch.update({
         where: { id: params.id },
         data: {
+          batchNumber: batchNumber?.trim() || existing.batchNumber,
           status: status ?? existing.status,
           volumePlannedLiters: volPlanned,
           volumeProducedLiters: volProd,
@@ -384,12 +386,53 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const session = getSessionFromRequest(req);
     if (!session || !session.breweryId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-    const existing = await prisma.productionBatch.findUnique({ where: { id: params.id } });
+    const existing = await prisma.productionBatch.findUnique({
+      where: { id: params.id },
+      include: { tank: true },
+    });
     if (!existing) return NextResponse.json({ error: 'Lote não encontrado' }, { status: 404 });
 
-    await prisma.productionBatch.delete({ where: { id: params.id } });
+    if (existing.breweryId !== session.breweryId && session.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Acesso não permitido' }, { status: 403 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete associated BatchIngredient records
+      await tx.batchIngredient.deleteMany({ where: { batchId: params.id } });
+
+      // 2. Unlink any kegs that were assigned to this batch
+      await tx.keg.updateMany({
+        where: { currentBatchId: params.id },
+        data: { currentBatchId: null },
+      });
+
+      // 3. Delete inventory movements linked to batch
+      await tx.inventoryMovement.deleteMany({ where: { batchId: params.id } });
+
+      // 4. If batch was in a tank, free the tank if no other active batch is in it
+      if (existing.tankId) {
+        const otherBatches = await tx.productionBatch.count({
+          where: {
+            tankId: existing.tankId,
+            id: { not: params.id },
+            status: { notIn: ['FINALIZADO', 'ENVASADO'] },
+          },
+        });
+        if (otherBatches === 0) {
+          await tx.tank.update({
+            where: { id: existing.tankId },
+            data: { status: 'LIVRE' },
+          });
+        }
+      }
+
+      // 5. Delete the batch
+      await tx.productionBatch.delete({ where: { id: params.id } });
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Erro ao excluir lote' }, { status: 500 });
+    console.error('Error deleting batch:', error);
+    return NextResponse.json({ error: 'Erro ao excluir lote: ' + (error.message || '') }, { status: 500 });
   }
 }
