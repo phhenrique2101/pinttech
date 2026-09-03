@@ -13,6 +13,8 @@ export interface MiscItem {
   unit: string;
   timeMinutes?: number;
   notes?: string;
+  manufacturer?: string;
+  lot?: string;
 }
 
 export interface ParsedBeerXmlRecipe {
@@ -65,6 +67,89 @@ function extractAllBlocks(xml: string, blockTag: string): string[] {
 }
 
 /**
+ * Extrai inteligentemente o Fabricante e o Lote a partir do Nome, Notas ou Tags XML do insumo.
+ */
+export function extractManufacturerAndLot(name = '', notes = '', supplierTag = ''): { manufacturer: string; lot: string; cleanName: string } {
+  const combined = `${name} ${notes} ${supplierTag}`.trim();
+  let foundManufacturer = supplierTag ? supplierTag.trim() : '';
+  let foundLot = '';
+
+  const KNOWN_MANUFACTURERS = [
+    'Agrária Malte', 'Agraria Malte', 'Agrária', 'Agraria',
+    'Weyermann', 'Castle Malting', 'Castle', 'Malteurop', 'Muntons',
+    'Crisp', 'Viking Malte', 'Viking Malt', 'Viking', 'Bestmalz',
+    'Dingemans', 'Briess', 'Maltaria Campos Gerais',
+    'BarthHaas Brasil', 'BarthHaas', 'Barth Haas', 'Hopsteiner',
+    'Yakima Chief Hops', 'Yakima Chief', 'YCH', 'John I Haas', 'Kalsec',
+    'LNF Latino Americana', 'LNF',
+    'Fermentis', 'Lallemand', 'Mangrove Jack', 'Mangrove Jacks',
+    'Bio4', 'Levteck', 'White Labs', 'Wyeast', 'Omega Yeast',
+    'White Martins', 'Air Liquide', 'Messer', 'Kalykim', 'Ecolab'
+  ];
+
+  // 1. Procura por "Lote: [CODIGO]" ou "Lote [CODIGO]" ou "Lot [CODIGO]"
+  const lotRegex = /(?:lote|lot|lt|l\.)[:\s#-]+([A-Za-z0-9\-_./]+)/i;
+  const lotMatch = combined.match(lotRegex);
+  if (lotMatch) {
+    foundLot = lotMatch[1].trim();
+  }
+
+  // 2. Procura por "Fabricante: [NOME]" ou "Fornecedor: [NOME]"
+  const fabRegex = /(?:fabricante|fornecedor|fabr|forn)[:\s]+([^,\n\r\-\/]+)/i;
+  const fabMatch = combined.match(fabRegex);
+  if (fabMatch) {
+    foundManufacturer = fabMatch[1].trim();
+  }
+
+  // 3. Busca nas fabricantes conhecidas do mercado se ainda não identificou
+  if (!foundManufacturer) {
+    for (const m of KNOWN_MANUFACTURERS) {
+      const regex = new RegExp(`\\b${m}\\b`, 'i');
+      if (regex.test(combined)) {
+        foundManufacturer = m;
+        break;
+      }
+    }
+  }
+
+  // 4. Se encontrou o fabricante mas não o lote, verifica se o lote vem logo em seguida!
+  // Ex: "Agrária 2026-08" ou "Weyermann WEY-1234" ou "BarthHaas 2025-12"
+  if (foundManufacturer && !foundLot) {
+    const afterFabRegex = new RegExp(`${foundManufacturer}[:\\s\\-\\/,]+(?:lote[:\\s\\-]*)?([A-Za-z0-9\\-_./]+)`, 'i');
+    const afterMatch = combined.match(afterFabRegex);
+    if (afterMatch && afterMatch[1]) {
+      const candidate = afterMatch[1].trim();
+      const lower = candidate.toLowerCase();
+      if (!['de', 'do', 'da', 'e', 'para', 'com', 'tipo', 'malte', 'lupulo'].includes(lower)) {
+        foundLot = candidate;
+      }
+    }
+  }
+
+  // 5. Se ainda não achou lote, verifica se há um código com hífen no final (ex: "Citra - 2025-10")
+  if (!foundLot) {
+    const dashCodeRegex = /[-–]\s*([A-Za-z0-9\-_./]{3,})\s*$/;
+    const dashMatch = combined.match(dashCodeRegex);
+    if (dashMatch) {
+      foundLot = dashMatch[1].trim();
+    }
+  }
+
+  // 6. Limpa o nome do ingrediente para não ficar redundante se o lote/fabricante estavam no nome
+  let cleanName = name;
+  if (foundLot) {
+    cleanName = cleanName.replace(new RegExp(`(?:lote|lot|lt|l\.)?[:\\s#-]*${foundLot}`, 'gi'), '').trim();
+  }
+  cleanName = cleanName.replace(/[\(\)\-\/–]+$/g, '').trim();
+
+  return {
+    manufacturer: foundManufacturer,
+    lot: foundLot,
+    cleanName: cleanName || name,
+  };
+}
+
+/**
  * Lê o conteúdo em texto de um arquivo .xml e converte para o modelo de receita do PintTech.
  */
 export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
@@ -93,18 +178,24 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
     const fermentables: FermentableItem[] = [];
     const fermentableBlocks = extractAllBlocks(block, 'FERMENTABLE');
     for (const fBlock of fermentableBlocks) {
-      const fName = extractTagValue(fBlock, 'NAME') || 'Malte';
+      const rawName = extractTagValue(fBlock, 'NAME') || 'Malte';
+      const fNotes = extractTagValue(fBlock, 'NOTES') || '';
+      const fSupplier = extractTagValue(fBlock, 'SUPPLIER') || '';
+      const { manufacturer, lot, cleanName } = extractManufacturerAndLot(rawName, fNotes, fSupplier);
+
       const amountKg = parseFloat(extractTagValue(fBlock, 'AMOUNT') || '0');
       const yieldPercent = parseFloat(extractTagValue(fBlock, 'YIELD') || '75');
       const colorLovibond = parseFloat(extractTagValue(fBlock, 'COLOR') || '3.5');
       const fType = extractTagValue(fBlock, 'TYPE')?.toUpperCase() || 'GRAIN';
 
       fermentables.push({
-        name: fName,
+        name: cleanName || rawName,
         amountKg: Math.round(amountKg * 100) / 100,
         potentialYieldPercent: yieldPercent,
         colorEbc: Math.round(colorLovibond * 1.97 * 10) / 10,
         category: fType.includes('SUGAR') ? 'SUGAR' : fType.includes('EXTRACT') ? 'EXTRACT' : fType.includes('ADJUNCT') ? 'ADJUNCT' : 'GRAIN',
+        manufacturer: manufacturer || undefined,
+        lot: lot || undefined,
       });
     }
 
@@ -112,7 +203,11 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
     const hops: HopItem[] = [];
     const hopBlocks = extractAllBlocks(block, 'HOP');
     for (const hBlock of hopBlocks) {
-      const hName = extractTagValue(hBlock, 'NAME') || 'Lúpulo';
+      const rawName = extractTagValue(hBlock, 'NAME') || 'Lúpulo';
+      const hNotes = extractTagValue(hBlock, 'NOTES') || '';
+      const hSupplier = extractTagValue(hBlock, 'SUPPLIER') || '';
+      const { manufacturer, lot, cleanName } = extractManufacturerAndLot(rawName, hNotes, hSupplier);
+
       const amountKg = parseFloat(extractTagValue(hBlock, 'AMOUNT') || '0');
       const alphaAcid = parseFloat(extractTagValue(hBlock, 'ALPHA') || '10');
       const timeMin = parseFloat(extractTagValue(hBlock, 'TIME') || '60');
@@ -125,12 +220,14 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
       else if (useRaw.includes('MASH')) use = 'MASH';
 
       hops.push({
-        name: hName,
+        name: cleanName || rawName,
         amountGrams: Math.round(amountKg * 1000 * 10) / 10,
         alphaAcidPercent: alphaAcid,
         timeMinutes: timeMin,
         use,
         tempCelsius: use === 'WHIRLPOOL' ? 85 : undefined,
+        manufacturer: manufacturer || undefined,
+        lot: lot || undefined,
       });
     }
 
@@ -139,18 +236,24 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
     const yeastBlocks = extractAllBlocks(block, 'YEAST');
     if (yeastBlocks.length > 0) {
       const yBlock = yeastBlocks[0];
-      const yName = extractTagValue(yBlock, 'NAME') || 'Levedura';
+      const rawName = extractTagValue(yBlock, 'NAME') || 'Levedura';
+      const yNotes = extractTagValue(yBlock, 'NOTES') || '';
+      const yLab = extractTagValue(yBlock, 'LABORATORY') || '';
+      const { manufacturer, lot, cleanName } = extractManufacturerAndLot(rawName, yNotes, yLab);
+
       const yAttenuation = parseFloat(extractTagValue(yBlock, 'ATTENUATION') || '75');
       const yForm = extractTagValue(yBlock, 'FORM')?.toUpperCase() === 'LIQUID' ? 'LIQUID' : 'DRY';
       const yMinTemp = extractTagValue(yBlock, 'MIN_TEMPERATURE') ? parseFloat(extractTagValue(yBlock, 'MIN_TEMPERATURE')!) : undefined;
       const yMaxTemp = extractTagValue(yBlock, 'MAX_TEMPERATURE') ? parseFloat(extractTagValue(yBlock, 'MAX_TEMPERATURE')!) : undefined;
 
       yeast = {
-        name: yName,
+        name: cleanName || rawName,
         attenuationPercent: yAttenuation,
         form: yForm,
         minTempCelsius: yMinTemp,
         maxTempCelsius: yMaxTemp,
+        manufacturer: manufacturer || undefined,
+        lot: lot || undefined,
       };
     }
 
@@ -160,15 +263,16 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
     const miscs: MiscItem[] = [];
     const miscBlocks = extractAllBlocks(block, 'MISC');
     for (const mBlock of miscBlocks) {
-      const mName = extractTagValue(mBlock, 'NAME') || 'Adjunto';
+      const rawName = extractTagValue(mBlock, 'NAME') || 'Adjunto';
+      const mNotes = extractTagValue(mBlock, 'NOTES') || '';
+      const { manufacturer, lot, cleanName } = extractManufacturerAndLot(rawName, mNotes);
+
       const mType = extractTagValue(mBlock, 'TYPE') || 'Other';
       const mUse = extractTagValue(mBlock, 'USE') || 'Boil';
       const mAmountRaw = parseFloat(extractTagValue(mBlock, 'AMOUNT') || '0');
       const mAmountIsWeight = extractTagValue(mBlock, 'AMOUNT_IS_WEIGHT')?.toLowerCase() === 'true';
       const mTime = extractTagValue(mBlock, 'TIME') ? parseFloat(extractTagValue(mBlock, 'TIME')!) : undefined;
-      const mNotes = extractTagValue(mBlock, 'NOTES') || undefined;
 
-      // Se for peso e valor pequeno (< 1), geralmente está em kg no XML, converter para g
       let displayAmount = mAmountRaw;
       let displayUnit = mAmountIsWeight ? 'KG' : 'L';
       if (mAmountIsWeight && mAmountRaw < 1 && mAmountRaw > 0) {
@@ -180,13 +284,15 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
       }
 
       miscs.push({
-        name: mName,
+        name: cleanName || rawName,
         type: mType,
         use: mUse,
         amount: displayAmount,
         unit: displayUnit,
         timeMinutes: mTime,
-        notes: mNotes,
+        notes: mNotes || undefined,
+        manufacturer: manufacturer || undefined,
+        lot: lot || undefined,
       });
     }
 

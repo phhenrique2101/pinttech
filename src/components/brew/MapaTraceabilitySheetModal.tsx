@@ -191,7 +191,7 @@ export default function MapaTraceabilitySheetModal({
                     <th className="border border-slate-300 p-1.5 text-right w-20">Quantidade</th>
                     <th className="border border-slate-300 p-1.5 text-left w-36">Fornecedor / Fabricante</th>
                     <th className="border border-slate-300 p-1.5 text-left w-32 bg-amber-50 text-slate-950 font-black">
-                      Nº Lote do Insumo (MAPA)
+                      Nº do Lote
                     </th>
                     <th className="border border-slate-300 p-1.5 text-center w-20">Validade / Safra</th>
                   </tr>

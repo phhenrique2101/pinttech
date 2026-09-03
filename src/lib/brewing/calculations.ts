@@ -20,6 +20,8 @@ export interface FermentableItem {
   category?: 'GRAIN' | 'EXTRACT' | 'SUGAR' | 'ADJUNCT';
   inventoryItemId?: string | null;
   costPerKg?: number;
+  manufacturer?: string;
+  lot?: string;
 }
 
 export interface HopItem {
@@ -32,6 +34,8 @@ export interface HopItem {
   tempCelsius?: number; // temperatura no whirlpool (ex: 85°C)
   inventoryItemId?: string | null;
   costPerGram?: number;
+  manufacturer?: string;
+  lot?: string;
 }
 
 export interface YeastItem {
@@ -43,6 +47,8 @@ export interface YeastItem {
   form?: 'DRY' | 'LIQUID';
   inventoryItemId?: string | null;
   costPerUnit?: number;
+  manufacturer?: string;
+  lot?: string;
 }
 
 export interface WaterProfile {

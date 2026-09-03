@@ -108,8 +108,8 @@ export default function BeerXmlImporterModal({
               amount: f.amountKg,
               unit: 'KG',
               stage: 'MOSTURA',
-              supplierName: f.name.toLowerCase().includes('agr') ? 'Agrária Malte' : f.name.toLowerCase().includes('weyer') ? 'Weyermann' : 'Agrária Malte',
-              supplierLot: '',
+              supplierName: f.manufacturer || (f.name.toLowerCase().includes('agr') ? 'Agrária Malte' : f.name.toLowerCase().includes('weyer') ? 'Weyermann' : 'Agrária Malte'),
+              supplierLot: f.lot || '',
               expirationDate: '',
               harvestYear: `${new Date().getFullYear() - 1}/${new Date().getFullYear()}`,
             });
@@ -124,8 +124,8 @@ export default function BeerXmlImporterModal({
               amount: h.amountGrams,
               unit: 'G',
               stage: h.use === 'FIRST_WORT' ? 'FIRST_WORT' : h.use === 'WHIRLPOOL' ? 'WHIRLPOOL' : h.use === 'DRY_HOP' ? 'DRY_HOPPING' : 'FERVURA_60MIN',
-              supplierName: 'BarthHaas Brasil',
-              supplierLot: '',
+              supplierName: h.manufacturer || 'BarthHaas Brasil',
+              supplierLot: h.lot || '',
               expirationDate: '',
               harvestYear: `${new Date().getFullYear() - 1}`,
             });
@@ -140,8 +140,8 @@ export default function BeerXmlImporterModal({
               amount: 1,
               unit: 'PACOTE',
               stage: 'FERMENTACAO',
-              supplierName: rec.yeast.name.toLowerCase().includes('fermentis') ? 'Fermentis / LNF' : 'Lallemand',
-              supplierLot: '',
+              supplierName: rec.yeast.manufacturer || (rec.yeast.name.toLowerCase().includes('fermentis') ? 'Fermentis' : 'Lallemand'),
+              supplierLot: rec.yeast.lot || '',
               expirationDate: '',
               harvestYear: '',
             });
@@ -156,8 +156,8 @@ export default function BeerXmlImporterModal({
               amount: m.amount,
               unit: m.unit,
               stage: m.use === 'Mash' ? 'MOSTURA' : 'FERVURA_15MIN',
-              supplierName: 'Fornecedor Cadastrado',
-              supplierLot: '',
+              supplierName: m.manufacturer || 'Fornecedor Cadastrado',
+              supplierLot: m.lot || '',
               expirationDate: '',
               harvestYear: '',
             });
@@ -526,7 +526,7 @@ export default function BeerXmlImporterModal({
                           <th className="p-3 w-24">Qtd Real</th>
                           <th className="p-3 w-48">Fornecedor / Fabricante</th>
                           <th className="p-3 w-56 text-amber-300">
-                            Nº do Lote do Insumo (MAPA) *
+                            Nº do Lote *
                           </th>
                           <th className="p-3 w-36">Validade / Safra</th>
                         </tr>
@@ -569,6 +569,11 @@ export default function BeerXmlImporterModal({
                                 placeholder="Digite o Lote (ex: AGR-2026-08)"
                                 className="w-full bg-slate-900 border-2 border-amber-500/60 rounded-lg px-2.5 py-1.5 text-xs text-amber-200 font-mono font-bold focus:ring-2 focus:ring-amber-400 outline-none"
                               />
+                              {ing.supplierLot && (
+                                <span className="text-[9px] text-emerald-400 font-bold block mt-0.5">
+                                  ✨ Reconhecido no XML
+                                </span>
+                              )}
                             </td>
                             <td className="p-3">
                               <input
