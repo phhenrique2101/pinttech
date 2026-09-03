@@ -257,21 +257,36 @@ export default function MapaTraceabilitySheetModal({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] pt-1 border-t border-slate-200">
-              <div>
+              <div className="sm:col-span-2">
                 <span className="text-slate-500 block">pH da Mostura:</span>
-                <span className="font-mono">{batch.phMash || '5.3'}</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {(() => {
+                    if (batch.customRecipeDataJson) {
+                      try {
+                        const parsed = JSON.parse(batch.customRecipeDataJson);
+                        if (Array.isArray(parsed.mashPhList) && parsed.mashPhList.length > 1) {
+                          const valid = parsed.mashPhList.filter((m: any) => m.ph);
+                          if (valid.length > 0) {
+                            return valid.map((m: any) => `${m.name}: ${m.ph}`).join(' • ');
+                          }
+                        }
+                      } catch (e) {}
+                    }
+                    return batch.phMash || '5.30';
+                  })()}
+                </span>
               </div>
               <div>
-                <span className="text-slate-500 block">pH Final / Envase:</span>
-                <span className="font-mono">{batch.phFinal || '4.3'}</span>
+                <span className="text-slate-500 block">pH Fervura / Envase:</span>
+                <span className="font-mono text-slate-900">
+                  {batch.phBoil ? `${batch.phBoil} (Fervura) / ` : ''}{batch.phFinal || '4.30'}
+                </span>
               </div>
               <div>
-                <span className="text-slate-500 block">Cepa da Levedura:</span>
-                <span>{batch.yeastStrain || 'Fermentis US-05'}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Lote da Levedura:</span>
-                <span className="font-mono font-bold">{batch.yeastLot || 'LOTE-LEV-PADRAO'}</span>
+                <span className="text-slate-500 block">Levedura (Cepa & Lote):</span>
+                <span className="font-bold text-slate-900">
+                  {batch.yeastStrain || 'Fermentis US-05'} {batch.yeastLot ? `(Lote: ${batch.yeastLot})` : ''}
+                </span>
               </div>
             </div>
           </div>

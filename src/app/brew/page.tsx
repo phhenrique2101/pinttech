@@ -26,9 +26,11 @@ import {
   Eye,
   Trash2,
   X,
+  Activity,
 } from 'lucide-react';
 import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import MapaTraceabilitySheetModal from '@/components/brew/MapaTraceabilitySheetModal';
+import LiveBatchManagerModal from '@/components/brew/LiveBatchManagerModal';
 import { formatDate, formatDateShort } from '@/lib/utils';
 
 export default function BrewStudioPage() {
@@ -43,6 +45,7 @@ export default function BrewStudioPage() {
   // Modals
   const [importerModalOpen, setImporterModalOpen] = useState<boolean>(false);
   const [selectedBatchForSheet, setSelectedBatchForSheet] = useState<any | null>(null);
+  const [selectedBatchForManager, setSelectedBatchForManager] = useState<any | null>(null);
 
   // Status update modal / quick edit
   const [editingBatchStatus, setEditingBatchStatus] = useState<any | null>(null);
@@ -403,27 +406,37 @@ export default function BrewStudioPage() {
                     </div>
 
                     {/* Botões de Ação */}
-                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                    <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
                       <button
-                        onClick={() => {
-                          setEditingBatchStatus(batch);
-                          setNewStatus(batch.status);
-                          setNewMeasuredFg(batch.measuredFg ? String(batch.measuredFg) : '');
-                          setNewMeasuredAbv(batch.measuredAbv ? String(batch.measuredAbv) : '');
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition"
+                        onClick={() => setSelectedBatchForManager(batch)}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition shadow-xs"
                       >
-                        <Sliders className="w-3.5 h-3.5" />
-                        <span>Atualizar Status</span>
+                        <Activity className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Medições, pH & Adega</span>
                       </button>
 
-                      <button
-                        onClick={() => setSelectedBatchForSheet(batch)}
-                        className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow transition"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Ficha MAPA (A4)</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingBatchStatus(batch);
+                            setNewStatus(batch.status);
+                            setNewMeasuredFg(batch.measuredFg ? String(batch.measuredFg) : '');
+                            setNewMeasuredAbv(batch.measuredAbv ? String(batch.measuredAbv) : '');
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition"
+                        >
+                          <Sliders className="w-3 h-3" />
+                          <span>Status</span>
+                        </button>
+
+                        <button
+                          onClick={() => setSelectedBatchForSheet(batch)}
+                          className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow transition"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Ficha MAPA</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -585,6 +598,19 @@ export default function BrewStudioPage() {
           batch={selectedBatchForSheet}
           brewery={brewery}
           onClose={() => setSelectedBatchForSheet(null)}
+        />
+      )}
+
+      {/* MODAL DE CONTROLE DE ADEGA, MEDIÇÕES & MULTI-MASH PH */}
+      {selectedBatchForManager && (
+        <LiveBatchManagerModal
+          batch={selectedBatchForManager}
+          tanks={tanks}
+          onClose={() => setSelectedBatchForManager(null)}
+          onSaved={() => {
+            fetchData();
+            setSelectedBatchForManager(null);
+          }}
         />
       )}
 

@@ -91,13 +91,52 @@ export default function LiveBatchManagerModal({
   const [volumeProduced, setVolumeProduced] = useState<number>(batch.volumeProducedLiters || batch.volumePlannedLiters || 500);
   const [measuredOg, setMeasuredOg] = useState<string>(batch.measuredOg ? String(batch.measuredOg) : '');
   const [measuredFg, setMeasuredFg] = useState<string>(batch.measuredFg ? String(batch.measuredFg) : '');
-  const [phMash, setPhMash] = useState<string>(batch.phMash ? String(batch.phMash) : '');
   const [phBoil, setPhBoil] = useState<string>(batch.phBoil ? String(batch.phBoil) : '');
+  const [phFermentationStart, setPhFermentationStart] = useState<string>(batch.phFermentationStart ? String(batch.phFermentationStart) : '');
   const [phFinal, setPhFinal] = useState<string>(batch.phFinal ? String(batch.phFinal) : '');
+  const [tempMash, setTempMash] = useState<string>(batch.tempMash ? String(batch.tempMash) : '');
   const [tempFermentation, setTempFermentation] = useState<string>(batch.tempFermentation ? String(batch.tempFermentation) : '');
   const [tempMaturation, setTempMaturation] = useState<string>(batch.tempMaturation ? String(batch.tempMaturation) : '');
+  const [yeastStrain, setYeastStrain] = useState<string>(batch.yeastStrain || '');
+  const [yeastLot, setYeastLot] = useState<string>(batch.yeastLot || '');
+  const [yeastGeneration, setYeastGeneration] = useState<string>(batch.yeastGeneration ? String(batch.yeastGeneration) : '1');
   const [sensoryNotes, setSensoryNotes] = useState<string>(batch.sensoryNotes || '');
   const [notes, setNotes] = useState<string>(batch.notes || '');
+
+  // Múltiplas Mosturas (com botão +)
+  const initialMashPhList: { id: string; name: string; ph: string }[] = useMemo(() => {
+    if (batch.customRecipeDataJson) {
+      try {
+        const parsed = JSON.parse(batch.customRecipeDataJson);
+        if (Array.isArray(parsed.mashPhList) && parsed.mashPhList.length > 0) {
+          return parsed.mashPhList;
+        }
+      } catch (e) {}
+    }
+    if (batch.phMash) {
+      return [{ id: 'mash-1', name: 'Mostura 1', ph: String(batch.phMash) }];
+    }
+    return [{ id: 'mash-1', name: 'Mostura 1', ph: '' }];
+  }, [batch]);
+
+  const [mashPhList, setMashPhList] = useState(initialMashPhList);
+
+  const handleAddMashPh = () => {
+    const num = mashPhList.length + 1;
+    setMashPhList([
+      ...mashPhList,
+      { id: `mash-${Date.now()}`, name: `Mostura ${num}`, ph: '' },
+    ]);
+  };
+
+  const handleUpdateMashPh = (id: string, ph: string) => {
+    setMashPhList(mashPhList.map((m) => (m.id === id ? { ...m, ph } : m)));
+  };
+
+  const handleRemoveMashPh = (id: string) => {
+    if (mashPhList.length <= 1) return;
+    setMashPhList(mashPhList.filter((m) => m.id !== id));
+  };
 
   // 1. TAREFAS DE TANQUE & EDIÇÃO
   const initialTasks: TankTaskItem[] = useMemo(() => {
@@ -422,6 +461,19 @@ export default function LiveBatchManagerModal({
     setError('');
 
     try {
+      const validPhs = mashPhList.map((m) => parseFloat(m.ph)).filter((n) => !isNaN(n) && n > 0);
+      const computedMashPh = validPhs.length > 0
+        ? Math.round((validPhs.reduce((a, b) => a + b, 0) / validPhs.length) * 100) / 100
+        : null;
+
+      let customObj: any = {};
+      if (batch.customRecipeDataJson) {
+        try {
+          customObj = JSON.parse(batch.customRecipeDataJson);
+        } catch (e) {}
+      }
+      customObj.mashPhList = mashPhList;
+
       const payload = {
         status,
         tankId: tankId || null,
@@ -431,13 +483,19 @@ export default function LiveBatchManagerModal({
         totalCost: batchTotalCost,
         measuredOg: measuredOg ? parseFloat(measuredOg) : null,
         measuredFg: measuredFg ? parseFloat(measuredFg) : null,
-        phMash: phMash ? parseFloat(phMash) : null,
+        phMash: computedMashPh,
         phBoil: phBoil ? parseFloat(phBoil) : null,
+        phFermentationStart: phFermentationStart ? parseFloat(phFermentationStart) : null,
         phFinal: phFinal ? parseFloat(phFinal) : null,
+        tempMash: tempMash ? parseFloat(tempMash) : null,
         tempFermentation: tempFermentation ? parseFloat(tempFermentation) : null,
         tempMaturation: tempMaturation ? parseFloat(tempMaturation) : null,
+        yeastStrain: yeastStrain.trim() || null,
+        yeastLot: yeastLot.trim() || null,
+        yeastGeneration: yeastGeneration ? parseInt(yeastGeneration, 10) : null,
         sensoryNotes: sensoryNotes.trim() || null,
         notes: notes.trim() || null,
+        customRecipeDataJson: JSON.stringify(customObj),
         tankTasksJson: JSON.stringify(tasks),
         fermentationLogsJson: JSON.stringify(logs),
         ingredients: batchIngredients.map((item) => ({
@@ -1194,11 +1252,13 @@ export default function LiveBatchManagerModal({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+                {/* DENSIDADES */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">OG Medida</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">OG Medida (Inicial)</label>
                     <input
                       type="text"
+                      placeholder="Ex: 1.054"
                       value={measuredOg}
                       onChange={(e) => setMeasuredOg(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none"
@@ -1206,9 +1266,10 @@ export default function LiveBatchManagerModal({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">FG Medida / Final</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">FG Medida (Final)</label>
                     <input
                       type="text"
+                      placeholder="Ex: 1.010"
                       value={measuredFg}
                       onChange={(e) => setMeasuredFg(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-cyan-700 focus:outline-none"
@@ -1216,19 +1277,100 @@ export default function LiveBatchManagerModal({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">pH Mostura</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Teor Alcoólico (% ABV Estimado)</label>
+                    <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-slate-800">
+                      {measuredOg && measuredFg && parseFloat(measuredOg) > 1 && parseFloat(measuredFg) > 0.9
+                        ? `${Math.max(0, ((parseFloat(measuredOg) - parseFloat(measuredFg)) * 131.25)).toFixed(1)}% v/v`
+                        : 'Preencha OG e FG'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* pH DE MOSTURA COM SUPORTE A MÚLTIPLAS MOSTURAS (+) */}
+                <div className="bg-amber-50/60 border-2 border-amber-300/80 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-black text-amber-950 uppercase flex items-center gap-1.5">
+                        <Beaker className="w-4 h-4 text-amber-700" />
+                        <span>pH de Mostura (Multi-Brassagens / Múltiplas Mosturas)</span>
+                      </span>
+                      <p className="text-[11px] text-amber-800/80">
+                        Adicione o pH de cada mostura/cozimento individual se a cervejaria fizer mais de uma brassagem para este lote.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddMashPh}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Adicionar Mostura (+)</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                    {mashPhList.map((mash, idx) => (
+                      <div
+                        key={mash.id}
+                        className="bg-white border border-amber-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-xs"
+                      >
+                        <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
+                          {mash.name}:
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="Ex: 5.35"
+                            value={mash.ph}
+                            onChange={(e) => handleUpdateMashPh(mash.id, e.target.value)}
+                            className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-black text-amber-800 text-center focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                          />
+                          {mashPhList.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMashPh(mash.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                              title="Excluir esta mostura"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* DEMAIS pHs DO PROCESSO */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">pH da Fervura</label>
                     <input
                       type="text"
-                      value={phMash}
-                      onChange={(e) => setPhMash(e.target.value)}
+                      placeholder="Ex: 5.10"
+                      value={phBoil}
+                      onChange={(e) => setPhBoil(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">pH Final</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">pH Início da Fermentação</label>
                     <input
                       type="text"
+                      placeholder="Ex: 5.05"
+                      value={phFermentationStart}
+                      onChange={(e) => setPhFermentationStart(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">pH Final (Envase / Cerveja Pronta)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 4.30"
                       value={phFinal}
                       onChange={(e) => setPhFinal(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
@@ -1236,13 +1378,86 @@ export default function LiveBatchManagerModal({
                   </div>
                 </div>
 
+                {/* TEMPERATURAS DO PROCESSO */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Mostura (°C)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 66.0"
+                      value={tempMash}
+                      onChange={(e) => setTempMash(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Fermentação (°C)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 19.0"
+                      value={tempFermentation}
+                      onChange={(e) => setTempFermentation(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Maturação / Cold Crash (°C)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 0.5"
+                      value={tempMaturation}
+                      onChange={(e) => setTempMaturation(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* CONTROLE DE LEVEDURA */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Cepa da Levedura</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Fermentis US-05"
+                      value={yeastStrain}
+                      onChange={(e) => setYeastStrain(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Nº Lote da Levedura</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 881-A"
+                      value={yeastLot}
+                      onChange={(e) => setYeastLot(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Geração da Levedura</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={yeastGeneration}
+                      onChange={(e) => setYeastGeneration(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* ANÁLISE SENSORIAL */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Análise Sensorial & Degustação</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Análise Sensorial, Degustação & Liberação do Lote</label>
                   <textarea
                     rows={2}
                     value={sensoryNotes}
                     onChange={(e) => setSensoryNotes(e.target.value)}
-                    placeholder="Perfil aromático, atenuação, formação de espuma, liberação técnica..."
+                    placeholder="Perfil aromático, atenuação, formação de espuma, liberação técnica para envase..."
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none"
                   />
                 </div>
