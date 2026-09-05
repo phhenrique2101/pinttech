@@ -8,9 +8,9 @@ export function middleware(req: NextRequest) {
   const isBrewSubdomain = host.startsWith('brew.') || host.includes('brew.');
 
   if (isBrewSubdomain) {
-    // Se estiver acessando a raiz do subdomínio, redireciona/reescreve internamente para a página do Brew Studio (/brew)
+    // Se estiver acessando a raiz do subdomínio, redireciona/reescreve internamente para a página de Produção & Tanques (/producao)
     if (url.pathname === '/') {
-      url.pathname = '/brew';
+      url.pathname = '/producao';
       return NextResponse.rewrite(url);
     }
   }
