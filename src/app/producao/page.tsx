@@ -102,6 +102,11 @@ export default function ProducaoPage() {
         breweryRes.ok ? breweryRes.json() : null,
       ]);
 
+      if (authRes.status === 401 || !authRes.ok) {
+        window.location.href = '/login?redirect=/producao';
+        return;
+      }
+
       if (Array.isArray(batchesData)) setBatches(batchesData);
       if (Array.isArray(tanksData)) setTanks(tanksData);
       if (Array.isArray(recipesData)) setRecipes(recipesData);

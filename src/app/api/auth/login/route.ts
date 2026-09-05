@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { signJwtToken } from '@/lib/auth';
+import { signJwtToken, getAuthCookieOptions } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -54,14 +54,9 @@ export async function POST(req: NextRequest) {
       mustChangePassword: user.mustChangePassword,
     });
 
-    // Set HTTP-only cookie
-    response.cookies.set('pinttech_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 dias
-      path: '/',
-    });
+    // Set HTTP-only cookie with subdomain sharing in production
+    const cookieOptions = getAuthCookieOptions(req);
+    response.cookies.set('pinttech_token', token, cookieOptions);
 
     return response;
   } catch (error: any) {

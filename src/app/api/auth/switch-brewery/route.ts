@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest, signJwtToken } from '@/lib/auth';
+import { getSessionFromRequest, signJwtToken, getAuthCookieOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(req: NextRequest) {
@@ -37,15 +37,8 @@ export async function GET(req: NextRequest) {
     const redirectUrl = new URL(redirectTo, req.url);
     const res = NextResponse.redirect(redirectUrl);
 
-    const isHttps = req.nextUrl.protocol === 'https:' || req.headers.get('x-forwarded-proto') === 'https';
-
-    res.cookies.set('pinttech_token', token, {
-      httpOnly: true,
-      secure: isHttps,
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
-      path: '/',
-    });
+    const cookieOptions = getAuthCookieOptions(req);
+    res.cookies.set('pinttech_token', token, cookieOptions);
 
     return res;
   } catch (error: any) {
@@ -84,16 +77,9 @@ export async function POST(req: NextRequest) {
 
     const token = signJwtToken(newPayload);
 
-    const isHttps = req.nextUrl.protocol === 'https:' || req.headers.get('x-forwarded-proto') === 'https';
-
     const res = NextResponse.json({ success: true, user: newPayload });
-    res.cookies.set('pinttech_token', token, {
-      httpOnly: true,
-      secure: isHttps,
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
-      path: '/',
-    });
+    const cookieOptions = getAuthCookieOptions(req);
+    res.cookies.set('pinttech_token', token, cookieOptions);
 
     return res;
   } catch (error: any) {

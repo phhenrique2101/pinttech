@@ -37,14 +37,18 @@ export default function LoginPage() {
         throw new Error(data.error || 'Falha ao autenticar. Verifique seu e-mail e senha.');
       }
 
-      if (data.user.role === 'SUPER_ADMIN') {
-        router.push('/master');
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirectUrl = searchParams.get('redirect');
+
+      if (redirectUrl && redirectUrl.startsWith('/') && !redirectUrl.startsWith('//')) {
+        window.location.href = redirectUrl;
+      } else if (data.user.role === 'SUPER_ADMIN') {
+        window.location.href = '/master';
       } else if (data.user.role === 'LOGISTICS') {
-        router.push('/scanner');
+        window.location.href = '/scanner';
       } else {
-        router.push('/');
+        window.location.href = '/';
       }
-      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao realizar login');
     } finally {

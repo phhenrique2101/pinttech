@@ -48,3 +48,22 @@ export function getSessionFromRequest(req: NextRequest): UserSession | null {
   if (!token) return null;
   return verifyJwtToken(token);
 }
+
+export function getAuthCookieOptions(req?: NextRequest | { headers: { get: (name: string) => string | null } }) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  let host = '';
+  if (req) {
+    host = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
+  }
+  const hostname = host.split(':')[0].toLowerCase();
+  const domain = isProduction && hostname.endsWith('pinttech.com.br') ? '.pinttech.com.br' : undefined;
+
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax' as const,
+    maxAge: 60 * 60 * 24 * 7, // 7 dias
+    path: '/',
+    ...(domain ? { domain } : {}),
+  };
+}
