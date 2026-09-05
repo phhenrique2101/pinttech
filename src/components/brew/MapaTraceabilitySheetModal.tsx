@@ -115,7 +115,7 @@ export default function MapaTraceabilitySheetModal({
         </div>
 
         {/* ÁREA IMPRIMÍVEL (A4 FORMAL) */}
-        <div className="p-6 md:p-8 overflow-y-auto bg-white text-slate-900 font-sans print:p-0 print:m-0 print:overflow-visible text-xs leading-relaxed">
+        <div className="p-6 md:p-8 overflow-y-auto bg-white text-slate-900 font-sans print:p-0 print:m-0 print:overflow-visible text-xs leading-relaxed keep-white">
           {/* 1. Cabeçalho Oficial */}
           <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start">
             <div className="flex-1 pr-4">

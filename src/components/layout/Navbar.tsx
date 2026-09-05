@@ -18,6 +18,7 @@ import {
 import { ROLE_MAP } from '@/lib/utils';
 import UndoActionWidget from '@/components/common/UndoActionWidget';
 import BreweryEditModal from '@/components/brew/BreweryEditModal';
+import ThemeToggle from '@/components/theme/ThemeToggle';
 
 export interface CurrentUser {
   userId: string;
@@ -208,6 +209,9 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
             <QrCode className="w-4 h-4" />
             <span className="hidden sm:inline">Scanner Mobile</span>
           </Link>
+
+          {/* Theme Toggle (Modo Claro / Escuro) */}
+          <ThemeToggle />
 
           {/* User Profile */}
           {user && (

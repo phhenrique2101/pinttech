@@ -14,6 +14,7 @@ import {
 import { CurrentUser } from './Navbar';
 import BreweryEditModal from '@/components/brew/BreweryEditModal';
 import UndoActionWidget from '@/components/common/UndoActionWidget';
+import ThemeToggle from '@/components/theme/ThemeToggle';
 
 export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -88,6 +89,9 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
             <span>Acessar ERP Completo</span>
             <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
           </a>
+
+          {/* Theme Toggle (Modo Claro / Escuro) */}
+          <ThemeToggle />
 
           {/* User Profile */}
           {user && (
