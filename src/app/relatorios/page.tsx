@@ -57,10 +57,18 @@ export default function RelatoriosPage() {
 
   // Selected Columns per report type
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const loadAllData = async () => {
     setLoading(true);
     try {
+      fetch('/api/auth/me')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.user) setCurrentUser(data.user);
+        })
+        .catch(() => {});
+
       const [ordRes, kegRes, eqRes, cliRes, finRes] = await Promise.all([
         fetch('/api/orders'),
         fetch('/api/kegs'),
@@ -492,32 +500,34 @@ export default function RelatoriosPage() {
         </button>
       </div>
 
-      {/* Destaque: Integração Power BI */}
-      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-900 border border-amber-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0">
-            <BarChart3 className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white">Integração Completa com Microsoft Power BI</h3>
-              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-slate-950 uppercase">Nativo</span>
+      {/* Destaque: Integração Power BI (Apenas para o Proprietário) */}
+      {currentUser?.role === 'SUPER_ADMIN' && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-900 border border-amber-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0">
+              <BarChart3 className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Conecte 100% do banco de dados (Vendas, Lotes de Produção, Barris, Estoque e Financeiro) via Direct PostgreSQL ou Web Feed.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Integração Completa com Microsoft Power BI</h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-slate-950 uppercase">Nativo</span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Conecte 100% do banco de dados (Vendas, Lotes de Produção, Barris, Estoque e Financeiro) via Direct PostgreSQL ou Web Feed.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <Link
-          href="/relatorios/powerbi"
-          className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 transition shadow-md flex-shrink-0"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Acessar Central Power BI</span>
-          <ArrowRight className="w-4 h-4" />
-        </Link>
-      </div>
+          <Link
+            href="/relatorios/powerbi"
+            className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 transition shadow-md flex-shrink-0"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Acessar Central Power BI</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
 
       {/* Step 1: Escolha o Tipo de Relatório */}
       <div>

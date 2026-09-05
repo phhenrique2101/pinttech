@@ -27,6 +27,7 @@ import {
   EyeOff,
   Flame,
   CheckCircle2,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface BiDatasetInfo {
@@ -62,6 +63,8 @@ export default function PowerBiIntegrationPage() {
   const [loading, setLoading] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
+  const [unauthorized, setUnauthorized] = useState(false);
+  const [unauthorizedMsg, setUnauthorizedMsg] = useState('');
 
   // Data preview state
   const [selectedDataset, setSelectedDataset] = useState('vendas');
@@ -85,6 +88,12 @@ export default function PowerBiIntegrationPage() {
     setLoading(true);
     try {
       const res = await fetch('/api/bi/token');
+      if (res.status === 403 || res.status === 401) {
+        const errJson = await res.json().catch(() => ({}));
+        setUnauthorized(true);
+        setUnauthorizedMsg(errJson.error || 'Acesso restrito exclusivamente ao proprietário do sistema.');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setConfig(data);
@@ -227,6 +236,38 @@ export default function PowerBiIntegrationPage() {
   ];
 
   const filteredDax = daxCategory === 'ALL' ? DAX_ITEMS : DAX_ITEMS.filter((d) => d.category === daxCategory);
+
+  if (unauthorized) {
+    return (
+      <div className="p-6 max-w-2xl mx-auto mt-12 space-y-6">
+        <div className="bg-white rounded-3xl p-8 border border-amber-200 shadow-xl text-center space-y-4">
+          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900">
+            Acesso Restrito ao Proprietário
+          </h2>
+          <p className="text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+            {unauthorizedMsg || 'A integração direta e as credenciais analíticas com o Microsoft Power BI são de uso exclusivo do Proprietário do sistema.'}
+          </p>
+          <div className="pt-4 flex justify-center gap-3">
+            <Link
+              href="/relatorios"
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md transition"
+            >
+              Ir para Relatórios
+            </Link>
+            <Link
+              href="/"
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+            >
+              Voltar ao Início
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">

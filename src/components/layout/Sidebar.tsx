@@ -69,7 +69,6 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, moduleKey: 'CLIENTES', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Financeiro Cervejaria', href: '/financeiro', icon: DollarSign, moduleKey: 'FINANCEIRO', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
     { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download, moduleKey: 'RELATORIOS', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES'] },
-    { label: 'Integração Power BI', href: '/relatorios/powerbi', icon: BarChart3, badge: 'BI', highlight: true, moduleKey: 'RELATORIOS', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES', 'BREWER'] },
     { label: 'Importar Planilha (Excel)', href: '/importacao', icon: FileSpreadsheet, moduleKey: 'USUARIOS', roles: ['SUPER_ADMIN', 'ADMIN'] },
     { label: 'Usuários da Cervejaria', href: '/usuarios', icon: UserCheck, moduleKey: 'USUARIOS', roles: ['ADMIN'] },
   ];

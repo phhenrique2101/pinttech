@@ -9,6 +9,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Não autorizado. Faça login no sistema.' }, { status: 401 });
   }
 
+  if (session.role !== 'SUPER_ADMIN') {
+    return NextResponse.json(
+      { error: 'Acesso negado. A integração analítica com o Power BI é restrita exclusivamente ao proprietário da plataforma.' },
+      { status: 403 }
+    );
+  }
+
   // Generate a long-lived 365-day analytical token for Power BI
   const biToken = signBiApiToken(session);
 
