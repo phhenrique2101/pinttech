@@ -15,6 +15,7 @@ model Brewery {
   name                  String
   slug                  String                    @unique
   document              String?
+  mapaEstablishment     String?
   email                 String
   phone                 String?
   address               String?

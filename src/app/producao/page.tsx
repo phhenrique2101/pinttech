@@ -86,35 +86,30 @@ export default function ProducaoPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [batchesRes, tanksRes, recipesRes, authRes] = await Promise.all([
+      const [batchesRes, tanksRes, recipesRes, authRes, breweryRes] = await Promise.all([
         fetch('/api/batches'),
         fetch('/api/tanks'),
         fetch('/api/recipes'),
         fetch('/api/auth/me'),
+        fetch('/api/brewery'),
       ]);
 
-      const [batchesData, tanksData, recipesData, authData] = await Promise.all([
+      const [batchesData, tanksData, recipesData, authData, breweryData] = await Promise.all([
         batchesRes.json(),
         tanksRes.json(),
         recipesRes.json(),
         authRes.json(),
+        breweryRes.ok ? breweryRes.json() : null,
       ]);
 
       if (Array.isArray(batchesData)) setBatches(batchesData);
       if (Array.isArray(tanksData)) setTanks(tanksData);
       if (Array.isArray(recipesData)) setRecipes(recipesData);
 
-      if (authData?.user?.brewery) {
+      if (breweryData && !breweryData.error) {
+        setBrewery(breweryData);
+      } else if (authData?.user?.brewery) {
         setBrewery(authData.user.brewery);
-      } else if (authData?.user?.breweryId) {
-        const brewRes = await fetch(`/api/breweries`);
-        if (brewRes.ok) {
-          const breweries = await brewRes.json();
-          if (Array.isArray(breweries)) {
-            const found = breweries.find((b: any) => b.id === authData.user.breweryId);
-            if (found) setBrewery(found);
-          }
-        }
       }
     } catch (err) {
       console.error('Erro ao carregar dados de produção:', err);
@@ -1049,6 +1044,7 @@ export default function ProducaoPage() {
         <MapaTraceabilitySheetModal
           batch={selectedBatchForSheet}
           brewery={brewery}
+          onBreweryUpdated={(updated) => setBrewery(updated)}
           onClose={() => setSelectedBatchForSheet(null)}
         />
       )}

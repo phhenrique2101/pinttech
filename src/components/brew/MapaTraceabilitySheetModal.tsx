@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Printer,
@@ -11,8 +11,10 @@ import {
   Layers,
   FileCheck,
   CheckCircle2,
+  Edit3,
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
+import BreweryEditModal from './BreweryEditModal';
 
 interface BatchIngredient {
   id?: string;
@@ -31,14 +33,37 @@ interface BatchIngredient {
 interface MapaTraceabilitySheetModalProps {
   batch: any;
   brewery: any;
+  onBreweryUpdated?: (updatedBrewery: any) => void;
   onClose: () => void;
 }
 
 export default function MapaTraceabilitySheetModal({
   batch,
-  brewery,
+  brewery: initialBrewery,
+  onBreweryUpdated,
   onClose,
 }: MapaTraceabilitySheetModalProps) {
+  const [brewery, setBrewery] = useState(initialBrewery);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  useEffect(() => {
+    setBrewery(initialBrewery);
+  }, [initialBrewery]);
+
+  useEffect(() => {
+    if (!initialBrewery) {
+      fetch('/api/brewery')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && !data.error) {
+            setBrewery(data);
+            onBreweryUpdated?.(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [initialBrewery, onBreweryUpdated]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -66,6 +91,14 @@ export default function MapaTraceabilitySheetModal({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-2 border border-slate-700 transition shadow-sm"
+              title="Atualizar dados cadastrais da cervejaria (CNPJ, Registro MAPA, Telefone, etc.)"
+            >
+              <Building2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Editar Cadastro</span>
+            </button>
+            <button
               onClick={handlePrint}
               className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-2 shadow-lg transition"
             >
@@ -85,21 +118,61 @@ export default function MapaTraceabilitySheetModal({
         <div className="p-6 md:p-8 overflow-y-auto bg-white text-slate-900 font-sans print:p-0 print:m-0 print:overflow-visible text-xs leading-relaxed">
           {/* 1. Cabeçalho Oficial */}
           <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start">
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="flex-1 pr-4">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-base font-black tracking-tight text-slate-950 uppercase">
                   {brewery?.name || 'Cervejaria PintTech'}
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-700">
                   MAPA / DECRETO 6.871/2009
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="print:hidden text-[10px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 ml-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded transition cursor-pointer"
+                  title="Clique para editar CNPJ, Registro MAPA, Telefone e Endereço"
+                >
+                  <Edit3 className="w-3 h-3 text-amber-600" />
+                  <span>Editar dados cadastrais</span>
+                </button>
               </div>
-              <p className="text-[11px] text-slate-600 mt-0.5">
-                <strong>CNPJ:</strong> {brewery?.document || '12.345.678/0001-90'} •{' '}
-                <strong>Registro Estabelecimento MAPA:</strong> {brewery?.mapaEstablishment || 'SP 001234-5'}
+              <p className="text-[11px] text-slate-600 mt-1">
+                <strong>CNPJ:</strong>{' '}
+                {brewery?.document || (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="text-amber-700 underline print:no-underline print:text-slate-400 font-medium cursor-pointer"
+                  >
+                    (Não cadastrado - clique aqui para editar)
+                  </button>
+                )}{' '}
+                • <strong>Registro Estabelecimento MAPA:</strong>{' '}
+                {brewery?.mapaEstablishment || (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="text-amber-700 underline print:no-underline print:text-slate-400 font-medium cursor-pointer"
+                  >
+                    (Não cadastrado - clique aqui para editar)
+                  </button>
+                )}
               </p>
               <p className="text-[11px] text-slate-600">
-                {brewery?.address ? `${brewery.address} - ` : ''}{brewery?.city || 'Ribeirão Preto'}/{brewery?.state || 'SP'} • Telefone: {brewery?.phone || '(16) 3600-0000'}
+                {brewery?.address ? `${brewery.address} • ` : ''}
+                {brewery?.city ? `${brewery.city}` : ''}
+                {brewery?.city && brewery?.state ? `/${brewery.state}` : (brewery?.state || '')}
+                {brewery?.phone ? (
+                  ` • Telefone: ${brewery.phone}`
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="text-amber-700 underline print:hidden ml-1 cursor-pointer"
+                  >
+                    • Telefone: não cadastrado
+                  </button>
+                )}
               </p>
             </div>
 
@@ -364,6 +437,18 @@ export default function MapaTraceabilitySheetModal({
           </div>
         </div>
       </div>
+
+      {/* Modal de Edição de Dados Cadastrais da Cervejaria */}
+      <BreweryEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        brewery={brewery}
+        onSuccess={(updated) => {
+          setBrewery(updated);
+          onBreweryUpdated?.(updated);
+        }}
+      />
     </div>
   );
 }
+

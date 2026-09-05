@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const body = await req.json();
-    const { name, email, phone, city, state, plan, monthlyPrice, billingStatus, active } = body;
+    const { name, email, phone, city, state, address, document, mapaEstablishment, plan, monthlyPrice, billingStatus, active } = body;
 
     const existing = await prisma.brewery.findUnique({ where: { id: params.id } });
     if (!existing) {
@@ -23,6 +23,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         name: name !== undefined ? name : existing.name,
         email: email !== undefined ? email : existing.email,
         phone: phone !== undefined ? phone : existing.phone,
+        address: address !== undefined ? address : existing.address,
+        document: document !== undefined ? document : existing.document,
+        mapaEstablishment: mapaEstablishment !== undefined ? mapaEstablishment : existing.mapaEstablishment,
         city: city !== undefined ? city : existing.city,
         state: state !== undefined ? state : existing.state,
         plan: plan !== undefined ? plan : existing.plan,

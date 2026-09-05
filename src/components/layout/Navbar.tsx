@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ROLE_MAP } from '@/lib/utils';
 import UndoActionWidget from '@/components/common/UndoActionWidget';
+import BreweryEditModal from '@/components/brew/BreweryEditModal';
 
 export interface CurrentUser {
   userId: string;
@@ -35,6 +36,8 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
   const pathname = usePathname();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [breweries, setBreweries] = useState<{ id: string; name: string }[]>([]);
+  const [breweryModalOpen, setBreweryModalOpen] = useState(false);
+  const [breweryData, setBreweryData] = useState<any>(null);
 
   // Mandatory password change state
   const [forcePasswordModal, setForcePasswordModal] = useState(false);
@@ -304,15 +307,57 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
                           </div>
                         </div>
                       )}
+
+                      {user?.breweryId && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setDropdownOpen(false);
+                            try {
+                              const res = await fetch('/api/brewery');
+                              if (res.ok) {
+                                const b = await res.json();
+                                if (b && !b.error) setBreweryData(b);
+                              }
+                            } catch (e) {}
+                            setBreweryModalOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-50 text-left transition-colors border-t border-slate-100"
+                        >
+                          <Building2 className="w-4 h-4 text-amber-600" />
+                          <span>Editar Cadastro Desta Cervejaria</span>
+                        </button>
+                      )}
                     </>
                   ) : (
-                    <Link
-                      href="/usuarios"
-                      className="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      <Shield className="w-4 h-4 text-slate-400" />
-                      Gerenciar Usuários
-                    </Link>
+                    <>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setDropdownOpen(false);
+                          try {
+                            const res = await fetch('/api/brewery');
+                            if (res.ok) {
+                              const b = await res.json();
+                              if (b && !b.error) setBreweryData(b);
+                            }
+                          } catch (e) {}
+                          setBreweryModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 text-left transition-colors"
+                      >
+                        <Building2 className="w-4 h-4 text-slate-400" />
+                        <span>Dados da Cervejaria (CNPJ / MAPA)</span>
+                      </button>
+
+                      <Link
+                        href="/usuarios"
+                        className="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Shield className="w-4 h-4 text-slate-400" />
+                        Gerenciar Usuários
+                      </Link>
+                    </>
                   )}
 
                   <button
@@ -391,6 +436,19 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
           </div>
         </div>
       )}
+
+      {/* Modal de Edição de Dados Cadastrais da Cervejaria */}
+      <BreweryEditModal
+        isOpen={breweryModalOpen}
+        onClose={() => setBreweryModalOpen(false)}
+        brewery={breweryData}
+        onSuccess={(updated) => {
+          setBreweryData(updated);
+          if (updated?.name && updated.name !== user?.breweryName) {
+            window.location.reload();
+          }
+        }}
+      />
     </header>
   );
 }
