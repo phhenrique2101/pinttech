@@ -60,6 +60,28 @@ export function middleware(req: NextRequest) {
       url.pathname = '/producao';
       return NextResponse.redirect(url);
     }
+
+    // Se tentar acessar outros módulos do ERP completo (barris, financeiro, clientes, pedidos...)
+    // Redireciona para o domínio principal para manter o subdomínio brew focado 100% em Produção & Tanques!
+    const erpOnlyPaths = [
+      '/barris',
+      '/pedidos',
+      '/clientes',
+      '/financeiro',
+      '/equipamentos',
+      '/relatorios',
+      '/importacao',
+      '/master',
+      '/menu',
+    ];
+
+    const isErpOnly = erpOnlyPaths.some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`));
+    if (isErpOnly) {
+      const mainHost = host.replace(/^brew\./, '');
+      const protocol = req.headers.get('x-forwarded-proto') || 'https';
+      const erpUrl = new URL(url.pathname + url.search, `${protocol}://${mainHost}`);
+      return NextResponse.redirect(erpUrl);
+    }
   }
 
   return NextResponse.next();
