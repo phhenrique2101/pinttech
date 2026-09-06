@@ -49,10 +49,12 @@ import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import QuickClientModal from '@/components/clients/QuickClientModal';
 
-// Função para sanitizar e extrair apenas o nome puro do produto/cerveja (sem lotes, barris ou datas)
+// Função para sanitizar e extrair apenas o nome puro do produto/cerveja (sem lotes, barris, prefixos R$ ou datas)
 function cleanProductName(name: string): string {
   if (!name) return '';
   return name
+    .replace(/^R\$\s*/gi, '')
+    .replace(/\s*\(R\d+\)/gi, '')
     .replace(/\s*-\s*barril\s*\d+l?(\s*-\s*[\w\d]+)?/gi, '')
     .replace(/\s*-\s*lote\s*[\w\d]+/gi, '')
     .replace(/\s*-\s*[\d]{4,8}$/gi, '')
@@ -61,51 +63,177 @@ function cleanProductName(name: string): string {
     .trim();
 }
 
-// Componente de Busca Digitada de Cerveja / Chopp (Exibe somente o produto sem lotes)
+// Componente de Busca Digitada de Cerveja / Chopp
+// Prioriza e destaca Chopps ENVASADOS na câmara fria vs cervejas em produção/tanque
 function RecipeSearchSelect({
   recipeId,
   recipes,
+  kegs = [],
+  orders = [],
   onSelectRecipe,
-  placeholder = '🔍 Digite para buscar cerveja...',
+  placeholder = '🔍 Digite para buscar cerveja / chopp...',
 }: {
   recipeId: string;
   recipes: any[];
-  onSelectRecipe: (recipe: any) => void;
+  kegs?: any[];
+  orders?: any[];
+  onSelectRecipe: (recipe: any, recommendedCapacity?: number) => void;
   placeholder?: string;
 }) {
-  // Deduplicar e agrupar estilos por nome limpo (ex: "Saxônia - Pilsen")
-  const uniqueProductsMap = new Map<string, any>();
+  // 1. Identificar chopps ENVASADOS em estoque
+  const envasadosMap = new Map<string, {
+    key: string;
+    displayName: string;
+    matchedRecipe: any;
+    capacities: { capacity: number; available: number; total: number }[];
+    totalAvailable: number;
+    bestCapacity: number;
+  }>();
+
+  kegs
+    .filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO')
+    .forEach((k) => {
+      const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
+      const clean = cleanProductName(rawName);
+      const key = clean.toLowerCase();
+
+      if (!envasadosMap.has(key)) {
+        let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
+        if (!matched) {
+          matched = recipes.find((r) => {
+            const rClean = cleanProductName(r.name).toLowerCase();
+            return (
+              rClean === key ||
+              (key.length >= 4 && rClean.includes(key)) ||
+              (rClean.length >= 4 && key.includes(rClean))
+            );
+          });
+        }
+        if (!matched) {
+          matched = {
+            id: `keg-beer-${key}`,
+            name: clean,
+            style: k.currentBatch?.recipe?.style || 'Chopp Artesanal',
+            salePricePerLiter: 20,
+          };
+        }
+
+        envasadosMap.set(key, {
+          key,
+          displayName: clean,
+          matchedRecipe: matched,
+          capacities: [],
+          totalAvailable: 0,
+          bestCapacity: 50,
+        });
+      }
+    });
+
+  // Calcular estoques por capacidade para cada cerveja envasada
+  const envasadosList: any[] = [];
+  envasadosMap.forEach((val, key) => {
+    const capsCounts: { [c: number]: number } = {};
+    kegs
+      .filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO')
+      .forEach((k) => {
+        const kBeer = cleanProductName(k.currentBeerName || k.currentBatch?.recipe?.name || '').toLowerCase();
+        if (kBeer === key || (key.length >= 4 && kBeer.includes(key)) || (kBeer.length >= 4 && key.includes(kBeer))) {
+          const cap = k.capacity || 50;
+          capsCounts[cap] = (capsCounts[cap] || 0) + 1;
+        }
+      });
+
+    const capList: { capacity: number; available: number; total: number }[] = [];
+    let totAvail = 0;
+
+    [50, 30, 20, 15, 10, 5].forEach((cap) => {
+      if (capsCounts[cap]) {
+        let reserved = 0;
+        orders.forEach((o) => {
+          if (['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
+            (o.items || []).forEach((it: any) => {
+              const itClean = cleanProductName(it.recipe?.name || it.description || '').toLowerCase();
+              if ((itClean === key || (key.length >= 4 && itClean.includes(key))) && (it.kegCapacity || 50) === cap) {
+                reserved += (it.quantity || 1);
+              }
+            });
+          }
+        });
+        const avail = Math.max(0, capsCounts[cap] - reserved);
+        capList.push({ capacity: cap, available: avail, total: capsCounts[cap] });
+        totAvail += avail;
+      }
+    });
+
+    capList.sort((a, b) => b.available - a.available);
+    const bestCap = capList.length > 0 ? capList[0].capacity : 50;
+
+    envasadosList.push({
+      ...val,
+      capacities: capList,
+      totalAvailable: totAvail,
+      bestCapacity: bestCap,
+      isEnvasado: true,
+    });
+  });
+
+  envasadosList.sort((a, b) => b.totalAvailable - a.totalAvailable);
+
+  // 2. Outras receitas (não envasadas ou em tanque)
+  const outrosMap = new Map<string, any>();
   recipes.forEach((r) => {
-    const cleaned = cleanProductName(r.name);
-    if (cleaned && !uniqueProductsMap.has(cleaned.toLowerCase())) {
-      uniqueProductsMap.set(cleaned.toLowerCase(), {
-        ...r,
-        displayName: cleaned,
+    const clean = cleanProductName(r.name);
+    const key = clean.toLowerCase();
+    if (!envasadosMap.has(key) && !outrosMap.has(key)) {
+      outrosMap.set(key, {
+        key,
+        displayName: clean,
+        matchedRecipe: r,
+        capacities: [],
+        totalAvailable: 0,
+        bestCapacity: 50,
+        isEnvasado: false,
       });
     }
   });
-  const uniqueProducts = Array.from(uniqueProductsMap.values());
 
-  const selectedRecipe = recipes.find((r) => r.id === recipeId);
-  const selectedDisplayName = selectedRecipe ? cleanProductName(selectedRecipe.name) : '';
+  const outrosList = Array.from(outrosMap.values());
+
+  // Todos os produtos unificados para busca e exibição do selecionado
+  const allProducts = [...envasadosList, ...outrosList];
+
+  const selectedProduct = allProducts.find(
+    (p) => p.matchedRecipe?.id === recipeId || p.key === recipeId?.toLowerCase()
+  );
+  const selectedDisplayName = selectedProduct
+    ? selectedProduct.displayName
+    : recipes.find((r) => r.id === recipeId)
+    ? cleanProductName(recipes.find((r) => r.id === recipeId)!.name)
+    : '';
+
   const [query, setQuery] = useState(selectedDisplayName);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    if (selectedRecipe) {
-      setQuery(cleanProductName(selectedRecipe.name));
+    if (selectedProduct) {
+      setQuery(selectedProduct.displayName);
     } else {
-      setQuery('');
+      const found = recipes.find((r) => r.id === recipeId);
+      if (found) setQuery(cleanProductName(found.name));
+      else setQuery('');
     }
-  }, [recipeId, selectedRecipe]);
+  }, [recipeId, selectedProduct, recipes]);
 
-  const filtered = uniqueProducts.filter((r) => {
+  const filteredEnvasados = envasadosList.filter((p) => {
     if (!query) return true;
     const q = query.toLowerCase();
-    return (
-      r.displayName?.toLowerCase().includes(q) ||
-      r.style?.toLowerCase().includes(q)
-    );
+    return p.displayName.toLowerCase().includes(q) || (p.matchedRecipe?.style || '').toLowerCase().includes(q);
+  });
+
+  const filteredOutros = outrosList.filter((p) => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return p.displayName.toLowerCase().includes(q) || (p.matchedRecipe?.style || '').toLowerCase().includes(q);
   });
 
   return (
@@ -142,32 +270,103 @@ function RecipeSearchSelect({
             className="fixed inset-0 z-40"
             onClick={() => {
               setIsOpen(false);
-              if (selectedRecipe) setQuery(cleanProductName(selectedRecipe.name));
+              if (selectedDisplayName) setQuery(selectedDisplayName);
             }}
           />
-          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
-            {filtered.length === 0 ? (
-              <div className="p-2.5 text-[11px] text-slate-400 text-center font-medium">
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
+            {filteredEnvasados.length === 0 && filteredOutros.length === 0 ? (
+              <div className="p-4 text-xs text-slate-400 text-center font-medium">
                 Nenhuma cerveja encontrada com esse nome
               </div>
             ) : (
-              filtered.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => {
-                    setQuery(r.displayName);
-                    setIsOpen(false);
-                    onSelectRecipe(r);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
-                    recipeId === r.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
-                  }`}
-                >
-                  <span className="font-extrabold block text-slate-900">{r.displayName}</span>
-                  {recipeId === r.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
-                </button>
-              ))
+              <>
+                {/* Seção 1: Chopps Envasados em Estoque */}
+                {filteredEnvasados.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 bg-emerald-50 text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center justify-between sticky top-0 z-10 border-b border-emerald-100">
+                      <span className="flex items-center gap-1">
+                        🍺 Chopps Envasados na Câmara Fria ({filteredEnvasados.length})
+                      </span>
+                      <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-bold">
+                        Pronto p/ Entrega
+                      </span>
+                    </div>
+                    {filteredEnvasados.map((item) => {
+                      const isSelected = recipeId === item.matchedRecipe.id;
+                      const capText = item.capacities.map((c: any) => `${c.total}x ${c.capacity}L`).join(' • ');
+
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => {
+                            setQuery(item.displayName);
+                            setIsOpen(false);
+                            onSelectRecipe(item.matchedRecipe, item.bestCapacity);
+                          }}
+                          className={`w-full text-left px-3 py-2.5 hover:bg-amber-50/70 transition-colors flex items-center justify-between border-b border-slate-50 last:border-b-0 cursor-pointer ${
+                            isSelected ? 'bg-amber-50 font-bold' : ''
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-slate-900 text-xs truncate">
+                                {item.displayName}
+                              </span>
+                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex-shrink-0">
+                                {item.totalAvailable} {item.totalAvailable === 1 ? 'barril livre' : 'barris livres'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium flex items-center gap-2 mt-0.5">
+                              {capText && <span>Barris: <strong>{capText}</strong></span>}
+                              <span>• {formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L</span>
+                            </div>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-amber-600 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Seção 2: Outros Estilos / Em Produção nos Tanques */}
+                {filteredOutros.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 bg-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-between sticky top-0 z-10 border-b border-slate-200">
+                      <span>⏳ Em Produção nos Tanques / Sob Encomenda ({filteredOutros.length})</span>
+                      <span className="text-[9px] text-slate-400 font-bold">Sem estoque pronto</span>
+                    </div>
+                    {filteredOutros.map((item) => {
+                      const isSelected = recipeId === item.matchedRecipe.id;
+
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => {
+                            setQuery(item.displayName);
+                            setIsOpen(false);
+                            onSelectRecipe(item.matchedRecipe, 50);
+                          }}
+                          className={`w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer ${
+                            isSelected ? 'bg-amber-50 font-bold' : ''
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold text-slate-700 text-xs block">
+                              {item.displayName}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {item.matchedRecipe.style ? `${item.matchedRecipe.style} • ` : ''}0 barris envasados • {formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L
+                            </span>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-amber-600 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
@@ -345,7 +544,7 @@ export default function PedidosPage() {
   const [editActualReturnDate, setEditActualReturnDate] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const [editItems, setEditItems] = useState<{ id?: string; recipeId: string; description?: string; quantity: number; unitPrice: number; totalPrice: number }[]>([]);
+  const [editItems, setEditItems] = useState<{ id?: string; recipeId: string; description?: string; quantity: number; unitPrice: number; totalPrice: number; kegCapacity?: number }[]>([]);
   const [editEquipments, setEditEquipments] = useState<string[]>([]);
   const [editDiscount, setEditDiscount] = useState('0');
   const [editDeliveryFee, setEditDeliveryFee] = useState('0');
@@ -438,20 +637,34 @@ export default function PedidosPage() {
   };
 
   const getStockAvailability = (recipeId: string, capacity: number, editingOrderId?: string) => {
-    const recipe = recipes.find((r) => r.id === recipeId);
-    if (!recipe) return { available: 0, matchingTotal: 0, reserved: 0, reservedOrders: [], recipeName: 'Chopp' };
+    const recipe = recipes.find((r) => r.id === recipeId) || {
+      id: recipeId,
+      name: recipeId?.startsWith('keg-beer-') ? recipeId.replace('keg-beer-', '') : 'Chopp',
+    };
 
     const targetCleanName = cleanProductName(recipe.name).toLowerCase();
 
     // Find filled kegs in stock matching this recipe and capacity
-    const matchingKegs = kegs.filter(
-      (k) =>
-        (k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO') &&
-        k.capacity === capacity &&
-        (k.currentBatch?.recipeId === recipeId ||
-          (k.currentBeerName && cleanProductName(k.currentBeerName).toLowerCase() === targetCleanName) ||
-          (k.currentBatch?.recipe?.name && cleanProductName(k.currentBatch.recipe.name).toLowerCase() === targetCleanName))
-    );
+    const matchingKegs = kegs.filter((k) => {
+      if (k.status !== 'EM_ESTOQUE' && k.status !== 'ENVASADO') return false;
+      if (k.capacity !== capacity) return false;
+
+      // 1. Direct recipe ID match
+      if (k.currentBatch?.recipeId && k.currentBatch.recipeId === recipeId) return true;
+
+      // 2. Name matching with currentBeerName or currentBatch.recipe.name
+      const kBeer = cleanProductName(k.currentBeerName || '').toLowerCase();
+      const kBatch = cleanProductName(k.currentBatch?.recipe?.name || '').toLowerCase();
+
+      for (const name of [kBeer, kBatch]) {
+        if (!name) continue;
+        if (targetCleanName && (name === targetCleanName || (name.length >= 4 && targetCleanName.includes(name)) || (targetCleanName.length >= 4 && name.includes(targetCleanName)))) {
+          return true;
+        }
+      }
+
+      return false;
+    });
 
     // Calculate quantity already committed in active unfulfilled orders
     let reservedCount = 0;
@@ -462,10 +675,18 @@ export default function PedidosPage() {
         let qtyInOrder = 0;
         (o.items || []).forEach((it: any) => {
           const itCleanName = cleanProductName(it.recipe?.name || it.description || '').toLowerCase();
-          if (
-            (it.recipeId === recipeId || (itCleanName && itCleanName === targetCleanName)) &&
-            (it.kegCapacity || 50) === capacity
-          ) {
+          const itMatches =
+            it.recipeId === recipeId ||
+            (targetCleanName && (itCleanName === targetCleanName || (itCleanName.length >= 4 && targetCleanName.includes(itCleanName))));
+
+          let itemCap = it.kegCapacity || it.keg?.capacity;
+          if (!itemCap && it.description) {
+            const m = it.description.match(/(\d+)\s*L/i);
+            if (m) itemCap = parseInt(m[1], 10);
+          }
+          if (!itemCap) itemCap = 50;
+
+          if (itMatches && itemCap === capacity) {
             qtyInOrder += (it.quantity || 1);
           }
         });
@@ -666,14 +887,24 @@ export default function PedidosPage() {
 
     if (order.items && order.items.length > 0) {
       setEditItems(
-        order.items.map((it: any) => ({
-          id: it.id,
-          recipeId: it.recipeId || (recipes[0]?.id || ''),
-          description: it.description,
-          quantity: it.quantity || 1,
-          unitPrice: it.unitPrice || 0,
-          totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
-        }))
+        order.items.map((it: any) => {
+          let cap = it.kegCapacity || it.keg?.capacity;
+          if (!cap && it.description) {
+            const m = it.description.match(/(\d+)\s*L/i);
+            if (m) cap = parseInt(m[1], 10);
+          }
+          if (!cap) cap = 50;
+
+          return {
+            id: it.id,
+            recipeId: it.recipeId || (recipes[0]?.id || ''),
+            description: it.description,
+            quantity: it.quantity || 1,
+            unitPrice: it.unitPrice || 0,
+            totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
+            kegCapacity: cap,
+          };
+        })
       );
     } else {
       setEditItems([]);
@@ -716,7 +947,52 @@ export default function PedidosPage() {
   };
 
   const handleAddItemRow = () => {
-    if (recipes.length > 0) {
+    // 1. Priorizar chopps com estoque ENVASADO na câmara fria
+    const envasadosMap = new Map<string, { recipe: any; bestCap: number; availCount: number }>();
+
+    kegs.filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO').forEach((k) => {
+      const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
+      const clean = cleanProductName(rawName);
+      const key = clean.toLowerCase();
+
+      if (!envasadosMap.has(key)) {
+        let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
+        if (!matched) {
+          matched = recipes.find((r) => {
+            const rClean = cleanProductName(r.name).toLowerCase();
+            return rClean === key || (key.length >= 4 && rClean.includes(key)) || (rClean.length >= 4 && key.includes(rClean));
+          });
+        }
+        if (!matched) {
+          matched = {
+            id: `keg-beer-${key}`,
+            name: clean,
+            salePricePerLiter: 20,
+          };
+        }
+
+        let bestCap = 50;
+        let maxAvail = 0;
+        [50, 30, 20, 15, 10, 5].forEach((cap) => {
+          const avail = getStockAvailability(matched.id, cap).available;
+          if (avail > maxAvail) {
+            maxAvail = avail;
+            bestCap = cap;
+          }
+        });
+
+        envasadosMap.set(key, { recipe: matched, bestCap, availCount: maxAvail });
+      }
+    });
+
+    const envasadosList = Array.from(envasadosMap.values()).sort((a, b) => b.availCount - a.availCount);
+    const chosen = envasadosList[0];
+
+    if (chosen) {
+      const cap = chosen.bestCap || 50;
+      const defaultPrice = (chosen.recipe.salePricePerLiter || chosen.recipe.suggestedPricePerLiter || 20) * cap;
+      setOrderItems([...orderItems, { recipeId: chosen.recipe.id, quantity: 1, unitPrice: defaultPrice, kegCapacity: cap }]);
+    } else if (recipes.length > 0) {
       const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
       setOrderItems([...orderItems, { recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
     }
@@ -727,15 +1003,71 @@ export default function PedidosPage() {
   };
 
   const handleAddEditItemRow = () => {
-    if (recipes.length > 0) {
+    const envasadosMap = new Map<string, { recipe: any; bestCap: number; availCount: number }>();
+
+    kegs.filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO').forEach((k) => {
+      const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
+      const clean = cleanProductName(rawName);
+      const key = clean.toLowerCase();
+
+      if (!envasadosMap.has(key)) {
+        let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
+        if (!matched) {
+          matched = recipes.find((r) => {
+            const rClean = cleanProductName(r.name).toLowerCase();
+            return rClean === key || (key.length >= 4 && rClean.includes(key)) || (rClean.length >= 4 && key.includes(rClean));
+          });
+        }
+        if (!matched) {
+          matched = {
+            id: `keg-beer-${key}`,
+            name: clean,
+            salePricePerLiter: 20,
+          };
+        }
+
+        let bestCap = 50;
+        let maxAvail = 0;
+        [50, 30, 20, 15, 10, 5].forEach((cap) => {
+          const avail = getStockAvailability(matched.id, cap, selectedOrder?.id).available;
+          if (avail > maxAvail) {
+            maxAvail = avail;
+            bestCap = cap;
+          }
+        });
+
+        envasadosMap.set(key, { recipe: matched, bestCap, availCount: maxAvail });
+      }
+    });
+
+    const envasadosList = Array.from(envasadosMap.values()).sort((a, b) => b.availCount - a.availCount);
+    const chosen = envasadosList[0];
+
+    if (chosen) {
+      const cap = chosen.bestCap || 50;
+      const defaultPrice = (chosen.recipe.salePricePerLiter || chosen.recipe.suggestedPricePerLiter || 20) * cap;
+      setEditItems([
+        ...editItems,
+        {
+          recipeId: chosen.recipe.id,
+          description: `Barril ${cap}L - ${chosen.recipe.name}`,
+          quantity: 1,
+          unitPrice: defaultPrice,
+          totalPrice: defaultPrice,
+          kegCapacity: cap,
+        },
+      ]);
+    } else if (recipes.length > 0) {
       const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
       setEditItems([
         ...editItems,
         {
           recipeId: recipes[0].id,
+          description: `Barril 50L - ${recipes[0].name}`,
           quantity: 1,
           unitPrice: defaultPrice,
           totalPrice: defaultPrice,
+          kegCapacity: 50,
         },
       ]);
     }
@@ -813,11 +1145,12 @@ export default function PedidosPage() {
     // Collect informational stock notes for edit
     const stockNotes: string[] = [];
     for (const it of editItems) {
-      const stock = getStockAvailability(it.recipeId, 50, selectedOrder.id);
+      const cap = it.kegCapacity || 50;
+      const stock = getStockAvailability(it.recipeId, cap, selectedOrder.id);
       if (stock.available <= 0) {
-        stockNotes.push(`• ${stock.recipeName}: 0 barris livres na câmara fria (${stock.matchingTotal} total, ${stock.reserved} reservados)`);
+        stockNotes.push(`• ${stock.recipeName} (${cap}L): 0 barris livres na câmara fria (${stock.matchingTotal} total, ${stock.reserved} reservados)`);
       } else if (it.quantity > stock.available) {
-        stockNotes.push(`• ${stock.recipeName}: solicitado ${it.quantity} un, mas há ${stock.available} livres (${stock.reserved} reservados)`);
+        stockNotes.push(`• ${stock.recipeName} (${cap}L): solicitado ${it.quantity} un, mas há ${stock.available} livres (${stock.reserved} reservados)`);
       }
     }
 
@@ -2084,7 +2417,7 @@ export default function PedidosPage() {
                       </div>
                     ) : (
                       editItems.map((item, idx) => {
-                      const stock = getStockAvailability(item.recipeId, 50, selectedOrder?.id);
+                      const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50, selectedOrder?.id);
                       const isOutOfStock = stock.available <= 0;
                       const isInsufficient = !isOutOfStock && item.quantity > stock.available;
 
@@ -2097,19 +2430,53 @@ export default function PedidosPage() {
                               <RecipeSearchSelect
                                 recipeId={item.recipeId}
                                 recipes={recipes}
-                                onSelectRecipe={(r) => {
+                                kegs={kegs}
+                                orders={orders}
+                                onSelectRecipe={(r, recommendedCap) => {
                                   const updated = [...editItems];
+                                  const cap = recommendedCap || updated[idx].kegCapacity || 50;
                                   updated[idx].recipeId = r.id;
-                                  updated[idx].description = `Barril - ${r.name}`;
-                                  updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * 50;
+                                  updated[idx].kegCapacity = cap;
+                                  updated[idx].description = `Barril ${cap}L - ${r.name}`;
+                                  updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
                                   updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
                                   setEditItems(updated);
                                 }}
                               />
                             </div>
 
+                            {/* Capacidade */}
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Tamanho</label>
+                              <select
+                                value={item.kegCapacity || 50}
+                                onChange={(e) => {
+                                  const cap = parseInt(e.target.value, 10) || 50;
+                                  const updated = [...editItems];
+                                  updated[idx].kegCapacity = cap;
+                                  const r = recipes.find((rec) => rec.id === updated[idx].recipeId);
+                                  if (r) {
+                                    updated[idx].description = `Barril ${cap}L - ${r.name}`;
+                                    updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                    updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                  }
+                                  setEditItems(updated);
+                                }}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                              >
+                                {[50, 30, 20, 15, 10, 5].map((cap) => {
+                                  const avail = item.recipeId ? getStockAvailability(item.recipeId, cap, selectedOrder?.id).available : 0;
+                                  return (
+                                    <option key={cap} value={cap}>
+                                      {cap}L {avail > 0 ? `(${avail} livre${avail > 1 ? 's' : ''})` : ''}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+
                             {/* Quantidade */}
-                            <div className="col-span-3">
+                            <div className="col-span-2">
                               <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-center">Qtd</label>
                               <input
                                 type="number"
@@ -2128,7 +2495,7 @@ export default function PedidosPage() {
                             </div>
 
                             {/* Preço Unitário */}
-                            <div className="col-span-3">
+                            <div className="col-span-2">
                               <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-right">Unitário (R$)</label>
                               <input
                                 type="number"
@@ -2151,7 +2518,7 @@ export default function PedidosPage() {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveEditItemRow(idx)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                 title="Excluir este item"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -2166,7 +2533,7 @@ export default function PedidosPage() {
                                 <span className="flex items-center gap-1.5">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                   <span>
-                                    Estoque (50L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
+                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
                                     {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
                                   </span>
                                 </span>
@@ -2179,7 +2546,7 @@ export default function PedidosPage() {
                                 <span className="flex items-center gap-1.5">
                                   <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                                   <span>
-                                    Estoque (50L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será salvo normalmente para programação de envase)
+                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será salvo normalmente para programação de envase)
                                   </span>
                                 </span>
                                 <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded font-black">
@@ -2740,10 +3107,13 @@ export default function PedidosPage() {
                               <RecipeSearchSelect
                                 recipeId={item.recipeId}
                                 recipes={recipes}
-                                onSelectRecipe={(r) => {
+                                kegs={kegs}
+                                orders={orders}
+                                onSelectRecipe={(r, recommendedCap) => {
                                   const newItems = [...orderItems];
+                                  const cap = recommendedCap || item.kegCapacity || 50;
                                   newItems[idx].recipeId = r.id;
-                                  const cap = item.kegCapacity || 50;
+                                  newItems[idx].kegCapacity = cap;
                                   newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
                                   setOrderItems(newItems);
                                 }}
@@ -2767,12 +3137,14 @@ export default function PedidosPage() {
                                 }}
                                 className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
                               >
-                                <option value="50">50 Litros</option>
-                                <option value="30">30 Litros</option>
-                                <option value="20">20 Litros</option>
-                                <option value="15">15 Litros</option>
-                                <option value="10">10 Litros</option>
-                                <option value="5">5 Litros</option>
+                                {[50, 30, 20, 15, 10, 5].map((cap) => {
+                                  const avail = item.recipeId ? getStockAvailability(item.recipeId, cap).available : 0;
+                                  return (
+                                    <option key={cap} value={cap}>
+                                      {cap}L {avail > 0 ? `(${avail} livre${avail > 1 ? 's' : ''})` : ''}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </div>
 

@@ -76,12 +76,26 @@ export async function POST(req: NextRequest) {
 
       for (const item of items) {
         let desc = item.description;
-        if (!desc && item.recipeId) {
-          const recipe = await prisma.beerRecipe.findUnique({ where: { id: item.recipeId } });
-          const cap = parseInt(item.kegCapacity, 10) || 50;
-          desc = `Barril ${cap}L - ${recipe?.name || 'Chopp Artesanal'}`;
+        let validRecipeId: string | null = null;
+        let recipeName: string | null = null;
+
+        if (item.recipeId && !item.recipeId.startsWith('keg-beer-')) {
+          try {
+            const recipe = await prisma.beerRecipe.findUnique({ where: { id: item.recipeId } });
+            if (recipe) {
+              validRecipeId = recipe.id;
+              recipeName = recipe.name;
+            }
+          } catch (e) {
+            console.warn('Invalid recipeId:', item.recipeId);
+          }
+        }
+
+        const cap = parseInt(item.kegCapacity, 10) || 50;
+        if (recipeName) {
+          desc = `Barril ${cap}L - ${recipeName}`;
         } else if (!desc) {
-          desc = 'Barril de Chopp';
+          desc = `Barril ${cap}L - Chopp Artesanal`;
         }
 
         const qty = parseFloat(item.quantity) || 1;
@@ -90,7 +104,7 @@ export async function POST(req: NextRequest) {
         computedSubtotal += tPrice;
 
         processedItems.push({
-          recipeId: item.recipeId || null,
+          recipeId: validRecipeId,
           kegId: item.kegId || null,
           description: desc,
           quantity: qty,
