@@ -553,7 +553,7 @@ export default function ProducaoPage() {
         <div className="flex space-x-2 overflow-x-auto">
           {[
             { id: 'PRODUCTION_TANKS', label: 'Produção & Tanques', count: tanks.length, icon: Flame },
-            { id: 'HISTORY_MAPA', label: 'Histórico & Dossiês MAPA', count: historicalBatches.length, icon: ShieldCheck },
+            { id: 'HISTORY_MAPA', label: 'Lotes Finalizados', count: historicalBatches.length, icon: ShieldCheck },
             { id: 'RECIPES', label: 'Catálogo de Receitas', count: recipes.length, icon: Beer },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -1385,14 +1385,14 @@ export default function ProducaoPage() {
         </div>
       )}
 
-      {/* ABA 3: HISTÓRICO DE DOSSIÊS MAPA */}
+      {/* ABA 2: LOTES FINALIZADOS */}
       {activeTab === 'HISTORY_MAPA' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
           <div className="p-4 border-b border-slate-800 flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-white text-sm">Arquivo Histórico de Lotes & Dossiês MAPA</h3>
+              <h3 className="font-bold text-white text-sm">Lotes Finalizados</h3>
               <p className="text-xs text-slate-400">
-                Lotes finalizados ou envasados com rastreabilidade arquivada para consulta fiscal.
+                Lotes finalizados ou envasados com rastreabilidade arquivada para consulta fiscal e dossiês MAPA.
               </p>
             </div>
             <span className="text-xs text-slate-400 font-mono">{filteredHistory.length} lotes</span>
