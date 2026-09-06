@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import {
   QrCode,
@@ -22,6 +22,7 @@ import {
   Zap,
   ArrowRightLeft,
   TrendingDown,
+  Package,
 } from 'lucide-react';
 import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
 import KegTimelineModal from '@/components/kegs/KegTimelineModal';
@@ -45,8 +46,10 @@ export default function ScannerPage() {
   const [fillSourceType, setFillSourceType] = useState<'BATCH' | 'QUICK'>('BATCH');
   const [quickBeerName, setQuickBeerName] = useState('');
   const [quickBatchNumber, setQuickBatchNumber] = useState('');
+  const [selectedStockBeerKey, setSelectedStockBeerKey] = useState<string>('');
   const [isPartialFill, setIsPartialFill] = useState(false);
   const [fillVolumeLiters, setFillVolumeLiters] = useState('35');
+  const [kegsList, setKegsList] = useState<any[]>([]);
 
   // Trasfega & Blends (Transfer) State
   const [transferStep, setTransferStep] = useState<'SOURCE' | 'TARGET'>('SOURCE');
@@ -81,8 +84,19 @@ export default function ScannerPage() {
   const [batchScannedCodes, setBatchScannedCodes] = useState<string[]>([]);
   const [timelineOpen, setTimelineOpen] = useState(false);
 
+  const loadKegs = () => {
+    fetch('/api/kegs')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setKegsList(data);
+        }
+      })
+      .catch(() => {});
+  };
+
   useEffect(() => {
-    // Load active batches and clients
+    // Load active batches, clients and kegs
     fetch('/api/batches')
       .then((res) => res.json())
       .then((data) => {
@@ -102,7 +116,48 @@ export default function ScannerPage() {
         }
       })
       .catch(() => {});
+
+    loadKegs();
   }, []);
+
+  // Group beers currently in stock by name + batch for quick fill picker
+  const stockBeers = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        beerName: string;
+        batchNumber: string;
+        kegCount: number;
+        totalVolume: number;
+      }
+    >();
+
+    kegsList.forEach((k) => {
+      if (['EM_ESTOQUE', 'ENVASADO'].includes(k.status) && k.currentBeerName) {
+        const bName = k.currentBeerName.trim();
+        const bNum = k.currentBatch?.batchNumber || '';
+        const key = `${bName}:::${bNum}`;
+        const vol = k.currentVolumeLiters !== null && k.currentVolumeLiters !== undefined
+          ? Number(k.currentVolumeLiters)
+          : Number(k.capacity);
+
+        if (!map.has(key)) {
+          map.set(key, {
+            beerName: bName,
+            batchNumber: bNum,
+            kegCount: 1,
+            totalVolume: vol,
+          });
+        } else {
+          const item = map.get(key)!;
+          item.kegCount += 1;
+          item.totalVolume += vol;
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.totalVolume - a.totalVolume);
+  }, [kegsList]);
 
   const handleScan = async (code: string) => {
     if (!code) return;
@@ -265,6 +320,7 @@ export default function ScannerPage() {
         setBatchScannedCodes((prev) => [code, ...prev.filter((c) => c !== code)]);
         setScannedItem(data.item);
         setItemType('KEG');
+        loadKegs();
       }
     } catch (err: any) {
       setFeedbackMessage({ text: err.message, type: 'error' });
@@ -307,6 +363,7 @@ export default function ScannerPage() {
         setScannedItem(data.targetKeg);
         setItemType('KEG');
       }
+      loadKegs();
     } catch (err: any) {
       setFeedbackMessage({ text: err.message, type: 'error' });
     } finally {
@@ -346,6 +403,7 @@ export default function ScannerPage() {
         setScannedItem(data.keg);
       }
       setLossNotes('');
+      loadKegs();
     } catch (err: any) {
       setFeedbackMessage({ text: err.message, type: 'error' });
     } finally {
@@ -525,21 +583,79 @@ export default function ScannerPage() {
               </select>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
+              {stockBeers.length > 0 && (
+                <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-black text-purple-950 dark:text-purple-200 text-xs flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-purple-600" />
+                      Cerveja do Estoque (Opcional):
+                    </label>
+                    <span className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">
+                      {stockBeers.length} disponível(is)
+                    </span>
+                  </div>
+                  <select
+                    value={selectedStockBeerKey}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedStockBeerKey(val);
+                      if (val) {
+                        const found = stockBeers.find((b) => `${b.beerName}:::${b.batchNumber}` === val);
+                        if (found) {
+                          setQuickBeerName(found.beerName);
+                          setQuickBatchNumber(found.batchNumber);
+                        }
+                      }
+                    }}
+                    className="w-full p-2 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-lg font-bold text-slate-900 dark:text-white shadow-2xs text-xs"
+                  >
+                    <option value="">-- Selecione uma cerveja em estoque --</option>
+                    {stockBeers.map((b) => (
+                      <option key={`${b.beerName}:::${b.batchNumber}`} value={`${b.beerName}:::${b.batchNumber}`}>
+                        {b.beerName} {b.batchNumber ? `(Lote: ${b.batchNumber})` : ''} — {b.kegCount} barril(is), {b.totalVolume}L
+                      </option>
+                    ))}
+                  </select>
+                  {selectedStockBeerKey && (
+                    <div className="flex items-center justify-between pt-0.5 text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
+                      <span className="flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                        Replicando dados do estoque. Pode ajustar abaixo se desejar.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedStockBeerKey('');
+                          setQuickBeerName('');
+                          setQuickBatchNumber('');
+                        }}
+                        className="underline text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
-                  ⚡ Nome do Chopp / Cerveja:
+                <label className="font-black text-purple-950 dark:text-purple-200 block mb-1 text-xs">
+                  ⚡ Nome do Chopp / Cerveja: *
                 </label>
                 <input
                   type="text"
                   value={quickBeerName}
-                  onChange={(e) => setQuickBeerName(e.target.value)}
+                  onChange={(e) => {
+                    setQuickBeerName(e.target.value);
+                    if (selectedStockBeerKey) setSelectedStockBeerKey('');
+                  }}
                   placeholder="Ex: Pilsen Puro Malte, IPA Cigana, Cerveja X..."
-                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs text-xs"
                 />
               </div>
               <div>
-                <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
+                <label className="font-black text-purple-950 dark:text-purple-200 block mb-1 text-xs">
                   🏷️ Número do Lote (opcional):
                 </label>
                 <input
@@ -547,7 +663,7 @@ export default function ScannerPage() {
                   value={quickBatchNumber}
                   onChange={(e) => setQuickBatchNumber(e.target.value)}
                   placeholder="Ex: AV-01, LOTE-102..."
-                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs text-xs"
                 />
               </div>
               <p className="text-[11px] text-purple-900/80 dark:text-purple-300">
