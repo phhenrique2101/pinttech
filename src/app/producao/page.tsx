@@ -58,6 +58,11 @@ export default function ProducaoPage() {
   const [batchSortBy, setBatchSortBy] = useState<'tank' | 'batchNumber' | 'recipe' | 'brewDate' | 'status' | 'volume'>('tank');
   const [batchSortOrder, setBatchSortOrder] = useState<'asc' | 'desc'>('asc');
 
+  // View mode and sorting state for Tanks
+  const [tankViewMode, setTankViewMode] = useState<'CARDS' | 'ROWS'>('CARDS');
+  const [tankSortBy, setTankSortBy] = useState<'name' | 'status' | 'capacity' | 'type' | 'occupation' | 'batch'>('name');
+  const [tankSortOrder, setTankSortOrder] = useState<'asc' | 'desc'>('asc');
+
   // Tank filter state
   const [tankStatusFilter, setTankStatusFilter] = useState<string>('ALL');
 
@@ -167,6 +172,17 @@ export default function ProducaoPage() {
 
       const savedOrder = localStorage.getItem('pinttech_batch_sort_order');
       if (savedOrder === 'asc' || savedOrder === 'desc') setBatchSortOrder(savedOrder);
+
+      const savedTankMode = localStorage.getItem('pinttech_tank_view_mode');
+      if (savedTankMode === 'CARDS' || savedTankMode === 'ROWS') setTankViewMode(savedTankMode);
+
+      const savedTankSort = localStorage.getItem('pinttech_tank_sort_by');
+      if (savedTankSort && ['name', 'status', 'capacity', 'type', 'occupation', 'batch'].includes(savedTankSort)) {
+        setTankSortBy(savedTankSort as any);
+      }
+
+      const savedTankOrder = localStorage.getItem('pinttech_tank_sort_order');
+      if (savedTankOrder === 'asc' || savedTankOrder === 'desc') setTankSortOrder(savedTankOrder);
     } catch {
       // ignore
     }
@@ -308,6 +324,80 @@ export default function ProducaoPage() {
       return matchesStatus && matchesSearch;
     });
   }, [tanks, tankStatusFilter, search]);
+
+  // Ordenação de Tanques
+  const sortedTanks = useMemo(() => {
+    return [...filteredTanks].sort((a, b) => {
+      let comp = 0;
+      switch (tankSortBy) {
+        case 'name':
+          comp = (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        case 'status':
+          comp = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'capacity':
+          comp = Number(a.capacityLiters || 0) - Number(b.capacityLiters || 0);
+          break;
+        case 'type':
+          comp = (a.type || '').localeCompare(b.type || '');
+          break;
+        case 'occupation': {
+          const batchA = (a.batches || []).find((b: any) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO') || a.batches?.[0];
+          const isOccA = a.status === 'OCUPADO';
+          const volA = isOccA && batchA ? (batchA.volumeProducedLiters || batchA.volumePlannedLiters || a.capacityLiters) : 0;
+          const fillA = a.capacityLiters > 0 ? (volA / a.capacityLiters) : 0;
+
+          const batchB = (b.batches || []).find((b: any) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO') || b.batches?.[0];
+          const isOccB = b.status === 'OCUPADO';
+          const volB = isOccB && batchB ? (batchB.volumeProducedLiters || batchB.volumePlannedLiters || b.capacityLiters) : 0;
+          const fillB = b.capacityLiters > 0 ? (volB / b.capacityLiters) : 0;
+
+          comp = fillA - fillB;
+          break;
+        }
+        case 'batch': {
+          const batchA = (a.batches || []).find((b: any) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO') || a.batches?.[0];
+          const batchB = (b.batches || []).find((b: any) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO') || b.batches?.[0];
+          const textA = batchA ? `${batchA.batchNumber || ''} ${batchA.recipe?.name || ''}` : '';
+          const textB = batchB ? `${batchB.batchNumber || ''} ${batchB.recipe?.name || ''}` : '';
+          if (!textA && textB) comp = 1;
+          else if (textA && !textB) comp = -1;
+          else comp = textA.localeCompare(textB, undefined, { sensitivity: 'base' });
+          break;
+        }
+      }
+      return tankSortOrder === 'asc' ? comp : -comp;
+    });
+  }, [filteredTanks, tankSortBy, tankSortOrder]);
+
+  const changeTankViewMode = (mode: 'CARDS' | 'ROWS') => {
+    setTankViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_tank_view_mode', mode);
+    } catch {}
+  };
+
+  const handleTankSortChange = (field: 'name' | 'status' | 'capacity' | 'type' | 'occupation' | 'batch') => {
+    let newOrder: 'asc' | 'desc' = 'asc';
+    if (tankSortBy === field) {
+      newOrder = tankSortOrder === 'asc' ? 'desc' : 'asc';
+    }
+    setTankSortBy(field);
+    setTankSortOrder(newOrder);
+    try {
+      localStorage.setItem('pinttech_tank_sort_by', field);
+      localStorage.setItem('pinttech_tank_sort_order', newOrder);
+    } catch {}
+  };
+
+  const toggleTankSortOrder = () => {
+    const newOrder = tankSortOrder === 'asc' ? 'desc' : 'asc';
+    setTankSortOrder(newOrder);
+    try {
+      localStorage.setItem('pinttech_tank_sort_order', newOrder);
+    } catch {}
+  };
 
   const handleUpdateBatchStatus = async () => {
     if (!editingBatchStatus) return;
@@ -1088,7 +1178,7 @@ export default function ProducaoPage() {
       {/* ABA 2: TANQUES DA ADEGA */}
       {activeTab === 'TANKS' && (
         <div className="space-y-4">
-          {/* Barra de Filtros de Tanques */}
+          {/* Barra de Filtros de Tanques e Novo Tanque */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-1.5 flex-wrap">
               {[
@@ -1121,7 +1211,94 @@ export default function ProducaoPage() {
             </button>
           </div>
 
-          {filteredTanks.length === 0 ? (
+          {/* Barra de Ferramentas e Ordenação de Tanques */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-300">
+                Tanques na Adega:
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                {sortedTanks.length} {sortedTanks.length === 1 ? 'tanque' : 'tanques'}
+              </span>
+              {(tankStatusFilter !== 'ALL' || search.trim()) && (
+                <span className="text-[11px] text-slate-400">
+                  (de {tanks.length})
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center flex-wrap gap-2.5">
+              {/* Classificação / Ordenação */}
+              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden sm:inline">Ordenar:</span>
+                </span>
+                <select
+                  value={tankSortBy}
+                  onChange={(e) => {
+                    const val = e.target.value as any;
+                    setTankSortBy(val);
+                    try { localStorage.setItem('pinttech_tank_sort_by', val); } catch {}
+                  }}
+                  className="bg-transparent text-xs text-amber-300 font-semibold focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="name" className="bg-slate-900 text-slate-200">Nome do Tanque</option>
+                  <option value="status" className="bg-slate-900 text-slate-200">Status</option>
+                  <option value="capacity" className="bg-slate-900 text-slate-200">Capacidade (Litros)</option>
+                  <option value="type" className="bg-slate-900 text-slate-200">Tipo de Tanque</option>
+                  <option value="occupation" className="bg-slate-900 text-slate-200">Ocupação (%)</option>
+                  <option value="batch" className="bg-slate-900 text-slate-200">Lote / Cerveja</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={toggleTankSortOrder}
+                  className="p-1 rounded-md hover:bg-slate-800 text-slate-300 hover:text-amber-400 transition"
+                  title={tankSortOrder === 'asc' ? 'Ordem Crescente (clique para Decrescente)' : 'Ordem Decrescente (clique para Crescente)'}
+                >
+                  {tankSortOrder === 'asc' ? (
+                    <ArrowUp className="w-3.5 h-3.5 text-amber-400" />
+                  ) : (
+                    <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                  )}
+                </button>
+              </div>
+
+              {/* Alternador Grade / Linhas */}
+              <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => changeTankViewMode('CARDS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    tankViewMode === 'CARDS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Visualizar como Grade / Cards"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Cards</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeTankViewMode('ROWS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    tankViewMode === 'ROWS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Visualizar como Linhas / Tabela"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Linhas</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {sortedTanks.length === 0 ? (
             <div className="p-12 text-center bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl space-y-3 text-slate-400">
               <Cylinder className="w-12 h-12 mx-auto text-slate-500" />
               <h4 className="text-sm font-bold text-white">Nenhum tanque encontrado</h4>
@@ -1134,9 +1311,287 @@ export default function ProducaoPage() {
                 <span>Novo Tanque</span>
               </button>
             </div>
+          ) : tankViewMode === 'ROWS' ? (
+            /* VISUALIZAÇÃO EM LINHAS (TABELA) */
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-950 text-slate-300 font-bold border-b border-slate-800">
+                    <tr>
+                      <th
+                        onClick={() => handleTankSortChange('name')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Nome do Tanque"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Tanque & Tipo</span>
+                          {tankSortBy === 'name' ? (
+                            tankSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTankSortChange('status')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Status"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Status</span>
+                          {tankSortBy === 'status' ? (
+                            tankSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTankSortChange('capacity')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Capacidade"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Capacidade</span>
+                          {tankSortBy === 'capacity' ? (
+                            tankSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTankSortChange('occupation')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Ocupação"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Ocupação</span>
+                          {tankSortBy === 'occupation' ? (
+                            tankSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTankSortChange('batch')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Lote / Cerveja"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Lote Contido / Cerveja</span>
+                          {tankSortBy === 'batch' ? (
+                            tankSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th className="p-3.5">OG / FG / ABV</th>
+                      <th className="p-3.5 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {sortedTanks.map((tank) => {
+                      const isOccupied = tank.status === 'OCUPADO';
+                      const activeBatch = (tank.batches || []).find((b: any) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO') || tank.batches?.[0];
+                      const volumeInTank = activeBatch ? (activeBatch.volumeProducedLiters || activeBatch.volumePlannedLiters || tank.capacityLiters) : 0;
+                      const fillPercent = tank.capacityLiters > 0 ? Math.min(100, Math.round((volumeInTank / tank.capacityLiters) * 100)) : 0;
+
+                      return (
+                        <tr key={tank.id} className="hover:bg-slate-800/40 transition group">
+                          {/* Tanque & Tipo */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                  tank.status === 'OCUPADO'
+                                    ? 'bg-purple-400 animate-pulse'
+                                    : tank.status === 'LIVRE'
+                                    ? 'bg-emerald-400'
+                                    : tank.status === 'HIGIENIZANDO'
+                                    ? 'bg-blue-400'
+                                    : 'bg-amber-400'
+                                }`}
+                              />
+                              <div>
+                                <strong className="text-white block text-xs group-hover:text-amber-300 transition">
+                                  {tank.name}
+                                </strong>
+                                <span className="text-[11px] text-slate-400">
+                                  {tank.type || 'Fermentador Cônico'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block ${
+                                tank.status === 'OCUPADO'
+                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                  : tank.status === 'LIVRE'
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                  : tank.status === 'HIGIENIZANDO'
+                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {tank.status}
+                            </span>
+                          </td>
+
+                          {/* Capacidade */}
+                          <td className="p-3.5 whitespace-nowrap font-mono font-bold text-xs text-slate-200">
+                            {tank.capacityLiters}L
+                          </td>
+
+                          {/* Ocupação */}
+                          <td className="p-3.5 whitespace-nowrap min-w-[140px]">
+                            <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 mb-1">
+                              <span>{isOccupied ? `${fillPercent}%` : '0%'}</span>
+                              <span className="text-slate-400">{isOccupied ? `${volumeInTank}L` : 'Vazio'}</span>
+                            </div>
+                            <div className="w-28 h-1.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+                              <div
+                                className={`h-full transition-all duration-300 ${
+                                  isOccupied ? 'bg-gradient-to-r from-amber-500 to-amber-400' : 'bg-slate-700'
+                                }`}
+                                style={{ width: `${isOccupied ? fillPercent : 0}%` }}
+                              />
+                            </div>
+                          </td>
+
+                          {/* Lote Contido / Cerveja */}
+                          <td className="p-3.5 min-w-[180px]">
+                            {isOccupied && activeBatch ? (
+                              <div>
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    #{activeBatch.batchNumber}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {activeBatch.status}
+                                  </span>
+                                </div>
+                                <strong className="text-white block text-xs truncate max-w-[200px]">
+                                  {activeBatch.recipe?.name || 'Cerveja'}
+                                </strong>
+                                <span className="text-[11px] text-slate-400 block truncate max-w-[200px]">
+                                  {activeBatch.recipe?.style || 'Standard'}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 italic text-[11px]">
+                                {tank.status === 'LIVRE' ? 'Tanque livre' : tank.status === 'HIGIENIZANDO' ? 'Em sanitização (CIP)' : 'Em manutenção'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Parâmetros Vitais */}
+                          <td className="p-3.5 whitespace-nowrap font-mono text-[11px] text-slate-300">
+                            {isOccupied && activeBatch ? (
+                              <div>
+                                <div>OG: {activeBatch.measuredOg || activeBatch.recipe?.og || '—'} / FG: {activeBatch.measuredFg || activeBatch.recipe?.fg || '—'}</div>
+                                <div className="text-[10px] text-emerald-400 font-semibold">
+                                  {activeBatch.measuredAbv || activeBatch.recipe?.abv || '—'}% ABV
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                          </td>
+
+                          {/* Ações */}
+                          <td className="p-3.5 whitespace-nowrap text-right">
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              {isOccupied && activeBatch ? (
+                                <>
+                                  <button
+                                    onClick={() => setSelectedBatchForManager(activeBatch)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold inline-flex items-center gap-1.5 transition shadow-xs"
+                                    title="Adega & Medições"
+                                  >
+                                    <Activity className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="hidden lg:inline">Adega</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleLiberateTank(tank)}
+                                    className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold inline-flex items-center gap-1 transition border border-slate-700"
+                                    title="Desocupar e Liberar Tanque"
+                                  >
+                                    <span className="hidden lg:inline">Liberar</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <div className="inline-flex items-center gap-1 mr-1">
+                                  <button
+                                    onClick={() => handleQuickTankStatus(tank.id, 'LIVRE')}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold ${tank.status === 'LIVRE' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                    title="Marcar como Livre"
+                                  >
+                                    Livre
+                                  </button>
+                                  <button
+                                    onClick={() => handleQuickTankStatus(tank.id, 'HIGIENIZANDO')}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold ${tank.status === 'HIGIENIZANDO' ? 'bg-blue-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                    title="Marcar como CIP / Higienizando"
+                                  >
+                                    CIP
+                                  </button>
+                                  <button
+                                    onClick={() => handleQuickTankStatus(tank.id, 'MANUTENCAO')}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold ${tank.status === 'MANUTENCAO' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                    title="Marcar como Manutenção"
+                                  >
+                                    Manut.
+                                  </button>
+                                </div>
+                              )}
+
+                              <button
+                                onClick={() => openEditTankModal(tank)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+                                title="Editar Tanque"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  setItemToDelete({
+                                    type: 'TANK',
+                                    id: tank.id,
+                                    title: tank.name,
+                                    subtitle: `${tank.capacityLiters}L • ${tank.type}`,
+                                  })
+                                }
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition"
+                                title="Excluir Tanque"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : (
+            /* VISUALIZAÇÃO EM GRADE (CARDS) */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredTanks.map((tank) => {
+              {sortedTanks.map((tank) => {
                 const isOccupied = tank.status === 'OCUPADO';
                 const activeBatch = (tank.batches || []).find((b: any) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO') || tank.batches?.[0];
                 const volumeInTank = activeBatch ? (activeBatch.volumeProducedLiters || activeBatch.volumePlannedLiters || tank.capacityLiters) : 0;
