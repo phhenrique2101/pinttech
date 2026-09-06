@@ -412,7 +412,7 @@ export default function ScannerPage() {
       )}
 
       {/* Camera Barcode Scanner Viewport */}
-      <BarcodeScanner onScan={handleScan} isProcessing={loading} />
+      <BarcodeScanner onScan={handleScan} isProcessing={loading} storageKey="pinttech_scanner_pwa_collapsed" />
 
       {/* Live Feedback Banner */}
       {feedbackMessage && (

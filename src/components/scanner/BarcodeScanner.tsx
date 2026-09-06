@@ -1,20 +1,55 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Camera, CameraOff, Sparkles, Volume2, VolumeX, Keyboard, RefreshCw } from 'lucide-react';
+import {
+  Camera,
+  CameraOff,
+  Volume2,
+  VolumeX,
+  Keyboard,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+} from 'lucide-react';
 
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
   isProcessing?: boolean;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
+  storageKey?: string;
+  title?: string;
 }
 
-export default function BarcodeScanner({ onScan, isProcessing = false }: BarcodeScannerProps) {
+export default function BarcodeScanner({
+  onScan,
+  isProcessing = false,
+  collapsible = true,
+  defaultCollapsed = false,
+  storageKey = 'pinttech_scanner_camera_collapsed',
+  title = 'Câmera do Scanner',
+}: BarcodeScannerProps) {
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
   const [isScanning, setIsScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [scannerInstance, setScannerInstance] = useState<any>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Restore collapsed preference from localStorage
+  useEffect(() => {
+    if (!collapsible || !storageKey) return;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved !== null) {
+        setIsCollapsed(saved === 'true');
+      }
+    } catch (e) {
+      // Ignore in private/restricted browsing
+    }
+  }, [collapsible, storageKey]);
 
   // Play satisfying scanner beep using Web Audio API
   const playBeep = () => {
@@ -91,6 +126,7 @@ export default function BarcodeScanner({ onScan, isProcessing = false }: Barcode
         console.error('Error stopping scanner', err);
       }
     }
+    setScannerInstance(null);
     setIsScanning(false);
   };
 
@@ -102,6 +138,26 @@ export default function BarcodeScanner({ onScan, isProcessing = false }: Barcode
     };
   }, [scannerInstance]);
 
+  const setCollapsedMode = async (collapsed: boolean) => {
+    if (collapsed === isCollapsed) return;
+    if (collapsed && isScanning) {
+      await stopScanner();
+    }
+    setIsCollapsed(collapsed);
+    if (storageKey) {
+      try {
+        localStorage.setItem(storageKey, String(collapsed));
+      } catch (e) {}
+    }
+    if (collapsed) {
+      setTimeout(() => inputRef.current?.focus(), 150);
+    }
+  };
+
+  const toggleCollapse = () => {
+    setCollapsedMode(!isCollapsed);
+  };
+
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualCode.trim()) return;
@@ -111,106 +167,209 @@ export default function BarcodeScanner({ onScan, isProcessing = false }: Barcode
   };
 
   return (
-    <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-6 shadow-xl border border-slate-800 flex flex-col items-center">
-      {/* Scanner Controls Header */}
-      <div className="w-full flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-            Leitor de Código de Barras / QR Code
-          </span>
+    <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-800 flex flex-col items-center transition-all duration-300">
+      {/* Scanner Mode Tabs & Retract Controls Header */}
+      <div className="w-full flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800">
+        {/* Segmented Tabs: Câmera vs Manual / Laser */}
+        <div className="flex items-center p-1 bg-slate-950 rounded-xl border border-slate-800/80">
+          <button
+            type="button"
+            onClick={() => setCollapsedMode(false)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              !isCollapsed
+                ? 'bg-amber-500 text-white shadow-md font-black'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>Câmera</span>
+            {isScanning && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCollapsedMode(true)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              isCollapsed
+                ? 'bg-slate-800 text-amber-400 shadow-md font-black border border-slate-700/60'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+            <span>Manual / Laser</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action Controls: Sound Toggle & Quick Retract/Expand */}
+        <div className="flex items-center gap-1.5">
           <button
+            type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
             className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
-            title={soundEnabled ? 'Desativar Som' : 'Ativar Som'}
+            title={soundEnabled ? 'Desativar Som do Bip' : 'Ativar Som do Bip'}
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+            {soundEnabled ? (
+              <Volume2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <VolumeX className="w-4 h-4 text-slate-500" />
+            )}
           </button>
-        </div>
-      </div>
 
-      {/* Viewport for Camera Scanning */}
-      <div className="relative w-full max-w-sm aspect-[4/3] bg-slate-950 rounded-xl overflow-hidden border-2 border-slate-700 flex flex-col items-center justify-center">
-        <div id="qr-reader-viewport" className="w-full h-full" />
-
-        {!isScanning && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-950/90">
-            <Camera className="w-12 h-12 text-slate-600 mb-3 animate-bounce" />
-            <p className="text-sm font-semibold text-slate-300 mb-1">Câmera em Espera</p>
-            <p className="text-xs text-slate-500 mb-4 max-w-xs">
-              Toque no botão abaixo para ativar a câmera e apontar para a etiqueta do barril.
-            </p>
+          {collapsible && (
             <button
-              onClick={startScanner}
-              disabled={isProcessing}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-amber-500/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              type="button"
+              onClick={toggleCollapse}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                isCollapsed
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title={isCollapsed ? 'Abrir visor da câmera' : 'Recolher câmera para limpar a tela'}
             >
-              <Camera className="w-4 h-4" />
-              Ativar Câmera Scanner
+              {isCollapsed ? (
+                <>
+                  <ChevronDown className="w-4 h-4 text-amber-400" />
+                  <span className="text-[11px]">Abrir Câmera</span>
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                  <span className="text-[11px]">Recolher</span>
+                </>
+              )}
             </button>
-          </div>
-        )}
-
-        {isScanning && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-            {/* Viewfinder Target frame */}
-            <div className="w-56 h-36 border-2 border-amber-400/80 rounded-lg relative shadow-2xl">
-              {/* Corner markers */}
-              <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-amber-400" />
-              <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-amber-400" />
-              <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-amber-400" />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-amber-400" />
-              
-              {/* Animated Laser Line */}
-              <div className="absolute left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_8px_#ef4444] scanner-laser" />
-            </div>
-            <p className="text-[11px] text-amber-300 font-medium mt-3 bg-slate-900/80 px-2 py-0.5 rounded">
-              Alinhe o código de barras ou QR Code
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {isScanning && (
-        <div className="mt-3">
+      {/* Retracted / Collapsed Banner */}
+      {isCollapsed && (
+        <div className="w-full flex items-center justify-between py-1 px-2 bg-slate-950/60 rounded-xl border border-slate-800/60 mb-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-slate-500" />
+            <p className="text-[11px] text-slate-400">
+              Câmera recolhida. Tela livre para bipar ou consultar.
+            </p>
+          </div>
           <button
-            onClick={stopScanner}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg flex items-center gap-1.5"
+            type="button"
+            onClick={() => setCollapsedMode(false)}
+            className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2"
           >
-            <CameraOff className="w-3.5 h-3.5" />
-            Desligar Câmera
+            Ativar Câmera
           </button>
         </div>
       )}
 
-      {errorMessage && (
-        <div className="mt-3 p-2.5 bg-rose-950/60 border border-rose-800 text-rose-300 text-xs rounded-xl text-center max-w-sm">
-          {errorMessage}
+      {/* Expanded Camera Viewport */}
+      {!isCollapsed && (
+        <div className="w-full flex flex-col items-center animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm aspect-[4/3] bg-slate-950 rounded-xl overflow-hidden border-2 border-slate-700 flex flex-col items-center justify-center">
+            <div id="qr-reader-viewport" className="w-full h-full" />
+
+            {!isScanning && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-950/90">
+                <Camera className="w-12 h-12 text-slate-600 mb-3 animate-bounce" />
+                <p className="text-sm font-semibold text-slate-300 mb-1">Câmera em Espera</p>
+                <p className="text-xs text-slate-500 mb-4 max-w-xs">
+                  Toque no botão abaixo para ativar a câmera e apontar para a etiqueta do barril.
+                </p>
+                <button
+                  type="button"
+                  onClick={startScanner}
+                  disabled={isProcessing}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-amber-500/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <Camera className="w-4 h-4" />
+                  Ativar Câmera Scanner
+                </button>
+              </div>
+            )}
+
+            {isScanning && (
+              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                {/* Viewfinder Target frame */}
+                <div className="w-56 h-36 border-2 border-amber-400/80 rounded-lg relative shadow-2xl">
+                  {/* Corner markers */}
+                  <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-amber-400" />
+                  <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-amber-400" />
+                  <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-amber-400" />
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-amber-400" />
+
+                  {/* Animated Laser Line */}
+                  <div className="absolute left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_8px_#ef4444] scanner-laser" />
+                </div>
+                <p className="text-[11px] text-amber-300 font-medium mt-3 bg-slate-900/80 px-2 py-0.5 rounded">
+                  Alinhe o código de barras ou QR Code
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Active Camera Action Bar */}
+          {isScanning && (
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={stopScanner}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg flex items-center gap-1.5"
+              >
+                <CameraOff className="w-3.5 h-3.5" />
+                Desligar Câmera
+              </button>
+              <button
+                type="button"
+                onClick={toggleCollapse}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg flex items-center gap-1.5"
+                title="Recolher câmera"
+              >
+                <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                Recolher
+              </button>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="mt-3 p-2.5 bg-rose-950/60 border border-rose-800 text-rose-300 text-xs rounded-xl text-center max-w-sm">
+              {errorMessage}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Manual Input / Physical USB/Bluetooth Laser Barcode Scanner Support */}
-      <div className="w-full max-w-sm mt-5 pt-4 border-t border-slate-800">
+      {/* Manual Input / Physical USB/Bluetooth Laser Barcode Scanner Form */}
+      <div
+        className={`w-full max-w-sm transition-all ${
+          isCollapsed ? 'mt-2' : 'mt-4 pt-4 border-t border-slate-800'
+        }`}
+      >
         <form onSubmit={handleManualSubmit} className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-            <Keyboard className="w-3.5 h-3.5" />
-            Digitação Rápida / Leitor Laser USB
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Keyboard className="w-3.5 h-3.5 text-amber-400" />
+              Digitação Rápida / Leitor Laser USB
+            </label>
+            {isCollapsed && (
+              <span className="text-[10px] text-amber-400 font-semibold">
+                Modo Rápido
+              </span>
+            )}
+          </div>
           <div className="flex gap-2">
             <input
+              ref={inputRef}
               type="text"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
               placeholder="Ex: BAR-50L-001 ou CHOP-EL-01"
-              className="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase font-mono"
+              className="flex-1 px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase font-mono shadow-inner"
             />
             <button
               type="submit"
               disabled={!manualCode.trim() || isProcessing}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl transition-all disabled:opacity-50 active:scale-95 shadow-md shadow-amber-500/20"
             >
               Bipar
             </button>
