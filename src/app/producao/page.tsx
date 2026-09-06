@@ -569,24 +569,49 @@ export default function ProducaoPage() {
         : t
     );
 
-    // Atualização otimista local
+    const updatedJson = JSON.stringify(updatedTasks);
+
+    // Atualização otimista local imediata
     setBatches((prevBatches) =>
       prevBatches.map((b) =>
         b.id === targetBatch.id
-          ? { ...b, tankTasksJson: JSON.stringify(updatedTasks) }
+          ? { ...b, tankTasksJson: updatedJson }
           : b
       )
     );
 
+    setSelectedBatchForManager((prev: any) =>
+      prev && prev.id === targetBatch.id
+        ? { ...prev, tankTasksJson: updatedJson }
+        : prev
+    );
+
     try {
-      await fetch(`/api/batches/${targetBatch.id}`, {
+      const res = await fetch(`/api/batches/${targetBatch.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tankTasksJson: JSON.stringify(updatedTasks) }),
+        body: JSON.stringify({ tankTasksJson: updatedJson }),
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro na resposta do servidor');
+      }
+
+      const savedBatch = await res.json();
+      if (savedBatch && savedBatch.tankTasksJson) {
+        setBatches((prevBatches) =>
+          prevBatches.map((b) =>
+            b.id === targetBatch.id
+              ? { ...b, tankTasksJson: savedBatch.tankTasksJson }
+              : b
+          )
+        );
+      }
     } catch (err) {
-      console.error('Erro ao salvar status da tarefa:', err);
-      fetchData();
+      console.error('Erro ao salvar status da tarefa no servidor:', err);
+      // Reverte em caso de falha de conexão buscando o estado real do banco
+      await fetchData();
     }
   };
 

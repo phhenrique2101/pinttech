@@ -381,6 +381,70 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = getSessionFromRequest(req);
+    if (!session || !session.breweryId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const existing = await prisma.productionBatch.findUnique({
+      where: { id: params.id },
+    });
+
+    if (!existing) return NextResponse.json({ error: 'Lote não encontrado' }, { status: 404 });
+
+    if (existing.breweryId !== session.breweryId && session.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Acesso não permitido' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const updateData: any = {};
+
+    if (body.tankTasksJson !== undefined) {
+      updateData.tankTasksJson = body.tankTasksJson
+        ? (typeof body.tankTasksJson === 'string' ? body.tankTasksJson : JSON.stringify(body.tankTasksJson))
+        : null;
+    }
+
+    if (body.fermentationLogsJson !== undefined) {
+      updateData.fermentationLogsJson = body.fermentationLogsJson
+        ? (typeof body.fermentationLogsJson === 'string' ? body.fermentationLogsJson : JSON.stringify(body.fermentationLogsJson))
+        : null;
+    }
+
+    if (body.status !== undefined) {
+      updateData.status = body.status;
+    }
+
+    if (body.notes !== undefined) {
+      updateData.notes = body.notes;
+    }
+
+    if (body.measuredOg !== undefined) {
+      updateData.measuredOg = body.measuredOg ? parseFloat(body.measuredOg) : null;
+    }
+    if (body.measuredFg !== undefined) {
+      updateData.measuredFg = body.measuredFg ? parseFloat(body.measuredFg) : null;
+    }
+    if (body.measuredAbv !== undefined) {
+      updateData.measuredAbv = body.measuredAbv ? parseFloat(body.measuredAbv) : null;
+    }
+
+    const updated = await prisma.productionBatch.update({
+      where: { id: params.id },
+      data: updateData,
+      include: {
+        recipe: true,
+        tank: true,
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    console.error('Erro ao atualizar lote via PATCH:', error);
+    return NextResponse.json({ error: 'Erro ao atualizar lote: ' + (error.message || '') }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = getSessionFromRequest(req);
