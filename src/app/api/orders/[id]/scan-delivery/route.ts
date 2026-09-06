@@ -52,18 +52,48 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // PROCESSAR BARRIL BIPADO NO PEDIDO
     // ----------------------------------------------------
     if (keg) {
+      // 1. O barril já foi bipado neste pedido?
+      const alreadyScannedItem = order.items.find((it) => it.kegId === keg.id);
+      if (alreadyScannedItem) {
+        return NextResponse.json(
+          {
+            error: `Barril ${keg.code} (${keg.currentBeerName || 'Chopp'}) já foi bipado e conferido neste pedido.`,
+            order,
+          },
+          { status: 400 }
+        );
+      }
+
       let isNewItem = false;
-      const existingItem = order.items.find((it) => it.kegId === keg.id);
+      const recipe = keg.currentBatch?.recipe;
+      const beerName = keg.currentBeerName || recipe?.name || 'Cerveja Artesanal';
+      const pricePerLiter = recipe?.salePricePerLiter || recipe?.suggestedPricePerLiter || 22.0;
+      const volume = keg.currentVolumeLiters || keg.capacity || 50;
+      const calculatedPrice = pricePerLiter * volume;
 
-      if (!existingItem) {
-        // Barril NÃO estava no pedido original -> Adicionar automaticamente e recalcular!
+      // 2. Existe um item no pedido sem barril vinculado que corresponda a esta cerveja?
+      const pendingItem = order.items.find(
+        (it) =>
+          !it.kegId &&
+          ((it.recipeId && it.recipeId === keg.currentBatch?.recipeId) ||
+            (!it.recipeId && it.description?.toLowerCase().includes(beerName.toLowerCase())))
+      );
+
+      if (pendingItem) {
+        // Vincula o barril físico ao item do pedido
+        await prisma.orderItem.update({
+          where: { id: pendingItem.id },
+          data: {
+            kegId: keg.id,
+            batchId: keg.currentBatchId || pendingItem.batchId,
+            description: `Barril ${keg.capacity}L - ${beerName} (${volume}L envasados)`,
+            unitPrice: pendingItem.unitPrice > 0 ? pendingItem.unitPrice : calculatedPrice,
+            totalPrice: pendingItem.totalPrice > 0 ? pendingItem.totalPrice : calculatedPrice,
+          },
+        });
+      } else {
+        // Pedido sem itens ou novo barril adicional adicionado na entrega -> Cria o item no pedido!
         isNewItem = true;
-        const recipe = keg.currentBatch?.recipe;
-        const beerName = keg.currentBeerName || recipe?.name || 'Cerveja Artesanal';
-        const pricePerLiter = recipe?.suggestedPricePerLiter || 22.0;
-        const volume = keg.currentVolumeLiters || keg.capacity;
-        const itemTotalPrice = pricePerLiter * volume;
-
         await prisma.orderItem.create({
           data: {
             orderId: order.id,
@@ -72,8 +102,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             kegId: keg.id,
             description: `Barril ${keg.capacity}L - ${beerName} (${volume}L envasados)`,
             quantity: 1,
-            unitPrice: itemTotalPrice,
-            totalPrice: itemTotalPrice,
+            unitPrice: calculatedPrice,
+            totalPrice: calculatedPrice,
           },
         });
       }
@@ -81,13 +111,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // Recalcular totais do pedido
       const allUpdatedItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });
       const newSubtotal = allUpdatedItems.reduce((acc, it) => acc + it.totalPrice, 0);
-      const newTotalAmount = newSubtotal + order.deliveryFee + order.cautionDeposit - order.discount;
+      const newTotalAmount = Math.max(0, newSubtotal + order.deliveryFee + order.cautionDeposit - order.discount);
+      const newRemainingAmount = Math.max(0, newTotalAmount - (order.paidAmount || 0));
+      const newPaymentStatus =
+        (order.paidAmount || 0) >= newTotalAmount && newTotalAmount > 0
+          ? 'PAGO'
+          : (order.paidAmount || 0) > 0
+          ? 'PARCIAL'
+          : 'PENDENTE';
 
       const updatedOrder = await prisma.order.update({
         where: { id: order.id },
         data: {
           subtotal: newSubtotal,
           totalAmount: newTotalAmount,
+          remainingAmount: newRemainingAmount,
+          paymentStatus: newPaymentStatus,
           status: 'ENTREGUE',
         },
         include: {
@@ -104,7 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           where: { id: primaryTx.id },
           data: {
             amount: newTotalAmount,
-            description: `Faturamento Pedido ${order.orderNumber} - ${order.client.tradeName || order.client.name} (Atualizado)`,
+            description: `Faturamento Pedido ${order.orderNumber} - ${order.client.tradeName || order.client.name} (Atualizado via Bipe)`,
           },
         });
       }
@@ -134,7 +173,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           toStatus: 'NO_CLIENTE',
           volumeLiters: keg.currentVolumeLiters || keg.capacity,
           userName: session.name,
-          driverName: session.name,
+          driverName: order.driverName || session.name,
           notes: isNewItem
             ? `Entregue via bipe e adicionado automaticamente ao pedido ${order.orderNumber}`
             : `Entregue no pedido ${order.orderNumber}`,

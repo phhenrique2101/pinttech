@@ -532,6 +532,7 @@ model Order {
   remainingAmount     Float                  @default(0)
   driverUserId        String?
   driverUser          User?                  @relation("DriverOrders", fields: [driverUserId], references: [id], onDelete: SetNull)
+  driverName          String?
   notes               String?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt

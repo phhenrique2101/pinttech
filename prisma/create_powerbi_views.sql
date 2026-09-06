@@ -163,7 +163,7 @@ SELECT
   COALESCE(c."tradeName", c."name") AS client_trade_name,
   c."city" AS client_city,
   c."state" AS client_state,
-  u."name" AS driver_name,
+  COALESCE(o."driverName", u."name") AS driver_name,
   oi."recipeId" AS recipe_id,
   COALESCE(r."name", oi."description") AS beer_name,
   COALESCE(r."style", 'Outros') AS beer_style,

@@ -324,6 +324,7 @@ export default function PedidosPage() {
   const [recipes, setRecipes] = useState<any[]>([]);
   const [equipment, setEquipment] = useState<any[]>([]);
   const [kegs, setKegs] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -337,6 +338,7 @@ export default function PedidosPage() {
 
   // Edit Order Form State
   const [editClientId, setEditClientId] = useState('');
+  const [editDriverName, setEditDriverName] = useState('');
   const [editStatus, setEditStatus] = useState('CONFIRMADO');
   const [editDeliveryDate, setEditDeliveryDate] = useState('');
   const [editReturnDate, setEditReturnDate] = useState('');
@@ -360,6 +362,7 @@ export default function PedidosPage() {
   // New order modal state
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [clientId, setClientId] = useState('');
+  const [driverName, setDriverName] = useState('');
   const [orderItems, setOrderItems] = useState<{ recipeId: string; quantity: number; unitPrice: number; kegCapacity?: number }[]>([]);
   const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
@@ -562,20 +565,22 @@ export default function PedidosPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [oRes, cRes, rRes, eRes, kRes] = await Promise.all([
+      const [oRes, cRes, rRes, eRes, kRes, uRes] = await Promise.all([
         fetch('/api/orders'),
         fetch('/api/clients'),
         fetch('/api/recipes'),
         fetch('/api/equipment'),
         fetch('/api/kegs'),
+        fetch('/api/users'),
       ]);
 
-      const [oData, cData, rData, eData, kData] = await Promise.all([
+      const [oData, cData, rData, eData, kData, uData] = await Promise.all([
         oRes.json(),
         cRes.json(),
         rRes.json(),
         eRes.json(),
         kRes.json(),
+        uRes.json(),
       ]);
 
       if (Array.isArray(oData)) setOrders(oData);
@@ -587,6 +592,7 @@ export default function PedidosPage() {
       }
       if (Array.isArray(eData)) setEquipment(eData);
       if (Array.isArray(kData)) setKegs(kData);
+      if (Array.isArray(uData)) setUsers(uData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -647,6 +653,7 @@ export default function PedidosPage() {
     setOrderModalTab(tab);
     setCopiedAddress(false);
     setEditClientId(order.clientId || '');
+    setEditDriverName(order.driverName || order.driverUser?.name || '');
     setEditStatus(order.status || 'CONFIRMADO');
     setEditDeliveryDate(order.deliveryDate ? new Date(order.deliveryDate).toISOString().split('T')[0] : '');
     setEditReturnDate(order.estimatedReturnDate ? new Date(order.estimatedReturnDate).toISOString().split('T')[0] : '');
@@ -668,9 +675,8 @@ export default function PedidosPage() {
           totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
         }))
       );
-    } else if (recipes.length > 0) {
-      const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
-      setEditItems([{ recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, totalPrice: defaultPrice }]);
+    } else {
+      setEditItems([]);
     }
 
     if (order.orderEquipments) {
@@ -736,9 +742,7 @@ export default function PedidosPage() {
   };
 
   const handleRemoveEditItemRow = (index: number) => {
-    if (editItems.length > 1) {
-      setEditItems(editItems.filter((_, i) => i !== index));
-    }
+    setEditItems(editItems.filter((_, i) => i !== index));
   };
 
   const handleCreateOrder = async (e: React.FormEvent) => {
@@ -746,11 +750,6 @@ export default function PedidosPage() {
 
     if (!clientId) {
       alert('Por favor, selecione ou busque um cliente para o pedido.');
-      return;
-    }
-
-    if (orderItems.length === 0) {
-      alert('Adicione pelo menos um item ao pedido.');
       return;
     }
 
@@ -771,6 +770,7 @@ export default function PedidosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId,
+          driverName: driverName.trim() || null,
           items: orderItems,
           equipmentIds: selectedEquipments,
           deliveryDate,
@@ -791,6 +791,10 @@ export default function PedidosPage() {
         if (stockNotes.length > 0) {
           alert(
             `✅ Pedido cadastrado com sucesso!\n\nℹ️ Observação de Estoque / Envase:\n${stockNotes.join('\n')}\n\nO pedido foi registrado para o planejamento de envase e produção.`
+          );
+        } else if (orderItems.length === 0) {
+          alert(
+            `✅ Pedido #${createdOrder.orderNumber} criado sem itens!\n\nVocê pode bipar os barris na entrega para adicioná-los automaticamente ao pedido.`
           );
         }
       } else {
@@ -830,6 +834,7 @@ export default function PedidosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId: editClientId,
+          driverName: editDriverName.trim() || null,
           status: editStatus,
           deliveryDate: editDeliveryDate || null,
           estimatedReturnDate: editReturnDate || null,
@@ -1053,6 +1058,7 @@ export default function PedidosPage() {
           <button
             onClick={() => {
               setClientId('');
+              setDriverName('');
               setDeliveryAddress('');
               setSelectedEquipments([]);
               setOrderItems([]);
@@ -1245,10 +1251,12 @@ export default function PedidosPage() {
                   <div className="mt-2.5 bg-slate-50 p-2 rounded-xl text-xs space-y-1">
                     <div className="flex items-center justify-between font-bold text-slate-800">
                       <span className="truncate max-w-[200px] flex items-center gap-1">
-                        🍺 {(order.items || []).map((i: any) => `${i.quantity}x ${i.description}`).join(', ') || 'Chopp'}
+                        🍺 {(order.items || []).length > 0
+                          ? (order.items || []).map((i: any) => `${i.quantity}x ${i.description}`).join(', ')
+                          : <span className="text-amber-700 italic font-medium">Sem itens (bipar na entrega)</span>}
                       </span>
                       <span className="text-[11px] text-amber-800 font-extrabold flex-shrink-0">
-                        {totalLiters > 0 ? `${totalLiters}L` : `${totalKegs} barris`}
+                        {totalLiters > 0 ? `${totalLiters}L` : totalKegs > 0 ? `${totalKegs} barris` : '0 itens'}
                       </span>
                     </div>
 
@@ -1274,6 +1282,13 @@ export default function PedidosPage() {
                       {order.deliveryDate ? formatDateShort(order.deliveryDate) : 'Imediata'}
                     </span>
                   </div>
+
+                  {(order.driverName || order.driverUser?.name) && (
+                    <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-900 font-bold bg-amber-50/80 px-2 py-0.5 rounded-lg border border-amber-200/70">
+                      <Truck className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                      <span className="truncate">Entrega: {order.driverName || order.driverUser?.name}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Linha 4: Rodapé com Valor e Ações */}
@@ -1372,7 +1387,9 @@ export default function PedidosPage() {
                       </td>
                       <td className="py-3 px-4">
                         <span className="font-semibold text-slate-800">
-                          {(order.items || []).map((i: any) => `${i.quantity}x ${i.description}`).join(', ') || 'Chopp'}
+                          {(order.items || []).length > 0
+                            ? (order.items || []).map((i: any) => `${i.quantity}x ${i.description}`).join(', ')
+                            : <span className="text-amber-700 italic font-medium">Sem itens (a bipar)</span>}
                         </span>
                         {totalLiters > 0 && (
                           <span className="text-[10px] text-amber-700 font-bold block">
@@ -1388,6 +1405,11 @@ export default function PedidosPage() {
                         ) : (
                           <span className="font-bold text-slate-700">
                             {order.deliveryDate ? formatDateShort(order.deliveryDate) : 'Imediata'}
+                          </span>
+                        )}
+                        {(order.driverName || order.driverUser?.name) && (
+                          <span className="text-[10px] text-amber-800 font-bold block truncate max-w-[130px] mt-0.5">
+                            🚚 {order.driverName || order.driverUser?.name}
                           </span>
                         )}
                       </td>
@@ -1604,6 +1626,21 @@ export default function PedidosPage() {
                           : 'Pátio Central da Cervejaria (Devolução dos barris vazios e chopeiras comodatadas)'}
                       </p>
                     </div>
+
+                    {/* Responsável pela Entrega / Motorista */}
+                    <div className="md:col-span-2 p-3 bg-white rounded-xl border border-amber-200 shadow-sm flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-bold text-slate-700">
+                          Responsável pela Entrega: <strong className="font-black text-amber-900">{selectedOrder.driverName || selectedOrder.driverUser?.name || 'Não atribuído'}</strong>
+                        </span>
+                      </div>
+                      {selectedOrder.driverUser?.phone && (
+                        <span className="text-[11px] font-bold text-slate-600">
+                          Contato: {selectedOrder.driverUser.phone}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1701,7 +1738,14 @@ export default function PedidosPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-purple-100 text-xs">
-                        {selectedOrder.items?.map((it: any) => (
+                        {(!selectedOrder.items || selectedOrder.items.length === 0) ? (
+                          <tr>
+                            <td colSpan={4} className="p-4 text-center text-slate-500 font-medium">
+                              Nenhum chopp/barril adicionado a este pedido ainda. Os barris podem ser bipados na entrega!
+                            </td>
+                          </tr>
+                        ) : (
+                          selectedOrder.items.map((it: any) => (
                           <tr key={it.id} className="hover:bg-purple-50/50">
                             <td className="p-2.5 pl-3">
                               <span className="font-extrabold text-slate-900 block">{it.description}</span>
@@ -1739,7 +1783,7 @@ export default function PedidosPage() {
                             <td className="p-2.5 text-right font-medium text-slate-600">{formatCurrency(it.unitPrice)}</td>
                             <td className="p-2.5 text-right pr-3 font-black text-slate-900">{formatCurrency(it.totalPrice)}</td>
                           </tr>
-                        ))}
+                        )))}
                       </tbody>
                     </table>
                   </div>
@@ -1976,15 +2020,36 @@ export default function PedidosPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Endereço Completo de Entrega</label>
-                  <input
-                    type="text"
-                    value={editAddress}
-                    onChange={(e) => setEditAddress(e.target.value)}
-                    placeholder="Rua, número, complemento, bairro, cidade - UF, CEP"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Responsável pela Entrega</label>
+                    <input
+                      type="text"
+                      list="drivers-datalist-edit"
+                      value={editDriverName}
+                      onChange={(e) => setEditDriverName(e.target.value)}
+                      placeholder="Nome do motorista / entregador..."
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+                    />
+                    <datalist id="drivers-datalist-edit">
+                      {users.map((u) => (
+                        <option key={u.id} value={u.name}>
+                          {u.name} ({u.role})
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Endereço Completo de Entrega</label>
+                    <input
+                      type="text"
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
+                      placeholder="Rua, número, complemento, bairro, cidade - UF, CEP"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                    />
+                  </div>
                 </div>
 
                 {/* Items */}
@@ -2003,7 +2068,22 @@ export default function PedidosPage() {
                   </div>
 
                   <div className="space-y-2">
-                    {editItems.map((item, idx) => {
+                    {editItems.length === 0 ? (
+                      <div className="bg-white/80 p-4 rounded-xl border border-dashed border-purple-300 text-center space-y-1.5">
+                        <p className="text-xs text-purple-900 font-semibold">
+                          Nenhum item adicionado a este pedido. Você pode bipar os barris na entrega!
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleAddEditItemRow}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Adicionar Item</span>
+                        </button>
+                      </div>
+                    ) : (
+                      editItems.map((item, idx) => {
                       const stock = getStockAvailability(item.recipeId, 50, selectedOrder?.id);
                       const isOutOfStock = stock.available <= 0;
                       const isInsufficient = !isOutOfStock && item.quantity > stock.available;
@@ -2119,7 +2199,7 @@ export default function PedidosPage() {
                           </div>
                         </div>
                       );
-                    })}
+                    }))}
                   </div>
                 </div>
 
@@ -2412,6 +2492,12 @@ export default function PedidosPage() {
                 <h3 className="text-lg font-black text-slate-900">
                   Pedido {scanModalOrder.orderNumber} • {scanModalOrder.client?.tradeName || scanModalOrder.client?.name}
                 </h3>
+                {(scanModalOrder.driverName || scanModalOrder.driverUser?.name) && (
+                  <p className="text-xs text-slate-500 font-bold flex items-center gap-1 mt-0.5">
+                    <Truck className="w-3.5 h-3.5 text-amber-600" />
+                    Entregador: <strong className="text-amber-800 font-black">{scanModalOrder.driverName || scanModalOrder.driverUser?.name}</strong>
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setScanModalOrder(null)}
@@ -2441,6 +2527,55 @@ export default function PedidosPage() {
                 <span>{scanFeedback.text}</span>
               </div>
             )}
+
+            {/* Itens do Pedido Atualizados ao Vivo */}
+            <div className="p-3.5 bg-purple-50/70 rounded-2xl border border-purple-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-purple-950 text-xs flex items-center gap-1.5">
+                  <Cylinder className="w-3.5 h-3.5 text-purple-600" />
+                  Itens no Pedido ({scanModalOrder.items?.length || 0})
+                </span>
+                <span className="text-xs font-black text-purple-900">
+                  Total: {formatCurrency(scanModalOrder.totalAmount || 0)}
+                </span>
+              </div>
+
+              {(!scanModalOrder.items || scanModalOrder.items.length === 0) ? (
+                <div className="bg-white/90 p-3 rounded-xl border border-dashed border-purple-200 text-center text-xs text-purple-900 font-medium">
+                  Nenhum item bipado ainda. Aponte a câmera para o QR Code do barril para vincular ao pedido automaticamente!
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {scanModalOrder.items.map((it: any, idx: number) => (
+                    <div
+                      key={it.id || idx}
+                      className="bg-white p-2.5 rounded-xl border border-purple-100 flex items-center justify-between text-xs shadow-2xs"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-900 block">{it.description}</span>
+                        {it.keg ? (
+                          <span className="text-[10px] font-mono font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 inline-flex items-center gap-1 mt-0.5">
+                            ✓ Barril Bipado: {it.keg.code} ({it.keg.capacity}L)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
+                            Aguardando bipagem
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="font-black text-slate-800 block">
+                          {formatCurrency(it.totalPrice || (it.quantity * it.unitPrice))}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {it.quantity}x {formatCurrency(it.unitPrice)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="flex justify-end pt-2">
               <button
@@ -2517,7 +2652,7 @@ export default function PedidosPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Previsão Devolução / Recolha</label>
                   <input
@@ -2526,6 +2661,25 @@ export default function PedidosPage() {
                     onChange={(e) => setEstimatedReturnDate(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs"
                   />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Responsável pela Entrega</label>
+                  <input
+                    type="text"
+                    list="drivers-datalist-new"
+                    value={driverName}
+                    onChange={(e) => setDriverName(e.target.value)}
+                    placeholder="Nome do motorista / entregador..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs"
+                  />
+                  <datalist id="drivers-datalist-new">
+                    {users.map((u) => (
+                      <option key={u.id} value={u.name}>
+                        {u.name} ({u.role})
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
 
                 <div>
@@ -2560,7 +2714,7 @@ export default function PedidosPage() {
                   {orderItems.length === 0 ? (
                     <div className="bg-white/80 p-5 rounded-xl border border-dashed border-purple-300 text-center space-y-2">
                       <p className="text-xs text-purple-900 font-semibold">
-                        Nenhum item adicionado ao pedido ainda.
+                        Nenhum item adicionado ainda. Você pode salvar o pedido sem itens e bipar os barris diretamente na entrega!
                       </p>
                       <button
                         type="button"
@@ -2568,7 +2722,7 @@ export default function PedidosPage() {
                         className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Adicionar Primeiro Chopp / Produto</span>
+                        <span>Adicionar Item Agora</span>
                       </button>
                     </div>
                   ) : (
