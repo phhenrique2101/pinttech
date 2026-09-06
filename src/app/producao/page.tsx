@@ -32,6 +32,11 @@ import {
   Thermometer,
   Droplet,
   Boxes,
+  LayoutGrid,
+  List,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import MapaTraceabilitySheetModal from '@/components/brew/MapaTraceabilitySheetModal';
@@ -47,6 +52,11 @@ export default function ProducaoPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'ACTIVE_BATCHES' | 'TANKS' | 'HISTORY_MAPA' | 'RECIPES'>('ACTIVE_BATCHES');
+
+  // View mode and sorting state for Active Batches
+  const [batchViewMode, setBatchViewMode] = useState<'CARDS' | 'ROWS'>('CARDS');
+  const [batchSortBy, setBatchSortBy] = useState<'tank' | 'batchNumber' | 'recipe' | 'brewDate' | 'status' | 'volume'>('tank');
+  const [batchSortOrder, setBatchSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Tank filter state
   const [tankStatusFilter, setTankStatusFilter] = useState<string>('ALL');
@@ -146,6 +156,20 @@ export default function ProducaoPage() {
 
   useEffect(() => {
     fetchData();
+    try {
+      const savedMode = localStorage.getItem('pinttech_batch_view_mode');
+      if (savedMode === 'CARDS' || savedMode === 'ROWS') setBatchViewMode(savedMode);
+
+      const savedSort = localStorage.getItem('pinttech_batch_sort_by');
+      if (savedSort && ['tank', 'batchNumber', 'recipe', 'brewDate', 'status', 'volume'].includes(savedSort)) {
+        setBatchSortBy(savedSort as any);
+      }
+
+      const savedOrder = localStorage.getItem('pinttech_batch_sort_order');
+      if (savedOrder === 'asc' || savedOrder === 'desc') setBatchSortOrder(savedOrder);
+    } catch {
+      // ignore
+    }
   }, []);
 
   // Lotes Ativos nos Tanques
@@ -177,6 +201,88 @@ export default function ProducaoPage() {
   };
 
   const filteredActive = filterList(activeBatches);
+
+  // Ordenação de Lotes Ativos
+  const sortedActive = useMemo(() => {
+    return [...filteredActive].sort((a, b) => {
+      let comp = 0;
+      switch (batchSortBy) {
+        case 'tank': {
+          const tankA = a.tank?.name || '';
+          const tankB = b.tank?.name || '';
+          if (!tankA && tankB) comp = 1;
+          else if (tankA && !tankB) comp = -1;
+          else if (!tankA && !tankB) comp = 0;
+          else comp = tankA.localeCompare(tankB, undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        }
+        case 'batchNumber': {
+          comp = (a.batchNumber || '').localeCompare(b.batchNumber || '', undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        }
+        case 'recipe': {
+          const recA = a.recipe?.name || '';
+          const recB = b.recipe?.name || '';
+          comp = recA.localeCompare(recB, undefined, { sensitivity: 'base' });
+          break;
+        }
+        case 'brewDate': {
+          const dateA = a.brewDate ? new Date(a.brewDate).getTime() : 0;
+          const dateB = b.brewDate ? new Date(b.brewDate).getTime() : 0;
+          comp = dateA - dateB;
+          break;
+        }
+        case 'status': {
+          comp = (a.status || '').localeCompare(b.status || '');
+          break;
+        }
+        case 'volume': {
+          const volA = Number(a.volumeProducedLiters || a.volumePlannedLiters || 0);
+          const volB = Number(b.volumeProducedLiters || b.volumePlannedLiters || 0);
+          comp = volA - volB;
+          break;
+        }
+      }
+      return batchSortOrder === 'asc' ? comp : -comp;
+    });
+  }, [filteredActive, batchSortBy, batchSortOrder]);
+
+  const changeViewMode = (mode: 'CARDS' | 'ROWS') => {
+    setBatchViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_batch_view_mode', mode);
+    } catch {}
+  };
+
+  const handleSortChange = (field: 'tank' | 'batchNumber' | 'recipe' | 'brewDate' | 'status' | 'volume') => {
+    let newOrder: 'asc' | 'desc' = 'asc';
+    if (batchSortBy === field) {
+      newOrder = batchSortOrder === 'asc' ? 'desc' : 'asc';
+    }
+    setBatchSortBy(field);
+    setBatchSortOrder(newOrder);
+    try {
+      localStorage.setItem('pinttech_batch_sort_by', field);
+      localStorage.setItem('pinttech_batch_sort_order', newOrder);
+    } catch {}
+  };
+
+  const toggleSortOrder = () => {
+    const newOrder = batchSortOrder === 'asc' ? 'desc' : 'asc';
+    setBatchSortOrder(newOrder);
+    try {
+      localStorage.setItem('pinttech_batch_sort_order', newOrder);
+    } catch {}
+  };
+
+  const getElapsedDays = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const diffTime = Date.now() - d.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 ? diffDays : 0;
+  };
   const filteredHistory = filterList(historicalBatches);
   const filteredRecipes = recipes.filter(
     (r) =>
@@ -455,33 +561,383 @@ export default function ProducaoPage() {
       {/* ABA 1: LOTES ATIVOS EM PRODUÇÃO COM RASTREABILIDADE */}
       {activeTab === 'ACTIVE_BATCHES' && (
         <div className="space-y-4">
+          {/* Barra de Ferramentas e Ordenação */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-300">
+                Lotes em Andamento:
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                {sortedActive.length} {sortedActive.length === 1 ? 'lote' : 'lotes'}
+              </span>
+              {search.trim() && (
+                <span className="text-[11px] text-slate-400">
+                  (de {activeBatches.length})
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center flex-wrap gap-2.5">
+              {/* Classificação / Ordenação */}
+              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden sm:inline">Ordenar:</span>
+                </span>
+                <select
+                  value={batchSortBy}
+                  onChange={(e) => {
+                    const val = e.target.value as any;
+                    setBatchSortBy(val);
+                    try { localStorage.setItem('pinttech_batch_sort_by', val); } catch {}
+                  }}
+                  className="bg-transparent text-xs text-amber-300 font-semibold focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="tank" className="bg-slate-900 text-slate-200">Nome do Tanque</option>
+                  <option value="batchNumber" className="bg-slate-900 text-slate-200">Nº do Lote</option>
+                  <option value="recipe" className="bg-slate-900 text-slate-200">Cerveja (Nome)</option>
+                  <option value="brewDate" className="bg-slate-900 text-slate-200">Data da Brassagem</option>
+                  <option value="status" className="bg-slate-900 text-slate-200">Status / Fase</option>
+                  <option value="volume" className="bg-slate-900 text-slate-200">Volume</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={toggleSortOrder}
+                  className="p-1 rounded-md hover:bg-slate-800 text-slate-300 hover:text-amber-400 transition"
+                  title={batchSortOrder === 'asc' ? 'Ordem Crescente (clique para Decrescente)' : 'Ordem Decrescente (clique para Crescente)'}
+                >
+                  {batchSortOrder === 'asc' ? (
+                    <ArrowUp className="w-3.5 h-3.5 text-amber-400" />
+                  ) : (
+                    <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                  )}
+                </button>
+              </div>
+
+              {/* Alternador Grade / Linhas */}
+              <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => changeViewMode('CARDS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    batchViewMode === 'CARDS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Visualizar como Grade / Cards"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Cards</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeViewMode('ROWS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    batchViewMode === 'ROWS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Visualizar como Linhas / Tabela"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Linhas</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {loading ? (
             <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
               <RefreshCw className="w-6 h-6 animate-spin text-amber-400" />
               <span className="text-xs">Carregando lotes em produção...</span>
             </div>
-          ) : filteredActive.length === 0 ? (
+          ) : sortedActive.length === 0 ? (
             <div className="p-12 text-center bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto">
                 <Beer className="w-7 h-7" />
               </div>
               <div>
-                <h4 className="text-base font-bold text-white">Nenhum lote em produção no momento</h4>
+                <h4 className="text-base font-bold text-white">Nenhum lote em produção encontrado</h4>
                 <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
-                  Importe o arquivo BeerXML do seu BeerSmith para cadastrar os lotes de matérias-primas e enviar para o tanque.
+                  {search.trim()
+                    ? 'Nenhum lote corresponde aos termos pesquisados. Tente ajustar o filtro.'
+                    : 'Importe o arquivo BeerXML do seu BeerSmith para cadastrar os lotes de matérias-primas e enviar para o tanque.'}
                 </p>
               </div>
-              <button
-                onClick={() => setImporterModalOpen(true)}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black inline-flex items-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Importar BeerXML Agora</span>
-              </button>
+              {!search.trim() && (
+                <button
+                  onClick={() => setImporterModalOpen(true)}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black inline-flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Importar BeerXML Agora</span>
+                </button>
+              )}
+            </div>
+          ) : batchViewMode === 'ROWS' ? (
+            /* VISUALIZAÇÃO EM LINHAS (TABELA) */
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-950 text-slate-300 font-bold border-b border-slate-800">
+                    <tr>
+                      <th
+                        onClick={() => handleSortChange('tank')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Tanque"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Tanque</span>
+                          {batchSortBy === 'tank' ? (
+                            batchSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleSortChange('batchNumber')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Nº do Lote"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Nº Lote</span>
+                          {batchSortBy === 'batchNumber' ? (
+                            batchSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleSortChange('recipe')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Cerveja"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Cerveja & Estilo</span>
+                          {batchSortBy === 'recipe' ? (
+                            batchSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleSortChange('status')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Status"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Status / Fase</span>
+                          {batchSortBy === 'status' ? (
+                            batchSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleSortChange('brewDate')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Data de Brassagem"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Brassagem</span>
+                          {batchSortBy === 'brewDate' ? (
+                            batchSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleSortChange('volume')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Volume"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Volume</span>
+                          {batchSortBy === 'volume' ? (
+                            batchSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th className="p-3.5">OG / FG / ABV</th>
+                      <th className="p-3.5">Registro MAPA</th>
+                      <th className="p-3.5 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {sortedActive.map((batch) => {
+                      const ingCount = batch.ingredients?.length || batch._count?.ingredients || 0;
+                      const elapsedDays = getElapsedDays(batch.brewDate);
+
+                      return (
+                        <tr key={batch.id} className="hover:bg-slate-800/40 transition group">
+                          {/* Tanque */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            {batch.tank ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                                <span className="font-mono font-bold text-amber-400 text-xs">
+                                  {batch.tank.name}
+                                </span>
+                                {batch.tank.capacityLiters && (
+                                  <span className="text-[10px] text-slate-500 font-mono">
+                                    ({batch.tank.capacityLiters}L)
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 italic text-[11px]">Sem Tanque</span>
+                            )}
+                          </td>
+
+                          {/* Nº Lote */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              {batch.batchNumber}
+                            </span>
+                          </td>
+
+                          {/* Cerveja & Estilo */}
+                          <td className="p-3.5 min-w-[160px]">
+                            <span className="font-bold text-white block text-xs group-hover:text-amber-200 transition">
+                              {batch.recipe?.name || 'Cerveja'}
+                            </span>
+                            <span className="text-slate-400 text-[11px]">
+                              {batch.recipe?.style || 'Standard'}
+                            </span>
+                          </td>
+
+                          {/* Status / Fase */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
+                                batch.status === 'FERMENTANDO'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : batch.status === 'MATURANDO'
+                                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                  : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                              }`}
+                            >
+                              {batch.status}
+                            </span>
+                          </td>
+
+                          {/* Data Brassagem & Dias */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span className="text-slate-200 text-xs block font-medium">
+                              {formatDate(batch.brewDate)}
+                            </span>
+                            {elapsedDays !== null && (
+                              <span className="text-[10px] text-amber-400 font-semibold block">
+                                Dia {elapsedDays + 1}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Volume */}
+                          <td className="p-3.5 whitespace-nowrap font-mono font-bold text-xs text-slate-200">
+                            {batch.volumeProducedLiters || batch.volumePlannedLiters || 0}L
+                          </td>
+
+                          {/* OG / FG / ABV */}
+                          <td className="p-3.5 whitespace-nowrap font-mono text-[11px] text-slate-300">
+                            <div>
+                              {batch.measuredOg || batch.recipe?.og || '1.050'} → {batch.measuredFg || batch.recipe?.fg || '1.010'}
+                            </div>
+                            <div className="text-[10px] text-emerald-400 font-semibold">
+                              {batch.measuredAbv || batch.recipe?.abv || '5.0'}% ABV
+                            </div>
+                          </td>
+
+                          {/* Registro MAPA & Insumos */}
+                          <td className="p-3.5 min-w-[140px]">
+                            <span
+                              className="font-mono text-slate-300 text-[11px] block truncate max-w-[150px]"
+                              title={batch.mapaRegistration || batch.recipe?.mapaRegistration || '—'}
+                            >
+                              {batch.mapaRegistration || batch.recipe?.mapaRegistration || '—'}
+                            </span>
+                            <span className="text-[10px] text-emerald-400/90 font-medium">
+                              {ingCount} insumos rastreados
+                            </span>
+                          </td>
+
+                          {/* Ações */}
+                          <td className="p-3.5 whitespace-nowrap text-right">
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setSelectedBatchForManager(batch)}
+                                className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold inline-flex items-center gap-1.5 transition shadow-xs"
+                                title="Medições, pH, Densidade & Adega"
+                              >
+                                <Activity className="w-3.5 h-3.5 text-amber-400" />
+                                <span className="hidden lg:inline">Adega</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setEditingBatchStatus(batch);
+                                  setNewStatus(batch.status);
+                                  setNewMeasuredFg(batch.measuredFg ? String(batch.measuredFg) : '');
+                                  setNewMeasuredAbv(batch.measuredAbv ? String(batch.measuredAbv) : '');
+                                }}
+                                className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold inline-flex items-center gap-1 transition border border-slate-700"
+                                title="Alterar Fase / Status"
+                              >
+                                <Sliders className="w-3 h-3" />
+                                <span className="hidden lg:inline">Status</span>
+                              </button>
+
+                              <button
+                                onClick={() => setSelectedBatchForSheet(batch)}
+                                className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black inline-flex items-center gap-1.5 shadow transition"
+                                title="Ficha Oficial de Rastreabilidade MAPA"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span className="hidden lg:inline">MAPA</span>
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  setItemToDelete({
+                                    type: 'BATCH',
+                                    id: batch.id,
+                                    title: `Lote ${batch.batchNumber}`,
+                                    subtitle: `${batch.recipe?.name || 'Cerveja'} • Tanque: ${batch.tank?.name || 'Sem tanque'}`,
+                                  })
+                                }
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition"
+                                title="Excluir Lote"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
+            /* VISUALIZAÇÃO EM GRADE (CARDS) */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredActive.map((batch) => {
+              {sortedActive.map((batch) => {
                 const ingCount = batch.ingredients?.length || batch._count?.ingredients || 0;
                 return (
                   <div
