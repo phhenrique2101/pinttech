@@ -56,9 +56,23 @@ html.dark .bg-slate-50:not(.keep-light) {
   background-color: #090d16 !important;
 }
 
+html.dark .bg-slate-100:not(.keep-light) {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+html.dark .bg-slate-200:not(.keep-light) {
+  background-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
 html.dark .border-slate-200:not(.keep-border),
 html.dark .border-slate-100:not(.keep-border) {
   border-color: #1e293b !important;
+}
+
+html.dark .border-slate-300:not(.keep-border) {
+  border-color: #334155 !important;
 }
 
 html.dark .text-slate-900:not(.keep-text),
@@ -83,6 +97,28 @@ html.dark .hover\:bg-slate-100:hover:not(.keep-hover) {
   background-color: #1e293b !important;
 }
 
+html.dark .hover\:bg-slate-200:hover:not(.keep-hover) {
+  background-color: #334155 !important;
+}
+
+/* Proteção para botões e selos brilhantes (amarelos/amber/verdes): sempre texto escuro em Dark Mode */
+html.dark .bg-amber-500,
+html.dark .bg-amber-400,
+html.dark .bg-amber-300,
+html.dark .bg-yellow-400,
+html.dark .bg-yellow-300,
+html.dark .bg-emerald-400 {
+  color: #020617 !important;
+}
+
+html.dark .bg-amber-500 *,
+html.dark .bg-amber-400 *,
+html.dark .bg-amber-300 *,
+html.dark .bg-yellow-400 *,
+html.dark .bg-emerald-400 * {
+  color: #020617 !important;
+}
+
 html.dark input:not([type="checkbox"]):not([type="radio"]):not(.keep-input),
 html.dark select:not(.keep-input),
 html.dark textarea:not(.keep-input) {
@@ -96,6 +132,11 @@ html.dark textarea::placeholder {
   color: #64748b;
 }
 
+html.dark select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
 html.dark table thead:not(.keep-thead) {
   background-color: #1e293b !important;
   color: #e2e8f0 !important;
@@ -106,7 +147,7 @@ html.dark tr:hover:not(.keep-hover) {
 }
 
 /* =========================================================
-   MODO CLARO (LIGHT THEME) PARA TELAS NATIVAMENTE ESCURAS
+   MODO CLARO (LIGHT THEME) REFINADO & SEM PERDA DE CONTRASTE
    ========================================================= */
 html:not(.dark) .bg-slate-900:not(.keep-dark) {
   background-color: #ffffff !important;
@@ -120,6 +161,7 @@ html:not(.dark) .bg-slate-950:not(.keep-dark) {
   border-color: #e2e8f0 !important;
 }
 
+html:not(.dark) .bg-slate-900\/90:not(.keep-dark),
 html:not(.dark) .bg-slate-900\/80:not(.keep-dark),
 html:not(.dark) .bg-slate-900\/50:not(.keep-dark) {
   background-color: #ffffff !important;
@@ -144,13 +186,104 @@ html:not(.dark) .border-slate-700:not(.keep-border) {
   border-color: #e2e8f0 !important;
 }
 
+/* Garante que text-white e text-slate-100 NUNCA fiquem invisíveis no modo claro */
+html:not(.dark) .bg-slate-900:not(.keep-dark) .text-white:not(.keep-white),
+html:not(.dark) .bg-slate-950:not(.keep-dark) .text-white:not(.keep-white),
+html:not(.dark) .bg-slate-800:not(.keep-dark) .text-white:not(.keep-white),
+html:not(.dark) table .text-white:not(.keep-white),
+html:not(.dark) .text-white:not(.keep-white) {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .bg-slate-900:not(.keep-dark) .text-slate-100:not(.keep-white),
+html:not(.dark) .bg-slate-950:not(.keep-dark) .text-slate-100:not(.keep-white),
+html:not(.dark) .bg-slate-800:not(.keep-dark) .text-slate-100:not(.keep-white),
+html:not(.dark) table .text-slate-100:not(.keep-white),
+html:not(.dark) .text-slate-100:not(.keep-white) {
+  color: #0f172a !important;
+}
+
 html:not(.dark) .text-slate-200:not(.keep-text),
 html:not(.dark) .text-slate-300:not(.keep-text) {
   color: #1e293b !important;
 }
 
 html:not(.dark) .text-slate-400:not(.keep-text) {
-  color: #64748b !important;
+  color: #475569 !important;
+}
+
+/* Badges e destaques com cores pastéis: escurece no modo claro para alto contraste */
+html:not(.dark) .text-purple-300:not(.keep-text) {
+  color: #6b21a8 !important;
+}
+
+html:not(.dark) .text-blue-300:not(.keep-text) {
+  color: #1d4ed8 !important;
+}
+
+html:not(.dark) .text-emerald-300:not(.keep-text),
+html:not(.dark) .text-emerald-400:not(.keep-text) {
+  color: #047857 !important;
+}
+
+html:not(.dark) .text-amber-300:not(.keep-text),
+html:not(.dark) .text-amber-400:not(.keep-text) {
+  color: #b45309 !important;
+}
+
+html:not(.dark) .text-amber-200:not(.keep-text) {
+  color: #92400e !important;
+}
+
+/* Protege elementos intencionalmente escuros no Modo Claro (.keep-dark) */
+html:not(.dark) .keep-dark {
+  background-color: #0f172a;
+  color: #ffffff !important;
+}
+html:not(.dark) .keep-dark .text-white {
+  color: #ffffff !important;
+}
+html:not(.dark) .keep-dark .text-slate-200 {
+  color: #e2e8f0 !important;
+}
+html:not(.dark) .keep-dark .text-amber-200 {
+  color: #fde68a !important;
+}
+html:not(.dark) .keep-dark .text-amber-300 {
+  color: #fcd34d !important;
+}
+
+/* Inputs e tabelas no modo claro */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not(.keep-input),
+html:not(.dark) select:not(.keep-input),
+html:not(.dark) textarea:not(.keep-input) {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html:not(.dark) select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+html:not(.dark) table thead:not(.keep-thead) {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) table thead th {
+  color: #334155 !important;
+}
+
+html:not(.dark) tr:hover:not(.keep-hover) {
+  background-color: rgba(241, 245, 249, 0.7) !important;
 }
 
 /* Animações e componentes especiais */

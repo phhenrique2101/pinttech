@@ -463,7 +463,7 @@ export default function ProducaoPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 pb-20">
       {/* Header Principal */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-600 via-amber-700 to-slate-950 p-8 text-white shadow-2xl border border-amber-500/30">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-600 via-amber-700 to-slate-950 p-8 text-white shadow-2xl border border-amber-500/30 keep-dark">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-200 text-xs font-bold uppercase tracking-wider backdrop-blur-md">
@@ -505,22 +505,22 @@ export default function ProducaoPage() {
       {/* Métricas Rápidas */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center">
             <Flame className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lotes em Produção</span>
-            <strong className="text-xl font-black text-white">{activeBatches.length}</strong>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Lotes em Produção</span>
+            <strong className="text-xl font-black text-slate-900 dark:text-white">{activeBatches.length}</strong>
           </div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
             <Cylinder className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tanques Ocupados</span>
-            <strong className="text-xl font-black text-white">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Tanques Ocupados</span>
+            <strong className="text-xl font-black text-slate-900 dark:text-white">
               {occupiedTanksCount} / {tanks.length}
             </strong>
             <span className="text-[9px] text-slate-500 font-mono block">{totalTankCapacity}L instalados</span>
@@ -528,28 +528,28 @@ export default function ProducaoPage() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Dossiês MAPA Emitidos</span>
-            <strong className="text-xl font-black text-white">{batches.length}</strong>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Dossiês MAPA Emitidos</span>
+            <strong className="text-xl font-black text-slate-900 dark:text-white">{batches.length}</strong>
           </div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
             <Beer className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Receitas no Catálogo</span>
-            <strong className="text-xl font-black text-white">{recipes.length}</strong>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Receitas no Catálogo</span>
+            <strong className="text-xl font-black text-slate-900 dark:text-white">{recipes.length}</strong>
           </div>
         </div>
       </div>
 
       {/* Barra de Busca e Navegação por Abas */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-800 pb-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
         <div className="flex space-x-2 overflow-x-auto">
           {[
             { id: 'PRODUCTION_TANKS', label: 'Produção & Tanques', count: tanks.length, icon: Flame },
@@ -564,13 +564,13 @@ export default function ProducaoPage() {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition whitespace-nowrap ${
                   isActive
-                    ? 'bg-amber-500 text-slate-950 shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800/60'
                 }`}
               >
                 <Icon className="w-4 h-4" />
                 <span>{tab.label}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${isActive ? 'bg-slate-900 text-amber-300' : 'bg-slate-800 text-slate-300'}`}>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-slate-950 text-amber-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
                   {tab.count}
                 </span>
               </button>
@@ -585,7 +585,7 @@ export default function ProducaoPage() {
             placeholder="Buscar por lote, tanque, cerveja ou MAPA..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none"
+            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 focus:ring-1 focus:ring-amber-500 outline-none"
           />
         </div>
       </div>

@@ -43,7 +43,7 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-950 border-b border-slate-800 text-white shadow-lg">
+    <header className="sticky top-0 z-40 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white shadow-sm dark:shadow-lg transition-colors">
       <div className="flex items-center justify-between h-16 px-4 md:px-6 max-w-[1600px] mx-auto">
         {/* Brand & Subdomain Badge */}
         <div className="flex items-center gap-3">
@@ -53,14 +53,14 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-xl tracking-tight text-white">
-                  Pint<span className="text-amber-400">Tech</span>
+                <span className="font-black text-xl tracking-tight text-slate-900 dark:text-white">
+                  Pint<span className="text-amber-600 dark:text-amber-400">Tech</span>
                 </span>
                 <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-amber-500 text-slate-950 shadow-xs">
                   BREW
                 </span>
               </div>
-              <span className="text-[10px] font-bold text-slate-400 block -mt-0.5">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block -mt-0.5">
                 Produção & Tanques (Chão de Fábrica)
               </span>
             </div>
@@ -68,8 +68,8 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
 
           {/* Active Brewery Badge */}
           {user?.breweryName && (
-            <div className="hidden sm:flex items-center gap-1.5 ml-3 px-3 py-1 bg-slate-900 border border-slate-700/80 rounded-full text-xs font-semibold text-amber-300">
-              <Building2 className="w-3.5 h-3.5 text-amber-400" />
+            <div className="hidden sm:flex items-center gap-1.5 ml-3 px-3 py-1 bg-amber-50 dark:bg-slate-900 border border-amber-200 dark:border-slate-700/80 rounded-full text-xs font-semibold text-amber-800 dark:text-amber-300">
+              <Building2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span className="truncate max-w-[200px]">{user.breweryName}</span>
             </div>
           )}
@@ -83,7 +83,7 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
           {/* Link para voltar ao ERP Completo */}
           <a
             href={getErpUrl()}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 text-xs font-bold transition shadow-xs"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700/80 text-xs font-bold transition shadow-xs"
             title="Acessar painel completo com Barris, Clientes, Pedidos e Financeiro"
           >
             <span>Acessar ERP Completo</span>
@@ -98,16 +98,16 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition"
+                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition"
               >
                 <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 font-black text-xs uppercase flex items-center justify-center shadow-sm">
                   {user.name.slice(0, 2)}
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-bold text-slate-200 leading-tight truncate max-w-[120px]">
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-200 leading-tight truncate max-w-[120px]">
                     {user.name}
                   </span>
-                  <span className="text-[10px] text-amber-400/90 font-medium">
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400/90 font-medium">
                     {user.role}
                   </span>
                 </div>
@@ -116,14 +116,14 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
 
               {dropdownOpen && (
                 <div
-                  className="absolute right-0 mt-2 w-64 bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 text-slate-200"
+                  className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 text-slate-800 dark:text-slate-200"
                   onClick={() => setDropdownOpen(false)}
                 >
-                  <div className="px-4 py-2.5 border-b border-slate-800">
-                    <p className="text-sm font-bold text-white">{user.name}</p>
-                    <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                  <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{user.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
                     {user.breweryName && (
-                      <p className="text-[11px] text-amber-400 mt-1 font-semibold flex items-center gap-1">
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-semibold flex items-center gap-1">
                         <Building2 className="w-3 h-3" />
                         {user.breweryName}
                       </p>
@@ -143,26 +143,26 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
                       } catch (e) {}
                       setBreweryModalOpen(true);
                     }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white text-left transition"
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white text-left transition"
                   >
-                    <Building2 className="w-4 h-4 text-amber-400" />
+                    <Building2 className="w-4 h-4 text-amber-500" />
                     <span>Dados da Cervejaria (CNPJ / MAPA)</span>
                   </button>
 
                   <a
                     href={getErpUrl()}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition"
                   >
                     <span className="flex items-center gap-2.5">
-                      <Crown className="w-4 h-4 text-amber-400" />
+                      <Crown className="w-4 h-4 text-amber-500" />
                       Acessar ERP Completo
                     </span>
-                    <ExternalLink className="w-3 h-3 text-slate-500" />
+                    <ExternalLink className="w-3 h-3 text-slate-400" />
                   </a>
 
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition border-t border-slate-800 mt-1"
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition border-t border-slate-100 dark:border-slate-800 mt-1"
                   >
                     <LogOut className="w-4 h-4" />
                     Sair da Conta

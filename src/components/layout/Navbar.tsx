@@ -200,10 +200,10 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
           {/* Quick Scanner Mobile Button */}
           <Link
             href="/scanner"
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-bold shadow-sm transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-black shadow-sm transition-all ${
               pathname === '/scanner'
-                ? 'bg-amber-600 text-white ring-2 ring-amber-400'
-                : 'bg-amber-500 hover:bg-amber-600 text-white'
+                ? 'bg-amber-600 text-slate-950 ring-2 ring-amber-400'
+                : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
             }`}
           >
             <QrCode className="w-4 h-4" />
