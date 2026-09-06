@@ -141,9 +141,9 @@ export default function ScannerPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const info = KEG_STATUS_MAP[status] || { label: status, bg: 'bg-slate-100', color: 'text-slate-800' };
+    const info = KEG_STATUS_MAP[status] || { label: status, bg: 'bg-slate-100', color: 'text-slate-800', border: 'border-slate-200' };
     return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-black ${info.bg} ${info.color}`}>
+      <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${info.bg} ${info.color} ${info.border || 'border-transparent'}`}>
         {info.label}
       </span>
     );
@@ -152,92 +152,104 @@ export default function ScannerPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-5 pb-16">
       {/* Header */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
+          <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
             <QrCode className="w-5 h-5 text-amber-600 animate-pulse" />
             Scanner Móvel de Campo
           </h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
             Leitura contínua na câmera para envase parcial, carga, entrega e recolha de chopeiras e barris
           </p>
         </div>
       </div>
 
       {/* Mode Selector Tabs */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 p-1.5 bg-slate-200/80 rounded-2xl">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <button
           onClick={() => { setMode('LOOKUP'); setFeedbackMessage(null); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-            mode === 'LOOKUP' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-slate-600 hover:text-slate-900'
+            mode === 'LOOKUP'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
           }`}
         >
-          <Search className="w-4 h-4 text-amber-600" />
+          <Search className={`w-4 h-4 ${mode === 'LOOKUP' ? 'text-slate-950 stroke-[2.5]' : 'text-amber-600'}`} />
           <span>Consultar</span>
         </button>
 
         <button
           onClick={() => { setMode('FILL'); setFeedbackMessage(null); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-            mode === 'FILL' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-slate-600 hover:text-slate-900'
+            mode === 'FILL'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
           }`}
         >
-          <Beer className="w-4 h-4 text-purple-600" />
+          <Beer className={`w-4 h-4 ${mode === 'FILL' ? 'text-slate-950 stroke-[2.5]' : 'text-purple-600'}`} />
           <span>Envase</span>
         </button>
 
         <button
           onClick={() => { setMode('EXPEDITION'); setFeedbackMessage(null); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-            mode === 'EXPEDITION' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-slate-600 hover:text-slate-900'
+            mode === 'EXPEDITION'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
           }`}
         >
-          <Truck className="w-4 h-4 text-cyan-600" />
+          <Truck className={`w-4 h-4 ${mode === 'EXPEDITION' ? 'text-slate-950 stroke-[2.5]' : 'text-cyan-600'}`} />
           <span>Carga</span>
         </button>
 
         <button
           onClick={() => { setMode('DELIVER'); setFeedbackMessage(null); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-            mode === 'DELIVER' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-slate-600 hover:text-slate-900'
+            mode === 'DELIVER'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
           }`}
         >
-          <MapPin className="w-4 h-4 text-emerald-600" />
+          <MapPin className={`w-4 h-4 ${mode === 'DELIVER' ? 'text-slate-950 stroke-[2.5]' : 'text-emerald-600'}`} />
           <span>Entrega</span>
         </button>
 
         <button
           onClick={() => { setMode('RETURN'); setFeedbackMessage(null); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-            mode === 'RETURN' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-slate-600 hover:text-slate-900'
+            mode === 'RETURN'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
           }`}
         >
-          <RefreshCw className="w-4 h-4 text-orange-600" />
+          <RefreshCw className={`w-4 h-4 ${mode === 'RETURN' ? 'text-slate-950 stroke-[2.5]' : 'text-orange-600'}`} />
           <span>Recolha</span>
         </button>
 
         <button
           onClick={() => { setMode('SANITIZE'); setFeedbackMessage(null); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-            mode === 'SANITIZE' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-slate-600 hover:text-slate-900'
+            mode === 'SANITIZE'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
           }`}
         >
-          <Sparkles className="w-4 h-4 text-blue-600" />
+          <Sparkles className={`w-4 h-4 ${mode === 'SANITIZE' ? 'text-slate-950 stroke-[2.5]' : 'text-blue-600'}`} />
           <span>Lavar/CIP</span>
         </button>
       </div>
 
       {/* Context Options per Mode */}
       {mode === 'FILL' && (
-        <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl space-y-3 animate-in fade-in text-xs">
+        <div className="p-4 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/60 rounded-2xl space-y-3 animate-in fade-in text-xs shadow-xs">
           <div>
-            <label className="font-bold text-purple-900 block mb-1">
+            <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
               🍺 Selecione o Lote de Cerveja a Envasar:
             </label>
             <select
               value={selectedBatchId}
               onChange={(e) => setSelectedBatchId(e.target.value)}
-              className="w-full p-2.5 bg-white border border-purple-300 rounded-xl font-bold text-slate-800"
+              className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
             >
               {batches.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -248,28 +260,28 @@ export default function ScannerPage() {
           </div>
 
           {/* Opção de Litragem Parcial */}
-          <div className="p-3 bg-white border border-purple-200 rounded-xl space-y-2">
-            <label className="flex items-center gap-2 font-bold text-purple-950 cursor-pointer">
+          <div className="p-3 bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800/60 rounded-xl space-y-2 shadow-2xs">
+            <label className="flex items-center gap-2 font-black text-purple-950 dark:text-purple-200 cursor-pointer">
               <input
                 type="checkbox"
                 checked={isPartialFill}
                 onChange={(e) => setIsPartialFill(e.target.checked)}
-                className="rounded text-purple-600 focus:ring-purple-500"
+                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
               />
               <span>Envase Parcial (Barril não ficou totalmente cheio / Sobra de tanque)</span>
             </label>
 
             {isPartialFill && (
               <div className="flex items-center gap-2 pt-1 animate-in fade-in">
-                <span className="text-slate-600 font-semibold">Litros reais envasados:</span>
+                <span className="text-slate-700 dark:text-slate-300 font-bold">Litros reais envasados:</span>
                 <input
                   type="number"
                   step="0.5"
                   value={fillVolumeLiters}
                   onChange={(e) => setFillVolumeLiters(e.target.value)}
-                  className="w-24 px-3 py-1.5 bg-slate-50 border border-purple-300 rounded-lg font-black text-center text-purple-900"
+                  className="w-24 px-3 py-1.5 bg-purple-50/50 dark:bg-slate-950 border border-purple-300 dark:border-purple-700 rounded-lg font-black text-center text-purple-950 dark:text-purple-200"
                 />
-                <span className="font-bold text-slate-500">Litros</span>
+                <span className="font-bold text-slate-600 dark:text-slate-400">Litros</span>
               </div>
             )}
           </div>
@@ -277,8 +289,8 @@ export default function ScannerPage() {
       )}
 
       {mode === 'RETURN' && (
-        <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl space-y-3 animate-in fade-in text-xs">
-          <label className="font-bold text-orange-950 block">
+        <div className="p-4 bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/60 rounded-2xl space-y-3 animate-in fade-in text-xs shadow-xs">
+          <label className="font-black text-orange-950 dark:text-orange-200 block">
             🔄 Tipo de Recolha & Condição dos Vasilhames:
           </label>
 
@@ -288,12 +300,14 @@ export default function ScannerPage() {
               onClick={() => setReturnCondition('VAZIO_SUJO')}
               className={`p-2.5 rounded-xl text-left border transition-all ${
                 returnCondition === 'VAZIO_SUJO'
-                  ? 'bg-white border-orange-400 shadow-sm font-bold text-orange-950 ring-2 ring-orange-300'
-                  : 'bg-orange-100/50 border-orange-200 text-orange-800'
+                  ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm font-black ring-2 ring-amber-300'
+                  : 'bg-white hover:bg-orange-50/50 border-orange-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
               }`}
             >
               <span className="font-black block">1. Vazio / Sujo</span>
-              <span className="text-[10px] text-orange-700">Retorna para lavagem CIP</span>
+              <span className={`text-[10px] block ${returnCondition === 'VAZIO_SUJO' ? 'text-slate-950/80 font-bold' : 'text-slate-500'}`}>
+                Retorna para lavagem CIP
+              </span>
             </button>
 
             <button
@@ -301,12 +315,14 @@ export default function ScannerPage() {
               onClick={() => setReturnCondition('PARCIALMENTE_CHEIO')}
               className={`p-2.5 rounded-xl text-left border transition-all ${
                 returnCondition === 'PARCIALMENTE_CHEIO'
-                  ? 'bg-white border-orange-400 shadow-sm font-bold text-orange-950 ring-2 ring-orange-300'
-                  : 'bg-orange-100/50 border-orange-200 text-orange-800'
+                  ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm font-black ring-2 ring-amber-300'
+                  : 'bg-white hover:bg-orange-50/50 border-orange-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
               }`}
             >
               <span className="font-black block">2. Parcial / Sobra</span>
-              <span className="text-[10px] text-orange-700">Retorna cheio ao estoque</span>
+              <span className={`text-[10px] block ${returnCondition === 'PARCIALMENTE_CHEIO' ? 'text-slate-950/80 font-bold' : 'text-slate-500'}`}>
+                Retorna cheio ao estoque
+              </span>
             </button>
 
             <button
@@ -314,33 +330,35 @@ export default function ScannerPage() {
               onClick={() => setReturnCondition('CHEIO_RETORNADO')}
               className={`p-2.5 rounded-xl text-left border transition-all ${
                 returnCondition === 'CHEIO_RETORNADO'
-                  ? 'bg-white border-orange-400 shadow-sm font-bold text-orange-950 ring-2 ring-orange-300'
-                  : 'bg-orange-100/50 border-orange-200 text-orange-800'
+                  ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm font-black ring-2 ring-amber-300'
+                  : 'bg-white hover:bg-orange-50/50 border-orange-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
               }`}
             >
               <span className="font-black block">3. Cheio (Intacto)</span>
-              <span className="text-[10px] text-orange-700">Não utilizado pelo cliente</span>
+              <span className={`text-[10px] block ${returnCondition === 'CHEIO_RETORNADO' ? 'text-slate-950/80 font-bold' : 'text-slate-500'}`}>
+                Não utilizado pelo cliente
+              </span>
             </button>
           </div>
 
           {returnCondition === 'PARCIALMENTE_CHEIO' && (
-            <div className="p-3.5 bg-white border border-orange-200 rounded-2xl space-y-3 animate-in fade-in">
+            <div className="p-3.5 bg-white dark:bg-slate-900 border border-orange-200 dark:border-orange-800/60 rounded-2xl space-y-3 animate-in fade-in shadow-2xs">
               <div className="flex items-center gap-2">
-                <span className="text-slate-800 font-black text-xs">Litros restantes no barril:</span>
+                <span className="text-slate-900 dark:text-white font-black text-xs">Litros restantes no barril:</span>
                 <input
                   type="number"
                   step="0.5"
                   min="0.5"
                   value={returnVolumeLiters}
                   onChange={(e) => setReturnVolumeLiters(e.target.value)}
-                  className="w-24 px-3 py-1.5 bg-slate-50 border border-orange-300 rounded-xl font-black text-center text-orange-950 text-xs"
+                  className="w-24 px-3 py-1.5 bg-orange-50/50 dark:bg-slate-950 border border-orange-300 dark:border-orange-700 rounded-xl font-black text-center text-orange-950 dark:text-orange-200 text-xs"
                 />
-                <span className="font-bold text-slate-500 text-xs">Litros</span>
+                <span className="font-bold text-slate-600 dark:text-slate-400 text-xs">Litros</span>
               </div>
 
               {/* Pergunta de Cobrança do Cliente no Pedido */}
-              <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 block">
+              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
                   💳 Cobrança do Cliente no Pedido:
                 </span>
 
@@ -350,14 +368,14 @@ export default function ScannerPage() {
                     onClick={() => setBillingMode('FULL')}
                     className={`p-2.5 rounded-xl text-left border transition-all ${
                       billingMode === 'FULL'
-                        ? 'bg-amber-50 border-amber-400 text-amber-950 ring-2 ring-amber-300 font-bold shadow-xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        ? 'bg-amber-500 text-slate-950 border-amber-600 ring-2 ring-amber-300 font-black shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="font-black text-xs">🧾 Cobrar Barril Inteiro (100%)</span>
                     </div>
-                    <span className="text-[10px] text-slate-500 block leading-tight">
+                    <span className={`text-[10px] block leading-tight ${billingMode === 'FULL' ? 'text-slate-950/80 font-semibold' : 'text-slate-500'}`}>
                       O cliente paga o valor integral do barril (padrão em eventos onde o barril foi aberto).
                     </span>
                   </button>
@@ -367,14 +385,14 @@ export default function ScannerPage() {
                     onClick={() => setBillingMode('PARTIAL')}
                     className={`p-2.5 rounded-xl text-left border transition-all ${
                       billingMode === 'PARTIAL'
-                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-300 font-bold shadow-xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-600 ring-2 ring-emerald-300 font-black shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="font-black text-xs text-emerald-800">💰 Cobrar Apenas Consumo Parcial</span>
+                      <span className="font-black text-xs">💰 Cobrar Apenas Consumo Parcial</span>
                     </div>
-                    <span className="text-[10px] text-slate-500 block leading-tight">
+                    <span className={`text-[10px] block leading-tight ${billingMode === 'PARTIAL' ? 'text-slate-950/80 font-semibold' : 'text-slate-500'}`}>
                       Calcula os litros consumidos e desconta os litros que voltaram no pedido.
                     </span>
                   </button>
@@ -383,21 +401,21 @@ export default function ScannerPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-orange-800 font-medium">
+          <p className="text-[11px] text-orange-900 dark:text-orange-300 font-bold">
             💡 Dica: Você também pode bipar <strong>Chopeiras e Cilindros de CO2</strong> continuamente aqui para dar baixa e retornar ao pátio!
           </p>
         </div>
       )}
 
       {mode === 'DELIVER' && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2 animate-in fade-in">
-          <label className="text-xs font-bold text-emerald-900 block">
+        <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl space-y-2 animate-in fade-in shadow-xs">
+          <label className="text-xs font-black text-emerald-950 dark:text-emerald-200 block">
             📍 Selecione o Cliente de Destino da Entrega:
           </label>
           <select
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full p-2.5 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-800"
+            className="w-full p-2.5 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white shadow-2xs"
           >
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
@@ -405,7 +423,7 @@ export default function ScannerPage() {
               </option>
             ))}
           </select>
-          <p className="text-[11px] text-emerald-700">
+          <p className="text-[11px] text-emerald-800 dark:text-emerald-400 font-medium">
             Ao bipar, o barril ou chopeira é transferido para a custódia do cliente.
           </p>
         </div>
@@ -419,14 +437,14 @@ export default function ScannerPage() {
         <div
           className={`p-4 rounded-2xl border text-xs font-bold flex items-center gap-2.5 shadow-sm animate-in slide-in-from-top-2 ${
             feedbackMessage.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-rose-50 border-rose-200 text-rose-800'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-950 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300'
+              : 'bg-rose-50 border-rose-300 text-rose-950 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300'
           }`}
         >
           {feedbackMessage.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
           )}
           <span>{feedbackMessage.text}</span>
         </div>
@@ -434,27 +452,27 @@ export default function ScannerPage() {
 
       {/* Scanned Item Detailed Card */}
       {scannedItem && (
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-md space-y-4 animate-in fade-in">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 animate-in fade-in">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 {itemType === 'KEG' ? `BARRIL ${scannedItem.capacity}L` : 'EQUIPAMENTO'}
               </span>
-              <h3 className="text-xl font-black text-slate-900">{scannedItem.code}</h3>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">{scannedItem.code}</h3>
             </div>
             {getStatusBadge(scannedItem.status)}
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             {scannedItem.currentBeerName && (
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                <span className="text-[10px] font-bold text-purple-700 block">Cerveja no Barril</span>
-                <span className="text-sm font-extrabold text-purple-900">{scannedItem.currentBeerName}</span>
-                <span className="text-[11px] font-black text-purple-800 block mt-0.5">
+              <div className="p-3.5 bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-xl">
+                <span className="text-[10px] font-bold text-purple-700 dark:text-purple-400 block">Cerveja no Barril</span>
+                <span className="text-sm font-black text-purple-950 dark:text-purple-100">{scannedItem.currentBeerName}</span>
+                <span className="text-[11px] font-black text-purple-900 dark:text-purple-300 block mt-0.5">
                   Volume: {scannedItem.currentVolumeLiters || scannedItem.capacity} Litros
                 </span>
                 {scannedItem.currentBatch && (
-                  <span className="text-[10px] text-purple-600 block mt-0.5 font-mono">
+                  <span className="text-[10px] text-purple-700 dark:text-purple-400 block mt-0.5 font-mono font-semibold">
                     Lote: {scannedItem.currentBatch.batchNumber}
                   </span>
                 )}
@@ -462,12 +480,12 @@ export default function ScannerPage() {
             )}
 
             {scannedItem.currentClient && (
-              <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                <span className="text-[10px] font-bold text-orange-700 block">Cliente Atual</span>
-                <span className="text-sm font-extrabold text-orange-900">
+              <div className="p-3.5 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl">
+                <span className="text-[10px] font-bold text-amber-800 dark:text-amber-400 block">Cliente Atual</span>
+                <span className="text-sm font-black text-amber-950 dark:text-amber-100">
                   {scannedItem.currentClient.tradeName || scannedItem.currentClient.name}
                 </span>
-                <span className="text-[10px] text-orange-700/80 block mt-0.5">
+                <span className="text-[10px] text-amber-800/80 dark:text-amber-300/80 block mt-0.5 font-medium">
                   {scannedItem.currentClient.city || ''}
                 </span>
               </div>
@@ -475,19 +493,19 @@ export default function ScannerPage() {
           </div>
 
           {scannedItem.notes && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
-              <span className="font-bold text-slate-800 block mb-0.5">Observações:</span>
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300">
+              <span className="font-bold text-slate-900 dark:text-white block mb-0.5">Observações:</span>
               {scannedItem.notes}
             </div>
           )}
 
           {/* Action buttons inside lookup */}
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={() => setTimelineOpen(true)}
-              className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+              className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-700 shadow-2xs"
             >
-              <Clock className="w-4 h-4 text-slate-600" />
+              <Clock className="w-4 h-4 text-slate-600 dark:text-slate-400" />
               Ver Linha do Tempo
             </button>
           </div>
@@ -496,15 +514,15 @@ export default function ScannerPage() {
 
       {/* Batch Scanned History List */}
       {batchScannedCodes.length > 0 && (
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+            <h4 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
               <ListPlus className="w-4 h-4 text-amber-600" />
               Bipes Recentes nesta Sessão ({batchScannedCodes.length})
             </h4>
             <button
               onClick={() => setBatchScannedCodes([])}
-              className="text-[11px] text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1"
+              className="text-[11px] text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold flex items-center gap-1"
             >
               <Trash2 className="w-3.5 h-3.5" /> Limpar
             </button>
@@ -513,7 +531,7 @@ export default function ScannerPage() {
             {batchScannedCodes.map((c) => (
               <span
                 key={c}
-                className="px-2.5 py-1 bg-slate-100 text-slate-800 font-mono text-xs font-bold rounded-lg border border-slate-200"
+                className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-200 font-mono text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700"
               >
                 {c}
               </span>
