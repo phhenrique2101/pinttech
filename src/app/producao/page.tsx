@@ -42,7 +42,7 @@ import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import MapaTraceabilitySheetModal from '@/components/brew/MapaTraceabilitySheetModal';
 import LiveBatchManagerModal from '@/components/brew/LiveBatchManagerModal';
 import EditRecipeModal from '@/components/brew/EditRecipeModal';
-import { formatDate, formatDateShort, formatCurrency } from '@/lib/utils';
+import { formatDate, formatDateShort, formatCurrency, getLocalDateString } from '@/lib/utils';
 
 export default function ProducaoPage() {
   const [batches, setBatches] = useState<any[]>([]);
@@ -53,10 +53,19 @@ export default function ProducaoPage() {
   const [search, setSearch] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'PRODUCTION_TANKS' | 'HISTORY_MAPA' | 'RECIPES'>('PRODUCTION_TANKS');
 
+  // Sub-aba ativa dentro de Produção & Tanques: TANKS ou TASKS
+  const [productionSubTab, setProductionSubTab] = useState<'TANKS' | 'TASKS'>('TANKS');
+
   // View mode and sorting state for Unified Production & Tanks
   const [tankViewMode, setTankViewMode] = useState<'CARDS' | 'ROWS'>('CARDS');
   const [tankSortBy, setTankSortBy] = useState<'name' | 'status' | 'batch' | 'capacity' | 'occupation' | 'type'>('name');
   const [tankSortOrder, setTankSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // View mode, sorting and filters for Tarefas da Adega
+  const [taskViewMode, setTaskViewMode] = useState<'CARDS' | 'ROWS'>('ROWS');
+  const [taskSortBy, setTaskSortBy] = useState<'dueDate' | 'urgency' | 'tank' | 'batch' | 'title' | 'type'>('dueDate');
+  const [taskSortOrder, setTaskSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [taskFilter, setTaskFilter] = useState<'ALL' | 'TODAY' | 'LATE' | 'PENDING' | 'COMPLETED'>('ALL');
 
   // Tank filter state
   const [tankStatusFilter, setTankStatusFilter] = useState<string>('ALL');
@@ -157,6 +166,9 @@ export default function ProducaoPage() {
   useEffect(() => {
     fetchData();
     try {
+      const savedSubTab = localStorage.getItem('pinttech_production_subtab');
+      if (savedSubTab === 'TANKS' || savedSubTab === 'TASKS') setProductionSubTab(savedSubTab);
+
       const savedMode = localStorage.getItem('pinttech_tank_view_mode') || localStorage.getItem('pinttech_batch_view_mode');
       if (savedMode === 'CARDS' || savedMode === 'ROWS') setTankViewMode(savedMode);
 
@@ -167,6 +179,17 @@ export default function ProducaoPage() {
 
       const savedOrder = localStorage.getItem('pinttech_tank_sort_order');
       if (savedOrder === 'asc' || savedOrder === 'desc') setTankSortOrder(savedOrder);
+
+      const savedTaskMode = localStorage.getItem('pinttech_task_view_mode');
+      if (savedTaskMode === 'CARDS' || savedTaskMode === 'ROWS') setTaskViewMode(savedTaskMode);
+
+      const savedTaskSort = localStorage.getItem('pinttech_task_sort_by');
+      if (savedTaskSort && ['dueDate', 'urgency', 'tank', 'batch', 'title', 'type'].includes(savedTaskSort)) {
+        setTaskSortBy(savedTaskSort as any);
+      }
+
+      const savedTaskOrder = localStorage.getItem('pinttech_task_sort_order');
+      if (savedTaskOrder === 'asc' || savedTaskOrder === 'desc') setTaskSortOrder(savedTaskOrder);
     } catch {
       // ignore
     }
@@ -333,6 +356,238 @@ export default function ProducaoPage() {
     try {
       localStorage.setItem('pinttech_tank_sort_order', newOrder);
     } catch {}
+  };
+
+  const changeProductionSubTab = (tab: 'TANKS' | 'TASKS') => {
+    setProductionSubTab(tab);
+    try {
+      localStorage.setItem('pinttech_production_subtab', tab);
+    } catch {}
+  };
+
+  const changeTaskViewMode = (mode: 'CARDS' | 'ROWS') => {
+    setTaskViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_task_view_mode', mode);
+    } catch {}
+  };
+
+  const handleTaskSortChange = (field: 'dueDate' | 'urgency' | 'tank' | 'batch' | 'title' | 'type') => {
+    let newOrder: 'asc' | 'desc' = 'asc';
+    if (taskSortBy === field) {
+      newOrder = taskSortOrder === 'asc' ? 'desc' : 'asc';
+    }
+    setTaskSortBy(field);
+    setTaskSortOrder(newOrder);
+    try {
+      localStorage.setItem('pinttech_task_sort_by', field);
+      localStorage.setItem('pinttech_task_sort_order', newOrder);
+    } catch {}
+  };
+
+  const toggleTaskSortOrder = () => {
+    const newOrder = taskSortOrder === 'asc' ? 'desc' : 'asc';
+    setTaskSortOrder(newOrder);
+    try {
+      localStorage.setItem('pinttech_task_sort_order', newOrder);
+    } catch {}
+  };
+
+  // Mapeamento Completo de Todas as Tarefas da Adega & Lotes Ativos
+  const allCellarTasks = useMemo(() => {
+    const list: Array<{
+      id: string;
+      batchId: string;
+      batchNumber: string;
+      recipeName: string;
+      recipeStyle?: string;
+      tankName: string;
+      tankId?: string;
+      batch: any;
+      title: string;
+      type: string;
+      dueDate: string;
+      completed: boolean;
+      completedAt?: string;
+      amount?: number;
+      unit?: string;
+      notes?: string;
+      urgency: 'LATE' | 'TODAY' | 'FUTURE' | 'COMPLETED';
+      daysDiff: number;
+    }> = [];
+
+    const todayStr = getLocalDateString();
+    const today = new Date(todayStr + 'T00:00:00');
+
+    activeBatches.forEach((b) => {
+      if (!b.tankTasksJson) return;
+      try {
+        const parsed = JSON.parse(b.tankTasksJson);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((t: any) => {
+            if (!t || !t.id || !t.title) return;
+
+            const dueDateStr = t.dueDate || todayStr;
+            let urgency: 'LATE' | 'TODAY' | 'FUTURE' | 'COMPLETED' = 'FUTURE';
+
+            const taskDate = new Date(dueDateStr + 'T00:00:00');
+            const diffTime = taskDate.getTime() - today.getTime();
+            const daysDiff = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+            if (t.completed) {
+              urgency = 'COMPLETED';
+            } else if (dueDateStr < todayStr) {
+              urgency = 'LATE';
+            } else if (dueDateStr === todayStr) {
+              urgency = 'TODAY';
+            } else {
+              urgency = 'FUTURE';
+            }
+
+            const tankName = b.tank?.name || (tanks.find((tk) => tk.id === b.tankId)?.name) || 'Sem tanque';
+
+            list.push({
+              id: t.id,
+              batchId: b.id,
+              batchNumber: b.batchNumber || 'S/N',
+              recipeName: b.recipe?.name || 'Cerveja',
+              recipeStyle: b.recipe?.style || '',
+              tankName,
+              tankId: b.tankId,
+              batch: b,
+              title: t.title,
+              type: t.type || 'OTHER',
+              dueDate: dueDateStr,
+              completed: !!t.completed,
+              completedAt: t.completedAt,
+              amount: t.amount,
+              unit: t.unit,
+              notes: t.notes,
+              urgency,
+              daysDiff,
+            });
+          });
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    });
+
+    return list;
+  }, [activeBatches, tanks]);
+
+  const lateTasksCount = useMemo(() => {
+    return allCellarTasks.filter((t) => t.urgency === 'LATE').length;
+  }, [allCellarTasks]);
+
+  const todayTasksCount = useMemo(() => {
+    return allCellarTasks.filter((t) => t.urgency === 'TODAY').length;
+  }, [allCellarTasks]);
+
+  const pendingTasksCount = useMemo(() => {
+    return allCellarTasks.filter((t) => !t.completed).length;
+  }, [allCellarTasks]);
+
+  // Filtro de Busca & Sub-filtro de Tarefas
+  const filteredTasks = useMemo(() => {
+    return allCellarTasks.filter((t) => {
+      if (taskFilter === 'TODAY' && t.urgency !== 'TODAY') return false;
+      if (taskFilter === 'LATE' && t.urgency !== 'LATE') return false;
+      if (taskFilter === 'PENDING' && t.completed) return false;
+      if (taskFilter === 'COMPLETED' && !t.completed) return false;
+
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const matches =
+          t.title.toLowerCase().includes(q) ||
+          t.tankName.toLowerCase().includes(q) ||
+          t.batchNumber.toLowerCase().includes(q) ||
+          t.recipeName.toLowerCase().includes(q) ||
+          (t.notes && t.notes.toLowerCase().includes(q)) ||
+          t.type.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [allCellarTasks, taskFilter, search]);
+
+  // Ordenação de Tarefas
+  const sortedTasks = useMemo(() => {
+    return [...filteredTasks].sort((a, b) => {
+      let comp = 0;
+      switch (taskSortBy) {
+        case 'dueDate':
+          comp = (a.dueDate || '').localeCompare(b.dueDate || '');
+          break;
+        case 'urgency': {
+          const priority: Record<string, number> = {
+            LATE: 1,
+            TODAY: 2,
+            FUTURE: 3,
+            COMPLETED: 4,
+          };
+          comp = (priority[a.urgency] || 99) - (priority[b.urgency] || 99);
+          if (comp === 0) comp = (a.dueDate || '').localeCompare(b.dueDate || '');
+          break;
+        }
+        case 'tank':
+          comp = a.tankName.localeCompare(b.tankName, undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        case 'batch':
+          comp = a.batchNumber.localeCompare(b.batchNumber, undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        case 'title':
+          comp = a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+          break;
+        case 'type':
+          comp = a.type.localeCompare(b.type, undefined, { sensitivity: 'base' });
+          break;
+      }
+      return taskSortOrder === 'asc' ? comp : -comp;
+    });
+  }, [filteredTasks, taskSortBy, taskSortOrder]);
+
+  // Concluir / Reabrir Tarefa Diretamente da Lista
+  const handleToggleTask = async (taskItem: any) => {
+    const targetBatch = batches.find((b) => b.id === taskItem.batchId);
+    if (!targetBatch) return;
+
+    let currentTasks: any[] = [];
+    try {
+      currentTasks = targetBatch.tankTasksJson ? JSON.parse(targetBatch.tankTasksJson) : [];
+    } catch {}
+
+    const newCompleted = !taskItem.completed;
+    const updatedTasks = currentTasks.map((t: any) =>
+      t.id === taskItem.id
+        ? {
+            ...t,
+            completed: newCompleted,
+            completedAt: newCompleted ? new Date().toISOString() : undefined,
+          }
+        : t
+    );
+
+    // Atualização otimista local
+    setBatches((prevBatches) =>
+      prevBatches.map((b) =>
+        b.id === targetBatch.id
+          ? { ...b, tankTasksJson: JSON.stringify(updatedTasks) }
+          : b
+      )
+    );
+
+    try {
+      await fetch(`/api/batches/${targetBatch.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankTasksJson: JSON.stringify(updatedTasks) }),
+      });
+    } catch (err) {
+      console.error('Erro ao salvar status da tarefa:', err);
+      fetchData();
+    }
   };
 
   const handleUpdateBatchStatus = async () => {
@@ -668,40 +923,44 @@ export default function ProducaoPage() {
             </div>
           )}
 
-          {/* Barra de Filtros Rápidos de Status e Ações */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-sm">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {[
-                { id: 'ALL', label: `Todos (${tanks.length})` },
-                {
-                  id: 'OCUPADO',
-                  label: `Em Produção (${tanks.filter((t) => t.status === 'OCUPADO' || !!getTankActiveBatch(t)).length})`,
-                },
-                {
-                  id: 'LIVRE',
-                  label: `Livres (${tanks.filter((t) => t.status === 'LIVRE' && !getTankActiveBatch(t)).length})`,
-                },
-                {
-                  id: 'HIGIENIZANDO',
-                  label: `CIP / Limpeza (${tanks.filter((t) => t.status === 'HIGIENIZANDO').length})`,
-                },
-                {
-                  id: 'MANUTENCAO',
-                  label: `Manutenção (${tanks.filter((t) => t.status === 'MANUTENCAO').length})`,
-                },
-              ].map((btn) => (
-                <button
-                  key={btn.id}
-                  onClick={() => setTankStatusFilter(btn.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                    tankStatusFilter === btn.id
-                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                      : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                  }`}
-                >
-                  {btn.label}
-                </button>
-              ))}
+          {/* Sub-abas de Produção: Tanques e Tarefas */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => changeProductionSubTab('TANKS')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                  productionSubTab === 'TANKS'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                    : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                <Cylinder className="w-4 h-4" />
+                <span>Tanques ({tanks.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => changeProductionSubTab('TASKS')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                  productionSubTab === 'TASKS'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                    : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span>Tarefas ({pendingTasksCount})</span>
+                {lateTasksCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                    {lateTasksCount} atrasada{lateTasksCount > 1 ? 's' : ''}
+                  </span>
+                )}
+                {todayTasksCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                    {todayTasksCount} hoje
+                  </span>
+                )}
+              </button>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
@@ -721,6 +980,10 @@ export default function ProducaoPage() {
               </button>
             </div>
           </div>
+
+          {/* SUB-ABA 1: TANQUES */}
+          {productionSubTab === 'TANKS' && (
+            <div className="space-y-5">
 
           {/* Barra de Ferramentas: Contagem, Ordenação e Alternador de Visualização (Grade / Linhas) */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -1382,6 +1645,582 @@ export default function ProducaoPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* SUB-ABA 2: TAREFAS DA ADEGA */}
+      {productionSubTab === 'TASKS' && (
+        <div className="space-y-5">
+          {/* Barra de Ferramentas das Tarefas */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:px-4 flex flex-col gap-3 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Contagem & Status */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Tarefas da Adega:</span>
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                  {sortedTasks.length} {sortedTasks.length === 1 ? 'tarefa' : 'tarefas'}
+                </span>
+                {search.trim() && (
+                  <span className="text-[11px] text-slate-400">
+                    (filtrando por &ldquo;{search}&rdquo;)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center flex-wrap gap-2.5">
+                {/* Ordenação */}
+                <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="hidden sm:inline">Ordenar:</span>
+                  </span>
+                  <select
+                    value={taskSortBy}
+                    onChange={(e) => {
+                      const val = e.target.value as any;
+                      setTaskSortBy(val);
+                      try { localStorage.setItem('pinttech_task_sort_by', val); } catch {}
+                    }}
+                    className="bg-transparent text-xs text-amber-300 font-semibold focus:outline-none cursor-pointer pr-1"
+                  >
+                    <option value="dueDate" className="bg-slate-900 text-slate-200">Data Prevista</option>
+                    <option value="urgency" className="bg-slate-900 text-slate-200">Urgência (Atrasada &gt; Hoje)</option>
+                    <option value="tank" className="bg-slate-900 text-slate-200">Nome do Tanque</option>
+                    <option value="batch" className="bg-slate-900 text-slate-200">Lote / Cerveja</option>
+                    <option value="title" className="bg-slate-900 text-slate-200">Título da Tarefa</option>
+                    <option value="type" className="bg-slate-900 text-slate-200">Tipo de Processo</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={toggleTaskSortOrder}
+                    className="p-1 rounded-md hover:bg-slate-800 text-slate-300 hover:text-amber-400 transition"
+                    title={taskSortOrder === 'asc' ? 'Ordem Crescente (clique para Decrescente)' : 'Ordem Decrescente (clique para Crescente)'}
+                  >
+                    {taskSortOrder === 'asc' ? (
+                      <ArrowUp className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Alternador Grade / Linhas */}
+                <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1">
+                  <button
+                    type="button"
+                    onClick={() => changeTaskViewMode('CARDS')}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      taskViewMode === 'CARDS'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Visualizar como Grade / Cards"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Cards</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => changeTaskViewMode('ROWS')}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      taskViewMode === 'ROWS'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Visualizar em Linhas"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span>Linhas</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-filtros Rápidos de Tarefas */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => setTaskFilter('ALL')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  taskFilter === 'ALL'
+                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white'
+                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                Todas ({allCellarTasks.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTaskFilter('TODAY')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  taskFilter === 'TODAY'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                    : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30'
+                }`}
+              >
+                <span>⚡ Vence Hoje</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-400 text-slate-950">
+                  {todayTasksCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTaskFilter('LATE')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  taskFilter === 'LATE'
+                    ? 'bg-rose-600 text-white font-black shadow-xs'
+                    : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30'
+                }`}
+              >
+                <span>🚨 Atrasadas</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-rose-600 text-white">
+                  {lateTasksCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTaskFilter('PENDING')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  taskFilter === 'PENDING'
+                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white'
+                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                Pendentes ({pendingTasksCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTaskFilter('COMPLETED')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  taskFilter === 'COMPLETED'
+                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white'
+                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                Concluídas ({allCellarTasks.length - pendingTasksCount})
+              </button>
+            </div>
+          </div>
+
+          {/* LISTA / TABELA DE TAREFAS */}
+          {sortedTasks.length === 0 ? (
+            <div className="p-12 text-center bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl space-y-3">
+              <Clock className="w-10 h-10 mx-auto text-slate-500" />
+              <h3 className="text-sm font-bold text-slate-200">
+                {allCellarTasks.length === 0
+                  ? 'Nenhuma tarefa programada nos lotes ativos da adega'
+                  : 'Nenhuma tarefa encontrada para os filtros selecionados'}
+              </h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                {allCellarTasks.length === 0
+                  ? 'Abra qualquer lote na aba Tanques para programar medições diárias, dosagens de dry hopping, antioxidantes ou purga.'
+                  : 'Tente alterar os filtros rápidos acima ou a busca.'}
+              </p>
+              {allCellarTasks.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => changeProductionSubTab('TANKS')}
+                  className="mt-2 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black hover:bg-amber-400 transition inline-flex items-center gap-1.5"
+                >
+                  <Cylinder className="w-4 h-4" />
+                  <span>Ver Tanques da Produção</span>
+                </button>
+              )}
+            </div>
+          ) : taskViewMode === 'ROWS' ? (
+            /* VISUALIZAÇÃO EM LINHAS (TABELA DE TAREFAS) */
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-950 text-slate-300 font-bold border-b border-slate-800">
+                    <tr>
+                      <th className="p-3.5 w-12 text-center">Status</th>
+                      <th
+                        onClick={() => handleTaskSortChange('urgency')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        title="Clique para ordenar por Urgência / Prazo"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Prazo / Urgência</span>
+                          {taskSortBy === 'urgency' ? (
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTaskSortChange('title')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        title="Clique para ordenar por Tarefa"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Tarefa & Processo</span>
+                          {taskSortBy === 'title' ? (
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTaskSortChange('tank')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        title="Clique para ordenar por Tanque"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Tanque</span>
+                          {taskSortBy === 'tank' ? (
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTaskSortChange('batch')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        title="Clique para ordenar por Lote"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Lote / Cerveja</span>
+                          {taskSortBy === 'batch' ? (
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleTaskSortChange('dueDate')}
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        title="Clique para ordenar por Data Prevista"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Data Prevista</span>
+                          {taskSortBy === 'dueDate' ? (
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th className="p-3.5 text-right whitespace-nowrap">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {sortedTasks.map((t) => {
+                      const isLate = t.urgency === 'LATE';
+                      const isToday = t.urgency === 'TODAY';
+                      const isCompleted = t.completed;
+
+                      return (
+                        <tr
+                          key={`${t.batchId}-${t.id}`}
+                          className={`transition-colors border-l-4 ${
+                            isCompleted
+                              ? 'bg-slate-900/40 border-l-slate-600 opacity-60 hover:opacity-100 hover:bg-slate-800/40'
+                              : isLate
+                              ? 'bg-rose-950/30 border-l-rose-500 hover:bg-rose-950/50'
+                              : isToday
+                              ? 'bg-amber-950/30 border-l-amber-400 hover:bg-amber-950/50'
+                              : 'hover:bg-slate-800/50 border-l-transparent'
+                          }`}
+                        >
+                          {/* Checkbox de Conclusão */}
+                          <td className="p-3.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleTask(t)}
+                              className={`w-6 h-6 mx-auto rounded-lg border flex items-center justify-center transition-all ${
+                                isCompleted
+                                  ? 'bg-emerald-500 border-emerald-500 text-white'
+                                  : isLate
+                                  ? 'bg-rose-950/60 border-rose-500 text-rose-300 hover:border-rose-400'
+                                  : isToday
+                                  ? 'bg-amber-950/60 border-amber-400 text-amber-300 hover:border-amber-300'
+                                  : 'bg-slate-800 border-slate-600 hover:border-amber-500 text-transparent'
+                              }`}
+                              title={isCompleted ? 'Marcar como Pendente' : 'Marcar como Concluída'}
+                            >
+                              {isCompleted && <Check className="w-4 h-4 stroke-[3]" />}
+                            </button>
+                          </td>
+
+                          {/* Prazo / Urgência */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            {isCompleted ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                <Check className="w-3 h-3" />
+                                <span>Concluída</span>
+                              </span>
+                            ) : isLate ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-600 text-white shadow-xs animate-pulse">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                <span>Atrasada ({Math.abs(t.daysDiff)}d)</span>
+                              </span>
+                            ) : isToday ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-400 text-slate-950 shadow-xs ring-2 ring-amber-400/40">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>Vence Hoje</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                                <Calendar className="w-3 h-3 text-slate-400" />
+                                <span>Em {t.daysDiff} dias</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Tarefa & Processo */}
+                          <td className="p-3.5">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className={`text-xs font-bold ${
+                                    isCompleted
+                                      ? 'line-through text-slate-500'
+                                      : isLate
+                                      ? 'text-rose-200'
+                                      : isToday
+                                      ? 'text-amber-200'
+                                      : 'text-white'
+                                  }`}
+                                >
+                                  {t.title}
+                                </span>
+
+                                {t.type === 'DRY_HOPPING' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                    🌿 Dry Hopping
+                                  </span>
+                                )}
+                                {t.type === 'ANTIOXIDANT' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                    🧪 Antioxidante
+                                  </span>
+                                )}
+                                {t.type === 'COLD_CRASH' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                    ❄️ Cold Crash
+                                  </span>
+                                )}
+                                {t.type === 'PURGE' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                                    ⚗️ Purga
+                                  </span>
+                                )}
+                                {t.type === 'MEASUREMENT' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                    📊 Medição
+                                  </span>
+                                )}
+                                {t.amount && (
+                                  <span className="text-[11px] font-mono font-bold text-slate-400">
+                                    ({t.amount} {t.unit || 'KG'})
+                                  </span>
+                                )}
+                              </div>
+                              {t.notes && (
+                                <p className="text-[11px] text-slate-400 line-clamp-1">
+                                  {t.notes}
+                                </p>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Tanque */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1.5 font-bold text-white text-xs">
+                              <Cylinder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>{t.tankName}</span>
+                            </span>
+                          </td>
+
+                          {/* Lote / Cerveja */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <div className="space-y-0.5">
+                              <span className="font-mono text-amber-300 font-bold text-xs block">
+                                #{t.batchNumber}
+                              </span>
+                              <span className="text-[11px] text-slate-400 block truncate max-w-[150px]">
+                                {t.recipeName}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Data Prevista */}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span className={`text-xs font-bold ${
+                              isLate ? 'text-rose-300 font-black' : isToday ? 'text-amber-300 font-black' : 'text-slate-300'
+                            }`}>
+                              {formatDate(t.dueDate)}
+                            </span>
+                            {t.completedAt && (
+                              <span className="block text-[10px] text-emerald-400 font-medium">
+                                Feito em {formatDateShort(t.completedAt)}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Ações */}
+                          <td className="p-3.5 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBatchForManager(t.batch)}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 text-xs font-bold transition inline-flex items-center gap-1"
+                              title="Abrir Gestor do Lote na Adega"
+                            >
+                              <Activity className="w-3.5 h-3.5" />
+                              <span>Adega</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* VISUALIZAÇÃO EM CARDS DE TAREFAS */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sortedTasks.map((t) => {
+                const isLate = t.urgency === 'LATE';
+                const isToday = t.urgency === 'TODAY';
+                const isCompleted = t.completed;
+
+                return (
+                  <div
+                    key={`${t.batchId}-${t.id}`}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                      isCompleted
+                        ? 'bg-slate-900/50 border-slate-800 opacity-60'
+                        : isLate
+                        ? 'bg-rose-950/20 border-rose-500 shadow-md shadow-rose-950/30 ring-1 ring-rose-500/30'
+                        : isToday
+                        ? 'bg-amber-950/20 border-amber-400 shadow-md shadow-amber-950/30 ring-1 ring-amber-400/40'
+                        : 'bg-slate-900 border-slate-800'
+                    }`}
+                  >
+                    <div className="space-y-2.5">
+                      {/* Header do Card */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {isCompleted ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              ✓ Concluída
+                            </span>
+                          ) : isLate ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                              🚨 Atrasada ({Math.abs(t.daysDiff)}d)
+                            </span>
+                          ) : isToday ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                              ⚡ Vence Hoje
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                              📅 Em {t.daysDiff}d
+                            </span>
+                          )}
+
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-amber-300 border border-slate-700 flex items-center gap-1">
+                            <Cylinder className="w-3 h-3" />
+                            {t.tankName}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTask(t)}
+                          className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                            isCompleted
+                              ? 'bg-emerald-500 border-emerald-500 text-white'
+                              : isLate
+                              ? 'bg-rose-950/60 border-rose-500 text-rose-400 hover:border-rose-300'
+                              : isToday
+                              ? 'bg-amber-950/60 border-amber-400 text-amber-300 hover:border-amber-300'
+                              : 'bg-slate-800 border-slate-600 hover:border-amber-500 text-transparent'
+                          }`}
+                          title={isCompleted ? 'Marcar como Pendente' : 'Marcar como Concluída'}
+                        >
+                          {isCompleted && <Check className="w-4 h-4 stroke-[3]" />}
+                        </button>
+                      </div>
+
+                      {/* Título & Detalhes */}
+                      <div>
+                        <h4
+                          className={`text-sm font-bold ${
+                            isCompleted
+                              ? 'line-through text-slate-500'
+                              : isLate
+                              ? 'text-rose-100'
+                              : isToday
+                              ? 'text-amber-100'
+                              : 'text-white'
+                          }`}
+                        >
+                          {t.title}
+                        </h4>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
+                          <span className="font-mono text-amber-300 font-bold">#{t.batchNumber}</span>
+                          <span>•</span>
+                          <span className="truncate">{t.recipeName}</span>
+                          {t.amount && (
+                            <span className="font-mono font-bold text-slate-300 ml-auto">
+                              {t.amount} {t.unit || 'KG'}
+                            </span>
+                          )}
+                        </div>
+                        {t.notes && (
+                          <p className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded-lg mt-2 border border-slate-800/80">
+                            {t.notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer do Card */}
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80 text-xs">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                        <span className={isLate ? 'text-rose-400 font-bold' : isToday ? 'text-amber-400 font-bold' : 'text-slate-300'}>
+                          {formatDate(t.dueDate)}
+                        </span>
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBatchForManager(t.batch)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold transition flex items-center gap-1"
+                      >
+                        <Activity className="w-3.5 h-3.5" />
+                        <span>Adega</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
         </div>
       )}
 
