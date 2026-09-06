@@ -21,7 +21,17 @@ export async function GET(req: NextRequest) {
           },
         },
         tank: true,
-        kegs: true,
+        kegs: {
+          include: { currentClient: true },
+        },
+        movements: {
+          include: {
+            keg: {
+              include: { currentClient: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         ingredients: {
           include: {
             supplier: true,
@@ -29,7 +39,7 @@ export async function GET(req: NextRequest) {
           },
           orderBy: { createdAt: 'asc' },
         },
-        _count: { select: { kegs: true, ingredients: true } },
+        _count: { select: { kegs: true, ingredients: true, movements: true } },
       },
       orderBy: { brewDate: 'desc' },
     });

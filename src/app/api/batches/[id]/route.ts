@@ -27,7 +27,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           orderBy: { createdAt: 'asc' },
         },
         inventoryMovements: true,
-        movements: true,
+        movements: {
+          include: {
+            keg: {
+              include: { currentClient: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
