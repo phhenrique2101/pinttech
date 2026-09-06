@@ -740,6 +740,13 @@ export default function ProducaoPage() {
     return tanks.filter((t) => t.status === 'OCUPADO').length;
   }, [tanks]);
 
+  const totalVolumeInProduction = useMemo(() => {
+    return activeBatches.reduce(
+      (acc, b) => acc + (b.volumeProducedLiters || b.volumePlannedLiters || 0),
+      0
+    );
+  }, [activeBatches]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 pb-20">
       {/* Header Compacto & Moderno */}
@@ -783,8 +790,9 @@ export default function ProducaoPage() {
         </div>
       </div>
 
-      {/* Métricas Rápidas */}
+      {/* Métricas Rápidas Operacionais */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* 1. Lotes em Produção */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs hover:border-amber-300/60 dark:hover:border-amber-500/40 transition">
           <div className="w-11 h-11 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
             <Flame className="w-5 h-5" />
@@ -796,9 +804,13 @@ export default function ProducaoPage() {
             <strong className="text-2xl font-black text-slate-900 dark:text-white leading-tight block">
               {activeBatches.length}
             </strong>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 block truncate">
+              {activeBatches.length === 1 ? '1 lote ativo' : `${activeBatches.length} lotes ativos`}
+            </span>
           </div>
         </div>
 
+        {/* 2. Tanques Ocupados */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs hover:border-emerald-300/60 dark:hover:border-emerald-500/40 transition">
           <div className="w-11 h-11 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
             <Cylinder className="w-5 h-5" />
@@ -819,31 +831,62 @@ export default function ProducaoPage() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs hover:border-blue-300/60 dark:hover:border-blue-500/40 transition">
-          <div className="w-11 h-11 rounded-xl bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-5 h-5" />
+        {/* 3. Tarefas da Adega (Substitui Dossiês MAPA - Clicável direto para a aba Tarefas) */}
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('PRODUCTION_TANKS');
+            changeProductionSubTab('TASKS');
+          }}
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs hover:border-blue-300 dark:hover:border-blue-500/50 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition text-left cursor-pointer group"
+          title="Clique para abrir a central de Tarefas da Adega"
+        >
+          <div className="w-11 h-11 rounded-xl bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <Clock className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              Dossiês MAPA
-            </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
+                Tarefas da Adega
+              </span>
+              {lateTasksCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              )}
+            </div>
             <strong className="text-2xl font-black text-slate-900 dark:text-white leading-tight block">
-              {batches.length}
+              {pendingTasksCount}
             </strong>
+            <span className={`text-[10px] font-bold block truncate ${
+              lateTasksCount > 0
+                ? 'text-rose-600 dark:text-rose-400 font-black'
+                : todayTasksCount > 0
+                ? 'text-amber-600 dark:text-amber-400 font-black'
+                : 'text-slate-400 dark:text-slate-500'
+            }`}>
+              {lateTasksCount > 0
+                ? `🚨 ${lateTasksCount} atrasada${lateTasksCount > 1 ? 's' : ''}`
+                : todayTasksCount > 0
+                ? `⚡ ${todayTasksCount} vence${todayTasksCount > 1 ? 'm' : ''} hoje`
+                : '✓ Tudo em dia'}
+            </span>
           </div>
-        </div>
+        </button>
 
+        {/* 4. Volume em Tanques (Líquido em Processo) */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs hover:border-purple-300/60 dark:hover:border-purple-500/40 transition">
           <div className="w-11 h-11 rounded-xl bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-            <Beer className="w-5 h-5" />
+            <Droplet className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              Receitas no Catálogo
+              Volume em Adega
             </span>
             <strong className="text-2xl font-black text-slate-900 dark:text-white leading-tight block">
-              {recipes.length}
+              {totalVolumeInProduction.toLocaleString('pt-BR')} L
             </strong>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono block truncate">
+              {totalTankCapacity > 0 ? `${Math.round((totalVolumeInProduction / totalTankCapacity) * 100)}% ocupado` : 'líquido em processo'}
+            </span>
           </div>
         </div>
       </div>
