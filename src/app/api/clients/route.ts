@@ -42,26 +42,27 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, tradeName, document, email, phone, address, number, complement, neighborhood, city, state, zipCode, notes } = body;
 
-    if (!name) {
-      return NextResponse.json({ error: 'Nome / Razão Social é obrigatório' }, { status: 400 });
+    const resolvedName = (name || tradeName)?.trim();
+    if (!resolvedName) {
+      return NextResponse.json({ error: 'Nome ou Nome Fantasia é obrigatório' }, { status: 400 });
     }
 
     const client = await prisma.client.create({
       data: {
         breweryId: session.breweryId,
-        name,
-        tradeName,
-        document,
-        email,
-        phone,
-        address,
-        number,
-        complement,
-        neighborhood,
-        city,
-        state,
-        zipCode,
-        notes,
+        name: resolvedName,
+        tradeName: tradeName?.trim() || resolvedName,
+        document: document?.trim() || null,
+        email: email?.trim() || null,
+        phone: phone?.trim() || null,
+        address: address?.trim() || null,
+        number: number?.trim() || null,
+        complement: complement?.trim() || null,
+        neighborhood: neighborhood?.trim() || null,
+        city: city?.trim() || null,
+        state: state?.trim() || null,
+        zipCode: zipCode?.trim() || null,
+        notes: notes?.trim() || null,
       },
     });
 

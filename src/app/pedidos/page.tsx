@@ -42,10 +42,12 @@ import {
   List,
   LayoutGrid,
   CalendarDays,
+  UserPlus,
 } from 'lucide-react';
 import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMENT_TYPE_MAP } from '@/lib/utils';
 import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
+import QuickClientModal from '@/components/clients/QuickClientModal';
 
 // Função para sanitizar e extrair apenas o nome puro do produto/cerveja (sem lotes, barris ou datas)
 function cleanProductName(name: string): string {
@@ -179,11 +181,13 @@ function ClientSearchSelect({
   clientId,
   clients,
   onSelectClient,
+  onOpenQuickCreate,
   placeholder = '🔍 Digite o nome do cliente, bar, CNPJ ou cidade...',
 }: {
   clientId: string;
   clients: any[];
   onSelectClient: (client: any) => void;
+  onOpenQuickCreate?: (initialName: string) => void;
   placeholder?: string;
 }) {
   const selectedClient = clients.find((c) => c.id === clientId);
@@ -248,34 +252,64 @@ function ClientSearchSelect({
               if (selectedClient) setQuery(selectedClient.tradeName || selectedClient.name);
             }}
           />
-          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100">
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100">
             {filtered.length === 0 ? (
-              <div className="p-2.5 text-xs text-slate-400 text-center font-medium">
-                Nenhum cliente encontrado
+              <div className="p-3 text-center space-y-2">
+                <p className="text-xs text-slate-500 font-medium">
+                  Nenhum cliente encontrado{query ? ` para "${query}"` : ''}
+                </p>
+                {onOpenQuickCreate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOpen(false);
+                      onOpenQuickCreate(query);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Cadastrar {query ? `"${query}"` : 'novo cliente'} agora</span>
+                  </button>
+                )}
               </div>
             ) : (
-              filtered.slice(0, 20).map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => {
-                    setQuery(c.tradeName || c.name);
-                    setIsOpen(false);
-                    onSelectClient(c);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
-                    clientId === c.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
-                  }`}
-                >
-                  <div>
-                    <span className="font-extrabold block text-slate-900">{c.tradeName || c.name}</span>
-                    <span className="text-[10px] text-slate-400 block font-normal">
-                      {c.city ? `${c.city}/${c.state || ''}` : ''} {c.document ? `• CNPJ: ${c.document}` : ''}
-                    </span>
-                  </div>
-                  {clientId === c.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
-                </button>
-              ))
+              <>
+                {filtered.slice(0, 20).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setQuery(c.tradeName || c.name);
+                      setIsOpen(false);
+                      onSelectClient(c);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-amber-50 transition-colors flex items-center justify-between ${
+                      clientId === c.id ? 'bg-amber-50 font-bold text-amber-900' : 'text-slate-800'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-extrabold block text-slate-900">{c.tradeName || c.name}</span>
+                      <span className="text-[10px] text-slate-400 block font-normal">
+                        {c.city ? `${c.city}/${c.state || ''}` : ''} {c.document ? `• CNPJ: ${c.document}` : ''}
+                      </span>
+                    </div>
+                    {clientId === c.id && <Check className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
+                  </button>
+                ))}
+                {onOpenQuickCreate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOpen(false);
+                      onOpenQuickCreate(query);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs bg-amber-50/70 hover:bg-amber-100 text-amber-900 font-bold border-t border-slate-100 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-amber-600" />
+                    <span>+ Cadastrar {query ? `"${query}"` : 'novo cliente'}...</span>
+                  </button>
+                )}
+              </>
             )}
           </div>
         </>
@@ -339,6 +373,11 @@ export default function PedidosPage() {
   const [cautionDeposit, setCautionDeposit] = useState('0');
   const [discount, setDiscount] = useState('0');
   const [notes, setNotes] = useState('');
+
+  // Quick client modal state (cadastro rápido sem sair do pedido)
+  const [quickClientModalOpen, setQuickClientModalOpen] = useState(false);
+  const [quickClientInitialName, setQuickClientInitialName] = useState('');
+  const [quickClientTarget, setQuickClientTarget] = useState<'NEW_ORDER' | 'EDIT_ORDER'>('NEW_ORDER');
 
   // Scan delivery modal
   const [scanModalOrder, setScanModalOrder] = useState<any>(null);
@@ -545,10 +584,6 @@ export default function PedidosPage() {
       }
       if (Array.isArray(rData)) {
         setRecipes(rData);
-        if (rData.length > 0 && orderItems.length === 0) {
-          const defaultPrice = (rData[0].salePricePerLiter || rData[0].suggestedPricePerLiter || 20) * 50;
-          setOrderItems([{ recipeId: rData[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
-        }
       }
       if (Array.isArray(eData)) setEquipment(eData);
       if (Array.isArray(kData)) setKegs(kData);
@@ -577,6 +612,33 @@ export default function PedidosPage() {
         .filter(Boolean)
         .join(', ');
       setDeliveryAddress(fullAddr);
+    }
+  };
+
+  const handleQuickClientSuccess = (newClient: any) => {
+    // Adiciona o novo cliente à lista de clientes em memória
+    setClients((prev) => {
+      const exists = prev.some((c) => c.id === newClient.id);
+      if (exists) return prev;
+      return [newClient, ...prev];
+    });
+
+    const fullAddr = [
+      newClient.address ? `${newClient.address}${newClient.number ? `, ${newClient.number}` : ''}` : '',
+      newClient.complement ? `(${newClient.complement})` : '',
+      newClient.neighborhood,
+      newClient.city ? `${newClient.city} - ${newClient.state || ''}` : '',
+      newClient.zipCode ? `CEP: ${newClient.zipCode}` : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    if (quickClientTarget === 'NEW_ORDER') {
+      setClientId(newClient.id);
+      if (fullAddr) setDeliveryAddress(fullAddr);
+    } else {
+      setEditClientId(newClient.id);
+      if (fullAddr) setEditAddress(fullAddr);
     }
   };
 
@@ -655,12 +717,7 @@ export default function PedidosPage() {
   };
 
   const handleRemoveItemRow = (index: number) => {
-    if (orderItems.length > 1) {
-      setOrderItems(orderItems.filter((_, i) => i !== index));
-    } else if (recipes.length > 0) {
-      const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
-      setOrderItems([{ recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
-    }
+    setOrderItems(orderItems.filter((_, i) => i !== index));
   };
 
   const handleAddEditItemRow = () => {
@@ -998,10 +1055,7 @@ export default function PedidosPage() {
               setClientId('');
               setDeliveryAddress('');
               setSelectedEquipments([]);
-              if (recipes.length > 0) {
-                const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
-                setOrderItems([{ recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
-              }
+              setOrderItems([]);
               setNewModalOpen(true);
             }}
             className="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95"
@@ -1841,7 +1895,21 @@ export default function PedidosPage() {
               <form onSubmit={handleSaveOrderEdits} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Cliente / Ponto de Venda</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-slate-700">Cliente / Ponto de Venda</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickClientTarget('EDIT_ORDER');
+                          setQuickClientInitialName('');
+                          setQuickClientModalOpen(true);
+                        }}
+                        className="text-[11px] font-extrabold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer transition-colors"
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        <span>+ Novo Cliente</span>
+                      </button>
+                    </div>
                     <ClientSearchSelect
                       clientId={editClientId}
                       clients={clients}
@@ -1851,6 +1919,11 @@ export default function PedidosPage() {
                           const addr = [c.address, c.number, c.neighborhood, c.city].filter(Boolean).join(', ');
                           setEditAddress(addr);
                         }
+                      }}
+                      onOpenQuickCreate={(initialName) => {
+                        setQuickClientTarget('EDIT_ORDER');
+                        setQuickClientInitialName(initialName);
+                        setQuickClientModalOpen(true);
                       }}
                     />
                   </div>
@@ -2401,14 +2474,33 @@ export default function PedidosPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Busca Digitada de Cliente */}
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Cliente / Ponto de Venda <span className="text-amber-600">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">
+                      Cliente / Ponto de Venda <span className="text-amber-600">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickClientTarget('NEW_ORDER');
+                        setQuickClientInitialName('');
+                        setQuickClientModalOpen(true);
+                      }}
+                      className="text-[11px] font-extrabold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer transition-colors"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>+ Novo Cliente</span>
+                    </button>
+                  </div>
                   <ClientSearchSelect
                     clientId={clientId}
                     clients={clients}
                     onSelectClient={(c) => {
                       handleClientSelectForNewOrder(c.id);
+                    }}
+                    onOpenQuickCreate={(initialName) => {
+                      setQuickClientTarget('NEW_ORDER');
+                      setQuickClientInitialName(initialName);
+                      setQuickClientModalOpen(true);
                     }}
                   />
                 </div>
@@ -2465,142 +2557,158 @@ export default function PedidosPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {orderItems.map((item, idx) => {
-                    const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
-                    const isOutOfStock = stock.available <= 0;
-                    const isInsufficient = !isOutOfStock && item.quantity > stock.available;
+                  {orderItems.length === 0 ? (
+                    <div className="bg-white/80 p-5 rounded-xl border border-dashed border-purple-300 text-center space-y-2">
+                      <p className="text-xs text-purple-900 font-semibold">
+                        Nenhum item adicionado ao pedido ainda.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleAddItemRow}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Adicionar Primeiro Chopp / Produto</span>
+                      </button>
+                    </div>
+                  ) : (
+                    orderItems.map((item, idx) => {
+                      const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
+                      const isOutOfStock = stock.available <= 0;
+                      const isInsufficient = !isOutOfStock && item.quantity > stock.available;
 
-                    return (
-                      <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
-                        <div className="grid grid-cols-12 gap-2 items-center">
-                          {/* Busca Digitada de Cerveja */}
-                          <div className="col-span-5">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
-                            <RecipeSearchSelect
-                              recipeId={item.recipeId}
-                              recipes={recipes}
-                              onSelectRecipe={(r) => {
-                                const newItems = [...orderItems];
-                                newItems[idx].recipeId = r.id;
-                                const cap = item.kegCapacity || 50;
-                                newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
-                                setOrderItems(newItems);
-                              }}
-                            />
-                          </div>
-
-                          {/* Capacidade */}
-                          <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Tamanho</label>
-                            <select
-                              value={item.kegCapacity || 50}
-                              onChange={(e) => {
-                                const cap = parseInt(e.target.value, 10) || 50;
-                                const newItems = [...orderItems];
-                                newItems[idx].kegCapacity = cap;
-                                const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
-                                if (r) {
+                      return (
+                        <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
+                          <div className="grid grid-cols-12 gap-2 items-center">
+                            {/* Busca Digitada de Cerveja */}
+                            <div className="col-span-5">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
+                              <RecipeSearchSelect
+                                recipeId={item.recipeId}
+                                recipes={recipes}
+                                onSelectRecipe={(r) => {
+                                  const newItems = [...orderItems];
+                                  newItems[idx].recipeId = r.id;
+                                  const cap = item.kegCapacity || 50;
                                   newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
-                                }
-                                setOrderItems(newItems);
-                              }}
-                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                            >
-                              <option value="50">50 Litros</option>
-                              <option value="30">30 Litros</option>
-                              <option value="20">20 Litros</option>
-                              <option value="15">15 Litros</option>
-                              <option value="10">10 Litros</option>
-                              <option value="5">5 Litros</option>
-                            </select>
+                                  setOrderItems(newItems);
+                                }}
+                              />
+                            </div>
+
+                            {/* Capacidade */}
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Tamanho</label>
+                              <select
+                                value={item.kegCapacity || 50}
+                                onChange={(e) => {
+                                  const cap = parseInt(e.target.value, 10) || 50;
+                                  const newItems = [...orderItems];
+                                  newItems[idx].kegCapacity = cap;
+                                  const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
+                                  if (r) {
+                                    newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                  }
+                                  setOrderItems(newItems);
+                                }}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                              >
+                                <option value="50">50 Litros</option>
+                                <option value="30">30 Litros</option>
+                                <option value="20">20 Litros</option>
+                                <option value="15">15 Litros</option>
+                                <option value="10">10 Litros</option>
+                                <option value="5">5 Litros</option>
+                              </select>
+                            </div>
+
+                            {/* Quantidade */}
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-center">Qtd</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const newItems = [...orderItems];
+                                  newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
+                                  setOrderItems(newItems);
+                                }}
+                                className="w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
+                              />
+                            </div>
+
+                            {/* Preço Unitário */}
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-right">Unitário (R$)</label>
+                              <input
+                                type="number"
+                                step="5"
+                                value={item.unitPrice}
+                                onChange={(e) => {
+                                  const newItems = [...orderItems];
+                                  newItems[idx].unitPrice = parseFloat(e.target.value) || 0;
+                                  setOrderItems(newItems);
+                                }}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                              />
+                            </div>
+
+                            {/* Botão de Excluir */}
+                            <div className="col-span-1 flex items-center justify-end gap-1 pt-3">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItemRow(idx)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Excluir este item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
 
-                          {/* Quantidade */}
-                          <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-center">Qtd</label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const newItems = [...orderItems];
-                                newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
-                                setOrderItems(newItems);
-                              }}
-                              className="w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
-                            />
-                          </div>
+                          {/* Quantidade em Estoque / Disponibilidade */}
+                          {item.recipeId ? (
+                            stock.available > 0 ? (
+                              <div className="text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                  <span>
+                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
+                                    {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
+                                  </span>
+                                </span>
+                                <span className="text-[10px] text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded font-black">
+                                  {stock.matchingTotal} barris cheios
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                  <span>
+                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será gerado normalmente para programação de envase)
+                                  </span>
+                                </span>
+                                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded font-black">
+                                  {stock.matchingTotal} cheios • {stock.reserved} reservados
+                                </span>
+                              </div>
+                            )
+                          ) : null}
 
-                          {/* Preço Unitário */}
-                          <div className="col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-right">Unitário (R$)</label>
-                            <input
-                              type="number"
-                              step="5"
-                              value={item.unitPrice}
-                              onChange={(e) => {
-                                const newItems = [...orderItems];
-                                newItems[idx].unitPrice = parseFloat(e.target.value) || 0;
-                                setOrderItems(newItems);
-                              }}
-                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
-                            />
-                          </div>
-
-                          {/* Botão de Excluir */}
-                          <div className="col-span-1 flex items-center justify-end gap-1 pt-3">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItemRow(idx)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Excluir este item"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
+                            <span className="text-slate-500">
+                              Subtotal: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
+                            </span>
+                            <span className="font-black text-purple-900 text-xs">
+                              {formatCurrency(item.unitPrice * item.quantity)}
+                            </span>
                           </div>
                         </div>
-
-                        {/* Quantidade em Estoque / Disponibilidade */}
-                        {item.recipeId ? (
-                          stock.available > 0 ? (
-                            <div className="text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                <span>
-                                  Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
-                                  {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
-                                </span>
-                              </span>
-                              <span className="text-[10px] text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded font-black">
-                                {stock.matchingTotal} barris cheios
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                <span>
-                                  Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será gerado normalmente para programação de envase)
-                                </span>
-                              </span>
-                              <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded font-black">
-                                {stock.matchingTotal} cheios • {stock.reserved} reservados
-                              </span>
-                            </div>
-                          )
-                        ) : null}
-
-                        <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
-                          <span className="text-slate-500">
-                            Subtotal: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
-                          </span>
-                          <span className="font-black text-purple-900 text-xs">
-                            {formatCurrency(item.unitPrice * item.quantity)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
@@ -2953,6 +3061,14 @@ export default function PedidosPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Cadastro Rápido de Cliente */}
+      <QuickClientModal
+        isOpen={quickClientModalOpen}
+        initialName={quickClientInitialName}
+        onClose={() => setQuickClientModalOpen(false)}
+        onSuccess={handleQuickClientSuccess}
+      />
     </div>
   );
 }
