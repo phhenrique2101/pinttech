@@ -25,6 +25,13 @@ interface Keg {
   currentBatch?: { batchNumber: string; recipe?: { name: string } } | null;
 }
 
+interface SourceItem {
+  kegId: string;
+  volumeLiters: number;
+  isPartial: boolean;
+  maxVolume: number;
+}
+
 interface KegTransferTabProps {
   kegs: Keg[];
   onSuccess: () => void;
@@ -35,8 +42,8 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
   const [targetKegId, setTargetKegId] = useState<string>('');
   const [targetSearch, setTargetSearch] = useState<string>('');
 
-  // Source Kegs (Doadores): list of { kegId, volumeLiters }
-  const [sourceItems, setSourceItems] = useState<Array<{ kegId: string; volumeLiters: number }>>([]);
+  // Source Kegs (Doadores): list of SourceItem
+  const [sourceItems, setSourceItems] = useState<SourceItem[]>([]);
   const [selectedSourceToAdd, setSelectedSourceToAdd] = useState<string>('');
 
   // Blend Settings
@@ -49,11 +56,37 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Available Target Kegs: preferably empty, sanitized, or partially full
+  // Selected Target Keg Object
+  const targetKeg = useMemo(() => {
+    return kegs.find((k) => k.id === targetKegId) || null;
+  }, [kegs, targetKegId]);
+
+  // Volume currently in target keg
+  const targetExistingVolume = useMemo(() => {
+    if (!targetKeg) return 0;
+    if (targetKeg.currentVolumeLiters !== null && targetKeg.currentVolumeLiters !== undefined) {
+      return targetKeg.currentVolumeLiters;
+    }
+    return ['EM_ESTOQUE', 'ENVASADO'].includes(targetKeg.status) ? targetKeg.capacity : 0;
+  }, [targetKeg]);
+
+  const targetCapacity = targetKeg ? targetKeg.capacity : 50;
+  const targetAvailableSpace = useMemo(() => {
+    return Math.max(0, targetCapacity - targetExistingVolume);
+  }, [targetCapacity, targetExistingVolume]);
+
+  // Available Target Kegs: empty/sanitized OR partially full (has space available)
   const availableTargetKegs = useMemo(() => {
     return kegs.filter((k) => {
       // Exclude kegs already in sources
       if (sourceItems.some((s) => s.kegId === k.id)) return false;
+      const existingVol = k.currentVolumeLiters !== null && k.currentVolumeLiters !== undefined
+        ? k.currentVolumeLiters
+        : (['EM_ESTOQUE', 'ENVASADO'].includes(k.status) ? k.capacity : 0);
+      const freeSpace = k.capacity - existingVol;
+      // Filter out completely full kegs (must have at least 0.5L free space or be empty/sanitized)
+      if (freeSpace < 0.5 && !['HIGIENIZADO', 'VAZIO_SUJO'].includes(k.status)) return false;
+
       if (targetSearch.trim()) {
         const q = targetSearch.toLowerCase();
         return k.code.toLowerCase().includes(q) || (k.currentBeerName || '').toLowerCase().includes(q);
@@ -61,11 +94,6 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
       return true;
     });
   }, [kegs, sourceItems, targetSearch]);
-
-  // Selected Target Keg Object
-  const targetKeg = useMemo(() => {
-    return kegs.find((k) => k.id === targetKegId) || null;
-  }, [kegs, targetKegId]);
 
   // Available Source Kegs (must have beer/volume)
   const availableSourceKegs = useMemo(() => {
@@ -79,14 +107,16 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
     });
   }, [kegs, targetKegId, sourceItems]);
 
-  // Total volume being transferred
+  // Total volume being transferred from sources
   const totalTransferVolume = useMemo(() => {
     return sourceItems.reduce((acc, item) => acc + (item.volumeLiters || 0), 0);
   }, [sourceItems]);
 
-  const targetCapacity = targetKeg ? targetKeg.capacity : 50;
-  const isOverCapacity = totalTransferVolume > targetCapacity;
-  const fillPercentage = Math.min(100, Math.round((totalTransferVolume / targetCapacity) * 100));
+  const finalTargetTotalVolume = targetExistingVolume + totalTransferVolume;
+  const isOverCapacity = finalTargetTotalVolume > targetCapacity;
+  const existingPercentage = Math.min(100, Math.round((targetExistingVolume / targetCapacity) * 100));
+  const transferPercentage = Math.min(100 - existingPercentage, Math.round((totalTransferVolume / targetCapacity) * 100));
+  const totalFillPercentage = Math.min(100, Math.round((finalTargetTotalVolume / targetCapacity) * 100));
 
   // Add a source keg to the transfer list
   const handleAddSource = (kegId: string) => {
@@ -98,16 +128,31 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
       ? keg.currentVolumeLiters
       : (['EM_ESTOQUE', 'ENVASADO', 'NO_CLIENTE'].includes(keg.status) ? keg.capacity : 0);
 
-    setSourceItems((prev) => [...prev, { kegId, volumeLiters: availableVol }]);
+    setSourceItems((prev) => [
+      ...prev,
+      {
+        kegId,
+        volumeLiters: availableVol,
+        isPartial: false,
+        maxVolume: availableVol,
+      },
+    ]);
     setSelectedSourceToAdd('');
 
-    // If more than 1 beer style, suggest blend
-    if (sourceItems.length >= 1 && !isBlend) {
-      const firstKeg = kegs.find((k) => k.id === sourceItems[0].kegId);
-      if (firstKeg && firstKeg.currentBeerName !== keg.currentBeerName) {
+    // If more than 1 beer style (or target has different beer), suggest blend
+    if (!isBlend) {
+      if (targetKeg && targetKeg.currentBeerName && targetKeg.currentBeerName !== keg.currentBeerName && targetExistingVolume > 0) {
         setIsBlend(true);
         if (!customBeerName) {
-          setCustomBeerName(`Blend ${firstKeg.currentBeerName || 'Chopp'} + ${keg.currentBeerName || 'Chopp'}`);
+          setCustomBeerName(`Blend ${targetKeg.currentBeerName} + ${keg.currentBeerName || 'Chopp'}`);
+        }
+      } else if (sourceItems.length >= 1) {
+        const firstKeg = kegs.find((k) => k.id === sourceItems[0].kegId);
+        if (firstKeg && firstKeg.currentBeerName !== keg.currentBeerName) {
+          setIsBlend(true);
+          if (!customBeerName) {
+            setCustomBeerName(`Blend ${firstKeg.currentBeerName || 'Chopp'} + ${keg.currentBeerName || 'Chopp'}`);
+          }
         }
       }
     }
@@ -117,10 +162,31 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
     setSourceItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleToggleSourceMode = (index: number, isPartial: boolean) => {
+    setSourceItems((prev) => {
+      const copy = [...prev];
+      const item = copy[index];
+      if (!item) return prev;
+      copy[index] = {
+        ...item,
+        isPartial,
+        volumeLiters: isPartial
+          ? (item.volumeLiters === item.maxVolume ? Math.max(1, Math.round(item.maxVolume / 2)) : item.volumeLiters)
+          : item.maxVolume,
+      };
+      return copy;
+    });
+  };
+
   const handleUpdateSourceVolume = (index: number, newVol: number) => {
     setSourceItems((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], volumeLiters: Math.max(0.1, newVol) };
+      const item = copy[index];
+      if (!item) return prev;
+      copy[index] = {
+        ...item,
+        volumeLiters: Math.min(item.maxVolume, Math.max(0.1, newVol)),
+      };
       return copy;
     });
   };
@@ -139,7 +205,7 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
     if (isOverCapacity) {
       setFeedback({
         type: 'error',
-        text: `O volume total (${totalTransferVolume}L) excede a capacidade do barril destino (${targetCapacity}L)! Ajuste as litragens.`,
+        text: `O volume resultante (${finalTargetTotalVolume.toFixed(1)}L = ${targetExistingVolume.toFixed(1)}L existentes + ${totalTransferVolume.toFixed(1)}L transferidos) excede a capacidade do barril destino (${targetCapacity}L)! Reduza a litragem transferida.`,
       });
       return;
     }
@@ -288,46 +354,27 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
               </p>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {sourceItems.map((item, idx) => {
                 const keg = kegs.find((k) => k.id === item.kegId);
                 if (!keg) return null;
-                const maxVol = keg.currentVolumeLiters !== null && keg.currentVolumeLiters !== undefined
-                  ? keg.currentVolumeLiters
-                  : keg.capacity;
 
                 return (
                   <div
                     key={item.kegId}
-                    className="p-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs"
+                    className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5 text-xs shadow-2xs"
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span className="font-mono font-black text-slate-900 dark:text-white">
                           {keg.code}
                         </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-bold truncate max-w-[150px]">
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-bold truncate max-w-[140px]">
                           {keg.currentBeerName || 'Chopp'}
                         </span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
-                        Disponível: {maxVol}L • Lote: {keg.currentBatch?.batchNumber || 'N/A'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Usar:</span>
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0.5"
-                          max={maxVol}
-                          value={item.volumeLiters}
-                          onChange={(e) => handleUpdateSourceVolume(idx, parseFloat(e.target.value) || 0)}
-                          className="w-16 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-center font-black text-slate-900 dark:text-white text-xs"
-                        />
-                        <span className="font-bold text-slate-500">L</span>
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                          ({item.maxVolume}L disponíveis)
+                        </span>
                       </div>
 
                       <button
@@ -339,6 +386,59 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
+
+                    {/* Mode Selector for Source Keg: Tudo vs Parcial */}
+                    <div className="flex items-center gap-1.5 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSourceMode(idx, false)}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                          !item.isPartial
+                            ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        📦 Transferir Tudo ({item.maxVolume}L)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSourceMode(idx, true)}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                          item.isPartial
+                            ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        ✂️ Parcial (Escolher Litros)
+                      </button>
+                    </div>
+
+                    {item.isPartial ? (
+                      <div className="p-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/40 rounded-lg flex items-center justify-between gap-2 animate-in fade-in">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            Transferir:
+                          </span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0.5"
+                            max={item.maxVolume}
+                            value={item.volumeLiters}
+                            onChange={(e) => handleUpdateSourceVolume(idx, parseFloat(e.target.value) || 0)}
+                            className="w-20 px-2 py-1 bg-amber-50/50 dark:bg-slate-950 border border-amber-300 dark:border-amber-700 rounded-lg text-center font-black text-amber-950 dark:text-amber-200 text-xs"
+                          />
+                          <span className="font-black text-slate-600 dark:text-slate-400">L</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500">
+                          Restarão: <strong className="text-slate-900 dark:text-white">{(item.maxVolume - item.volumeLiters).toFixed(1)}L</strong>
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-amber-800 dark:text-amber-300/90 font-medium">
+                        ✓ O barril {keg.code} será <strong>totalmente esvaziado</strong> ({item.maxVolume}L) e marcado para lavagem CIP.
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -349,7 +449,7 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
           {sourceItems.length > 0 && (
             <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl flex items-center justify-between text-xs">
               <span className="font-bold text-amber-900 dark:text-amber-300">
-                Volume Total Extraído:
+                Volume Total Extraído das Origens:
               </span>
               <span className="font-black text-sm text-amber-950 dark:text-amber-100">
                 {totalTransferVolume.toFixed(1)} Litros
@@ -366,7 +466,7 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
               2. Barril de Destino (Para onde vai o chopp)
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Escolha o barril receptor que receberá o chope consolidado ou o blend
+              Escolha o barril receptor (pode ser vazio/higienizado ou um barril com chopp a ser completado)
             </p>
           </div>
 
@@ -382,44 +482,100 @@ export default function KegTransferTab({ kegs, onSuccess }: KegTransferTabProps)
               required
             >
               <option value="">Selecione o barril de destino...</option>
-              {availableTargetKegs.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.code} ({k.capacity}L) — {k.status === 'HIGIENIZADO' ? 'Higienizado (Pronto)' : k.status === 'VAZIO_SUJO' ? 'Vazio' : k.status} {k.currentBeerName ? `[${k.currentBeerName}]` : ''}
-                </option>
-              ))}
+              {availableTargetKegs.map((k) => {
+                const existing = k.currentVolumeLiters !== null && k.currentVolumeLiters !== undefined
+                  ? k.currentVolumeLiters
+                  : (['EM_ESTOQUE', 'ENVASADO'].includes(k.status) ? k.capacity : 0);
+                const freeSpace = Math.max(0, k.capacity - existing);
+                const isPartiallyFull = existing > 0 && freeSpace > 0;
+
+                return (
+                  <option key={k.id} value={k.id}>
+                    {k.code} ({k.capacity}L) — {isPartiallyFull
+                      ? `[Contém ${existing}L de ${k.currentBeerName || 'Chopp'}] • Espaço livre: ${freeSpace}L`
+                      : k.status === 'HIGIENIZADO'
+                      ? `[Higienizado] • Espaço livre: ${k.capacity}L`
+                      : k.status === 'VAZIO_SUJO'
+                      ? `[Vazio] • Espaço livre: ${k.capacity}L`
+                      : `[${k.status}] • Espaço livre: ${freeSpace}L`}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
           {/* Target Visual Fill Progress */}
           {targetKeg && (
-            <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-xs">
+            <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 text-xs">
               <div className="flex items-center justify-between font-bold">
-                <span className="text-slate-700 dark:text-slate-300">
-                  Capacidade: {targetCapacity}L (Barril {targetKeg.code})
-                </span>
-                <span
-                  className={`font-black ${
-                    isOverCapacity ? 'text-rose-600' : 'text-emerald-600'
-                  }`}
-                >
-                  {totalTransferVolume}L / {targetCapacity}L ({fillPercentage}%)
-                </span>
+                <div>
+                  <span className="text-slate-900 dark:text-white font-black text-sm block">
+                    Barril {targetKeg.code} ({targetCapacity}L)
+                  </span>
+                  {targetExistingVolume > 0 ? (
+                    <span className="text-[11px] text-amber-700 dark:text-amber-300 font-bold block">
+                      Já contém {targetExistingVolume}L de {targetKeg.currentBeerName || 'Chopp'} (Espaço livre: {targetAvailableSpace.toFixed(1)}L)
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold block">
+                      Barril totalmente vazio / higienizado (Espaço livre: {targetCapacity}L)
+                    </span>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span
+                    className={`font-black text-sm block ${
+                      isOverCapacity ? 'text-rose-600' : 'text-emerald-600'
+                    }`}
+                  >
+                    {finalTargetTotalVolume.toFixed(1)}L / {targetCapacity}L
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-bold">
+                    {totalFillPercentage}% preenchido
+                  </span>
+                </div>
               </div>
 
-              {/* Progress Bar */}
-              <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+              {/* Dual Progress Bar: Existing + Transferred */}
+              <div className="w-full h-3.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                {targetExistingVolume > 0 && (
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-300"
+                    style={{ width: `${existingPercentage}%` }}
+                    title={`Já existente: ${targetExistingVolume}L`}
+                  />
+                )}
                 <div
-                  className={`h-full transition-all duration-300 rounded-full ${
-                    isOverCapacity ? 'bg-rose-500' : fillPercentage === 100 ? 'bg-emerald-500' : 'bg-amber-500'
+                  className={`h-full transition-all duration-300 ${
+                    isOverCapacity ? 'bg-rose-500' : 'bg-emerald-500'
                   }`}
-                  style={{ width: `${Math.min(100, fillPercentage)}%` }}
+                  style={{ width: `${transferPercentage}%` }}
+                  title={`Recebendo: ${totalTransferVolume}L`}
                 />
               </div>
 
+              <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                {targetExistingVolume > 0 && (
+                  <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                    Existente: {targetExistingVolume}L
+                  </span>
+                )}
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  Recebido: +{totalTransferVolume.toFixed(1)}L
+                </span>
+                <span>
+                  Espaço livre restante: {Math.max(0, targetCapacity - finalTargetTotalVolume).toFixed(1)}L
+                </span>
+              </div>
+
               {isOverCapacity && (
-                <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-bold text-[11px] pt-1">
+                <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-bold text-[11px] p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-800">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>Atenção: O volume ultrapassa a litragem do barril receptor!</span>
+                  <span>
+                    Atenção: O volume total ({finalTargetTotalVolume.toFixed(1)}L) ultrapassa a capacidade máxima do barril ({targetCapacity}L)! Reduza a litragem extraída das origens.
+                  </span>
                 </div>
               )}
             </div>

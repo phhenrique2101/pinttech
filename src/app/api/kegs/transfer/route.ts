@@ -43,6 +43,13 @@ export async function POST(req: NextRequest) {
 
     const breweryId = target.breweryId;
 
+    // Volume já existente no barril de destino (caso já tenha chopp e vá ser completado)
+    const targetExistingVol = target.currentVolumeLiters !== null && target.currentVolumeLiters !== undefined
+      ? target.currentVolumeLiters
+      : (['EM_ESTOQUE', 'ENVASADO'].includes(target.status) ? target.capacity : 0);
+
+    const availableSpaceInTarget = Math.max(0, target.capacity - targetExistingVol);
+
     // 2. Localizar e validar barris de origem
     const resolvedSources: any[] = [];
     let totalVolumeToTransfer = 0;
@@ -88,37 +95,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Volume total a transferir deve ser maior que zero' }, { status: 400 });
     }
 
-    // Validação de capacidade do destino
-    if (totalVolumeToTransfer > target.capacity * 1.05) {
+    // Validação de capacidade do destino (considerando o volume já existente no barril receptor)
+    const newTotalTargetVolume = targetExistingVol + totalVolumeToTransfer;
+    if (newTotalTargetVolume > target.capacity * 1.05) {
       return NextResponse.json({
-        error: `Volume total transferido (${totalVolumeToTransfer}L) excede a capacidade do barril destino ${target.code} (${target.capacity}L)`,
+        error: `O volume resultante (${newTotalTargetVolume.toFixed(1)}L = ${targetExistingVol.toFixed(1)}L existentes + ${totalVolumeToTransfer.toFixed(1)}L transferidos) excede a capacidade do barril destino ${target.code} (${target.capacity}L). Espaço livre disponível: ${availableSpaceInTarget.toFixed(1)}L.`,
       }, { status: 400 });
     }
 
     // 3. Determinar Nome da Cerveja e Lote resultante
     let finalBeerName = beerName?.trim();
     let finalBatchNumber = batchNumber?.trim();
-    let finalBatchId = null;
+    let finalBatchId = target.currentBatchId || null;
 
     if (isBlend) {
       if (!finalBeerName) {
-        finalBeerName = `Blend Especial (${resolvedSources.map((s) => s.keg.currentBeerName || 'Chopp').join(' + ')})`;
+        const allNames = [
+          ...(targetExistingVol > 0 && target.currentBeerName ? [target.currentBeerName] : []),
+          ...resolvedSources.map((s) => s.keg.currentBeerName || 'Chopp'),
+        ];
+        finalBeerName = `Blend Especial (${Array.from(new Set(allNames)).join(' + ')})`;
       }
       finalBatchId = null;
     } else {
-      // Transferência / Consolidação regular
+      // Transferência / Consolidação / Completar barril
       if (!finalBeerName) {
-        finalBeerName = resolvedSources[0].keg.currentBeerName || 'Chopp Artesanal';
+        // Se o barril destino já tem chopp, mantém o nome da cerveja dele
+        finalBeerName = target.currentBeerName || resolvedSources[0].keg.currentBeerName || 'Chopp Artesanal';
       }
       // Se todos os barris vierem do mesmo lote, herda o batchId
-      const firstBatchId = resolvedSources[0].keg.currentBatchId;
-      const allSameBatch = resolvedSources.every((s) => s.keg.currentBatchId === firstBatchId);
+      const firstBatchId = target.currentBatchId || resolvedSources[0].keg.currentBatchId;
+      const allSameBatch = resolvedSources.every((s) => s.keg.currentBatchId === firstBatchId) &&
+        (!target.currentBatchId || target.currentBatchId === firstBatchId);
       if (allSameBatch) {
         finalBatchId = firstBatchId;
       }
     }
 
-    const effectiveVolume = Math.min(target.capacity, totalVolumeToTransfer);
+    const effectiveVolume = Math.min(target.capacity, newTotalTargetVolume);
 
     // 4. Executar transação atômica
     const sourceCodesSummary = resolvedSources.map((s) => `${s.keg.code} (${s.volToTake}L)`).join(', ');
@@ -135,8 +149,8 @@ export async function POST(req: NextRequest) {
           lastFilledAt: new Date(),
           currentClientId: null,
           notes: notes
-            ? `${isBlend ? 'Blend' : 'Trasfega'}: ${notes}. Origem: ${sourceCodesSummary}`
-            : `${isBlend ? 'Blend' : 'Trasfega'} originada de: ${sourceCodesSummary}`,
+            ? `${isBlend ? 'Blend' : 'Trasfega'}: ${notes}. Origens: ${sourceCodesSummary}.${targetExistingVol > 0 ? ` Completou ${targetExistingVol}L pré-existentes.` : ''}`
+            : `${isBlend ? 'Blend' : 'Trasfega'}: recebeu ${totalVolumeToTransfer}L de: ${sourceCodesSummary}.${targetExistingVol > 0 ? ` Completou ${targetExistingVol}L pré-existentes.` : ''}`,
         },
       });
 
@@ -148,13 +162,13 @@ export async function POST(req: NextRequest) {
           action: isBlend ? 'BLEND' : 'TRANSFERENCIA',
           fromStatus: target.status,
           toStatus: 'EM_ESTOQUE',
-          volumeLiters: effectiveVolume,
+          volumeLiters: totalVolumeToTransfer,
           batchId: finalBatchId,
           userId: session.userId,
           userName: session.name,
           notes: isBlend
-            ? `Blend Criado: "${finalBeerName}" (Lote: ${finalBatchNumber || 'N/A'}). Mistura de: ${sourceCodesSummary}`
-            : `Recebeu ${effectiveVolume}L de chopp consolidado de: ${sourceCodesSummary}`,
+            ? `Blend Criado: "${finalBeerName}" (Lote: ${finalBatchNumber || 'N/A'}). Recebeu ${totalVolumeToTransfer}L de: ${sourceCodesSummary}. Volume final: ${effectiveVolume}L/${target.capacity}L.`
+            : `Recebeu ${totalVolumeToTransfer}L transferidos de: ${sourceCodesSummary}.${targetExistingVol > 0 ? ` (Completou ${targetExistingVol}L já existentes).` : ''} Volume final: ${effectiveVolume}L/${target.capacity}L.`,
         },
       });
 
@@ -195,11 +209,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: isBlend
+      message: targetExistingVol > 0
+        ? `Barril ${target.code} completado com sucesso! Recebeu +${totalVolumeToTransfer}L (total agora: ${effectiveVolume}L/${target.capacity}L de "${finalBeerName}").`
+        : isBlend
         ? `Blend "${finalBeerName}" criado com sucesso no barril ${target.code} (${effectiveVolume}L)!`
         : `Transferência de ${effectiveVolume}L para o barril ${target.code} concluída com sucesso!`,
       targetKegCode: target.code,
       totalVolume: effectiveVolume,
+      transferredVolume: totalVolumeToTransfer,
+      existingVolume: targetExistingVol,
       beerName: finalBeerName,
       batchNumber: finalBatchNumber,
     });

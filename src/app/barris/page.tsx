@@ -26,6 +26,7 @@ import {
   ArrowRight,
   Lock,
   Download,
+  TrendingDown,
 } from 'lucide-react';
 import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
 import { exportJsonToExcel } from '@/lib/exportUtils';
@@ -34,9 +35,10 @@ import KegTimelineModal from '@/components/kegs/KegTimelineModal';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import KegTransferTab from '@/components/kegs/KegTransferTab';
 import KegQuickFillTab from '@/components/kegs/KegQuickFillTab';
+import KegLossTab from '@/components/kegs/KegLossTab';
 
 export default function BarrisPage() {
-  const [activeTab, setActiveTab] = useState<'KEGS' | 'TRANSFER' | 'QUICK_FILL'>('KEGS');
+  const [activeTab, setActiveTab] = useState<'KEGS' | 'TRANSFER' | 'QUICK_FILL' | 'LOSS'>('KEGS');
   const [kegs, setKegs] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -423,6 +425,19 @@ export default function BarrisPage() {
           <Zap className="w-4 h-4 fill-current" />
           <span>Envase Rápido (Avulso)</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('LOSS')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'LOSS'
+              ? 'bg-rose-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+          }`}
+        >
+          <TrendingDown className="w-4 h-4" />
+          <span>Registrar Perda</span>
+        </button>
       </div>
 
       {activeTab === 'TRANSFER' && (
@@ -431,6 +446,10 @@ export default function BarrisPage() {
 
       {activeTab === 'QUICK_FILL' && (
         <KegQuickFillTab kegs={kegs} onSuccess={fetchKegs} />
+      )}
+
+      {activeTab === 'LOSS' && (
+        <KegLossTab kegs={kegs} onSuccess={fetchKegs} />
       )}
 
       {activeTab === 'KEGS' && (
