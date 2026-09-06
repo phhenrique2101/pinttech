@@ -226,13 +226,60 @@ html:not(.dark) .text-emerald-400:not(.keep-text) {
   color: #047857 !important;
 }
 
+html:not(.dark) .text-amber-100:not(.keep-text) {
+  color: #78350f !important;
+}
+
+html:not(.dark) .text-amber-200:not(.keep-text) {
+  color: #92400e !important;
+}
+
 html:not(.dark) .text-amber-300:not(.keep-text),
 html:not(.dark) .text-amber-400:not(.keep-text) {
   color: #b45309 !important;
 }
 
-html:not(.dark) .text-amber-200:not(.keep-text) {
-  color: #92400e !important;
+html:not(.dark) .text-rose-100:not(.keep-text),
+html:not(.dark) .text-rose-200:not(.keep-text) {
+  color: #881337 !important;
+}
+
+html:not(.dark) .text-rose-300:not(.keep-text),
+html:not(.dark) .text-rose-400:not(.keep-text) {
+  color: #be123c !important;
+}
+
+html:not(.dark) .text-red-100:not(.keep-text),
+html:not(.dark) .text-red-200:not(.keep-text) {
+  color: #7f1d1d !important;
+}
+
+html:not(.dark) .text-red-300:not(.keep-text),
+html:not(.dark) .text-red-400:not(.keep-text) {
+  color: #b91c1c !important;
+}
+
+/* Badges e botões sólidos que precisam manter texto branco no Modo Claro */
+html:not(.dark) .bg-rose-600,
+html:not(.dark) .bg-rose-700,
+html:not(.dark) .bg-red-600,
+html:not(.dark) .bg-red-700,
+html:not(.dark) .bg-emerald-600,
+html:not(.dark) .bg-emerald-700,
+html:not(.dark) .bg-blue-600,
+html:not(.dark) .bg-blue-700 {
+  color: #ffffff !important;
+}
+
+html:not(.dark) .bg-rose-600 *,
+html:not(.dark) .bg-rose-700 *,
+html:not(.dark) .bg-red-600 *,
+html:not(.dark) .bg-red-700 *,
+html:not(.dark) .bg-emerald-600 *,
+html:not(.dark) .bg-emerald-700 *,
+html:not(.dark) .bg-blue-600 *,
+html:not(.dark) .bg-blue-700 * {
+  color: #ffffff !important;
 }
 
 /* Protege elementos intencionalmente escuros no Modo Claro (.keep-dark) */

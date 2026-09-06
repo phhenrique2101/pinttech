@@ -924,7 +924,7 @@ export default function ProducaoPage() {
           )}
 
           {/* Sub-abas de Produção: Tanques e Tarefas */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
@@ -932,7 +932,7 @@ export default function ProducaoPage() {
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                   productionSubTab === 'TANKS'
                     ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                    : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent'
                 }`}
               >
                 <Cylinder className="w-4 h-4" />
@@ -945,13 +945,13 @@ export default function ProducaoPage() {
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                   productionSubTab === 'TASKS'
                     ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                    : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent'
                 }`}
               >
                 <Clock className="w-4 h-4" />
                 <span>Tarefas ({pendingTasksCount})</span>
                 {lateTasksCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white keep-white animate-pulse">
                     {lateTasksCount} atrasada{lateTasksCount > 1 ? 's' : ''}
                   </span>
                 )}
@@ -966,9 +966,9 @@ export default function ProducaoPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setImporterModalOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition"
+                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition"
               >
-                <Upload className="w-3.5 h-3.5 text-amber-400" />
+                <Upload className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                 <span>+ Importar BeerXML</span>
               </button>
               <button
@@ -1652,19 +1652,19 @@ export default function ProducaoPage() {
       {productionSubTab === 'TASKS' && (
         <div className="space-y-5">
           {/* Barra de Ferramentas das Tarefas */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:px-4 flex flex-col gap-3 shadow-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:px-4 flex flex-col gap-3 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               {/* Contagem & Status */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-300 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                   <span>Tarefas da Adega:</span>
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 font-mono text-xs font-bold border border-amber-300 dark:border-amber-500/30">
                   {sortedTasks.length} {sortedTasks.length === 1 ? 'tarefa' : 'tarefas'}
                 </span>
                 {search.trim() && (
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
                     (filtrando por &ldquo;{search}&rdquo;)
                   </span>
                 )}
@@ -1672,9 +1672,9 @@ export default function ProducaoPage() {
 
               <div className="flex items-center flex-wrap gap-2.5">
                 {/* Ordenação */}
-                <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
-                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                     <span className="hidden sm:inline">Ordenar:</span>
                   </span>
                   <select
@@ -1684,39 +1684,39 @@ export default function ProducaoPage() {
                       setTaskSortBy(val);
                       try { localStorage.setItem('pinttech_task_sort_by', val); } catch {}
                     }}
-                    className="bg-transparent text-xs text-amber-300 font-semibold focus:outline-none cursor-pointer pr-1"
+                    className="bg-transparent text-xs text-amber-700 dark:text-amber-300 font-bold focus:outline-none cursor-pointer pr-1"
                   >
-                    <option value="dueDate" className="bg-slate-900 text-slate-200">Data Prevista</option>
-                    <option value="urgency" className="bg-slate-900 text-slate-200">Urgência (Atrasada &gt; Hoje)</option>
-                    <option value="tank" className="bg-slate-900 text-slate-200">Nome do Tanque</option>
-                    <option value="batch" className="bg-slate-900 text-slate-200">Lote / Cerveja</option>
-                    <option value="title" className="bg-slate-900 text-slate-200">Título da Tarefa</option>
-                    <option value="type" className="bg-slate-900 text-slate-200">Tipo de Processo</option>
+                    <option value="dueDate" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Data Prevista</option>
+                    <option value="urgency" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Urgência (Atrasada &gt; Hoje)</option>
+                    <option value="tank" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Nome do Tanque</option>
+                    <option value="batch" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Lote / Cerveja</option>
+                    <option value="title" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Título da Tarefa</option>
+                    <option value="type" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Tipo de Processo</option>
                   </select>
 
                   <button
                     type="button"
                     onClick={toggleTaskSortOrder}
-                    className="p-1 rounded-md hover:bg-slate-800 text-slate-300 hover:text-amber-400 transition"
+                    className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 transition"
                     title={taskSortOrder === 'asc' ? 'Ordem Crescente (clique para Decrescente)' : 'Ordem Decrescente (clique para Crescente)'}
                   >
                     {taskSortOrder === 'asc' ? (
-                      <ArrowUp className="w-3.5 h-3.5 text-amber-400" />
+                      <ArrowUp className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                     ) : (
-                      <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      <ArrowDown className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                     )}
                   </button>
                 </div>
 
                 {/* Alternador Grade / Linhas */}
-                <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1">
+                <div className="flex items-center bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-1">
                   <button
                     type="button"
                     onClick={() => changeTaskViewMode('CARDS')}
                     className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
                       taskViewMode === 'CARDS'
                         ? 'bg-amber-500 text-slate-950 shadow-xs'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                     title="Visualizar como Grade / Cards"
                   >
@@ -1730,7 +1730,7 @@ export default function ProducaoPage() {
                     className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
                       taskViewMode === 'ROWS'
                         ? 'bg-amber-500 text-slate-950 shadow-xs'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                     title="Visualizar em Linhas"
                   >
@@ -1742,14 +1742,14 @@ export default function ProducaoPage() {
             </div>
 
             {/* Sub-filtros Rápidos de Tarefas */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800/80">
+            <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-200 dark:border-slate-800/80">
               <button
                 type="button"
                 onClick={() => setTaskFilter('ALL')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
                   taskFilter === 'ALL'
-                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-950 font-black shadow-xs keep-dark keep-white'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700'
                 }`}
               >
                 Todas ({allCellarTasks.length})
@@ -1760,12 +1760,14 @@ export default function ProducaoPage() {
                 onClick={() => setTaskFilter('TODAY')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                   taskFilter === 'TODAY'
-                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                    : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs ring-2 ring-amber-400/50'
+                    : 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 border border-amber-300 dark:border-amber-500/30 font-bold'
                 }`}
               >
                 <span>⚡ Vence Hoje</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-400 text-slate-950">
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  taskFilter === 'TODAY' ? 'bg-slate-950 text-amber-400' : 'bg-amber-200 dark:bg-amber-400 text-amber-950 dark:text-slate-950'
+                }`}>
                   {todayTasksCount}
                 </span>
               </button>
@@ -1775,12 +1777,14 @@ export default function ProducaoPage() {
                 onClick={() => setTaskFilter('LATE')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                   taskFilter === 'LATE'
-                    ? 'bg-rose-600 text-white font-black shadow-xs'
-                    : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30'
+                    ? 'bg-rose-600 text-white keep-white font-black shadow-xs ring-2 ring-rose-500/50'
+                    : 'bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 border border-rose-300 dark:border-rose-500/30 font-bold'
                 }`}
               >
                 <span>🚨 Atrasadas</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-rose-600 text-white">
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  taskFilter === 'LATE' ? 'bg-white text-rose-700' : 'bg-rose-600 text-white keep-white'
+                }`}>
                   {lateTasksCount}
                 </span>
               </button>
@@ -1790,8 +1794,8 @@ export default function ProducaoPage() {
                 onClick={() => setTaskFilter('PENDING')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
                   taskFilter === 'PENDING'
-                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-950 font-black shadow-xs keep-dark keep-white'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700'
                 }`}
               >
                 Pendentes ({pendingTasksCount})
@@ -1802,8 +1806,8 @@ export default function ProducaoPage() {
                 onClick={() => setTaskFilter('COMPLETED')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
                   taskFilter === 'COMPLETED'
-                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-950 font-black shadow-xs keep-dark keep-white'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700'
                 }`}
               >
                 Concluídas ({allCellarTasks.length - pendingTasksCount})
@@ -1813,14 +1817,14 @@ export default function ProducaoPage() {
 
           {/* LISTA / TABELA DE TAREFAS */}
           {sortedTasks.length === 0 ? (
-            <div className="p-12 text-center bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl space-y-3">
-              <Clock className="w-10 h-10 mx-auto text-slate-500" />
-              <h3 className="text-sm font-bold text-slate-200">
+            <div className="p-12 text-center bg-white dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl space-y-3">
+              <Clock className="w-10 h-10 mx-auto text-slate-400 dark:text-slate-500" />
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
                 {allCellarTasks.length === 0
                   ? 'Nenhuma tarefa programada nos lotes ativos da adega'
                   : 'Nenhuma tarefa encontrada para os filtros selecionados'}
               </h3>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
                 {allCellarTasks.length === 0
                   ? 'Abra qualquer lote na aba Tanques para programar medições diárias, dosagens de dry hopping, antioxidantes ou purga.'
                   : 'Tente alterar os filtros rápidos acima ou a busca.'}
@@ -1829,7 +1833,7 @@ export default function ProducaoPage() {
                 <button
                   type="button"
                   onClick={() => changeProductionSubTab('TANKS')}
-                  className="mt-2 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black hover:bg-amber-400 transition inline-flex items-center gap-1.5"
+                  className="mt-2 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black hover:bg-amber-400 transition inline-flex items-center gap-1.5 shadow-sm"
                 >
                   <Cylinder className="w-4 h-4" />
                   <span>Ver Tanques da Produção</span>
@@ -1838,83 +1842,83 @@ export default function ProducaoPage() {
             </div>
           ) : taskViewMode === 'ROWS' ? (
             /* VISUALIZAÇÃO EM LINHAS (TABELA DE TAREFAS) */
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950 text-slate-300 font-bold border-b border-slate-800">
+                  <thead className="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
                     <tr>
                       <th className="p-3.5 w-12 text-center">Status</th>
                       <th
                         onClick={() => handleTaskSortChange('urgency')}
-                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-600 dark:hover:text-amber-400 transition whitespace-nowrap"
                         title="Clique para ordenar por Urgência / Prazo"
                       >
                         <div className="inline-flex items-center gap-1.5">
                           <span>Prazo / Urgência</span>
                           {taskSortBy === 'urgency' ? (
-                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-600 dark:text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                           ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600" />
                           )}
                         </div>
                       </th>
 
                       <th
                         onClick={() => handleTaskSortChange('title')}
-                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-600 dark:hover:text-amber-400 transition"
                         title="Clique para ordenar por Tarefa"
                       >
                         <div className="inline-flex items-center gap-1.5">
                           <span>Tarefa & Processo</span>
                           {taskSortBy === 'title' ? (
-                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-600 dark:text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                           ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600" />
                           )}
                         </div>
                       </th>
 
                       <th
                         onClick={() => handleTaskSortChange('tank')}
-                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-600 dark:hover:text-amber-400 transition whitespace-nowrap"
                         title="Clique para ordenar por Tanque"
                       >
                         <div className="inline-flex items-center gap-1.5">
                           <span>Tanque</span>
                           {taskSortBy === 'tank' ? (
-                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-600 dark:text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                           ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600" />
                           )}
                         </div>
                       </th>
 
                       <th
                         onClick={() => handleTaskSortChange('batch')}
-                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-600 dark:hover:text-amber-400 transition whitespace-nowrap"
                         title="Clique para ordenar por Lote"
                       >
                         <div className="inline-flex items-center gap-1.5">
                           <span>Lote / Cerveja</span>
                           {taskSortBy === 'batch' ? (
-                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-600 dark:text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                           ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600" />
                           )}
                         </div>
                       </th>
 
                       <th
                         onClick={() => handleTaskSortChange('dueDate')}
-                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition whitespace-nowrap"
+                        className="p-3.5 cursor-pointer select-none hover:text-amber-600 dark:hover:text-amber-400 transition whitespace-nowrap"
                         title="Clique para ordenar por Data Prevista"
                       >
                         <div className="inline-flex items-center gap-1.5">
                           <span>Data Prevista</span>
                           {taskSortBy === 'dueDate' ? (
-                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
+                            taskSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-600 dark:text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                           ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600" />
                           )}
                         </div>
                       </th>
@@ -1922,7 +1926,7 @@ export default function ProducaoPage() {
                       <th className="p-3.5 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                     {sortedTasks.map((t) => {
                       const isLate = t.urgency === 'LATE';
                       const isToday = t.urgency === 'TODAY';
@@ -1931,14 +1935,14 @@ export default function ProducaoPage() {
                       return (
                         <tr
                           key={`${t.batchId}-${t.id}`}
-                          className={`transition-colors border-l-4 ${
+                          className={`transition-colors border-l-4 keep-hover ${
                             isCompleted
-                              ? 'bg-slate-900/40 border-l-slate-600 opacity-60 hover:opacity-100 hover:bg-slate-800/40'
+                              ? 'bg-slate-50/70 dark:bg-slate-900/40 border-l-slate-300 dark:border-l-slate-600 opacity-65 hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800/40'
                               : isLate
-                              ? 'bg-rose-950/30 border-l-rose-500 hover:bg-rose-950/50'
+                              ? 'bg-rose-50/90 dark:bg-rose-950/30 border-l-rose-500 hover:bg-rose-100/80 dark:hover:bg-rose-950/50'
                               : isToday
-                              ? 'bg-amber-950/30 border-l-amber-400 hover:bg-amber-950/50'
-                              : 'hover:bg-slate-800/50 border-l-transparent'
+                              ? 'bg-amber-50/90 dark:bg-amber-950/30 border-l-amber-500 hover:bg-amber-100/80 dark:hover:bg-amber-950/50'
+                              : 'bg-white dark:bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 border-l-transparent'
                           }`}
                         >
                           {/* Checkbox de Conclusão */}
@@ -1948,12 +1952,12 @@ export default function ProducaoPage() {
                               onClick={() => handleToggleTask(t)}
                               className={`w-6 h-6 mx-auto rounded-lg border flex items-center justify-center transition-all ${
                                 isCompleted
-                                  ? 'bg-emerald-500 border-emerald-500 text-white'
+                                  ? 'bg-emerald-500 border-emerald-500 text-white keep-white'
                                   : isLate
-                                  ? 'bg-rose-950/60 border-rose-500 text-rose-300 hover:border-rose-400'
+                                  ? 'bg-white dark:bg-rose-950/60 border-2 border-rose-500 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:border-rose-400'
                                   : isToday
-                                  ? 'bg-amber-950/60 border-amber-400 text-amber-300 hover:border-amber-300'
-                                  : 'bg-slate-800 border-slate-600 hover:border-amber-500 text-transparent'
+                                  ? 'bg-white dark:bg-amber-950/60 border-2 border-amber-500 text-amber-600 dark:text-amber-300 hover:bg-amber-100 dark:hover:border-amber-300'
+                                  : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-amber-500 text-transparent'
                               }`}
                               title={isCompleted ? 'Marcar como Pendente' : 'Marcar como Concluída'}
                             >
@@ -1964,23 +1968,23 @@ export default function ProducaoPage() {
                           {/* Prazo / Urgência */}
                           <td className="p-3.5 whitespace-nowrap">
                             {isCompleted ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
                                 <Check className="w-3 h-3" />
                                 <span>Concluída</span>
                               </span>
                             ) : isLate ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-600 text-white shadow-xs animate-pulse">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-600 text-white keep-white shadow-xs animate-pulse">
                                 <AlertTriangle className="w-3.5 h-3.5" />
                                 <span>Atrasada ({Math.abs(t.daysDiff)}d)</span>
                               </span>
                             ) : isToday ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-400 text-slate-950 shadow-xs ring-2 ring-amber-400/40">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-400 text-slate-950 shadow-xs ring-2 ring-amber-400/50">
                                 <Clock className="w-3.5 h-3.5" />
                                 <span>Vence Hoje</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                                <Calendar className="w-3 h-3 text-slate-400" />
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                <Calendar className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                                 <span>Em {t.daysDiff} dias</span>
                               </span>
                             )}
@@ -1993,50 +1997,50 @@ export default function ProducaoPage() {
                                 <span
                                   className={`text-xs font-bold ${
                                     isCompleted
-                                      ? 'line-through text-slate-500'
+                                      ? 'line-through text-slate-400 dark:text-slate-500'
                                       : isLate
-                                      ? 'text-rose-200'
+                                      ? 'text-rose-950 dark:text-rose-100'
                                       : isToday
-                                      ? 'text-amber-200'
-                                      : 'text-white'
+                                      ? 'text-amber-950 dark:text-amber-100'
+                                      : 'text-slate-900 dark:text-white'
                                   }`}
                                 >
                                   {t.title}
                                 </span>
 
                                 {t.type === 'DRY_HOPPING' && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
                                     🌿 Dry Hopping
                                   </span>
                                 )}
                                 {t.type === 'ANTIOXIDANT' && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-100 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30">
                                     🧪 Antioxidante
                                   </span>
                                 )}
                                 {t.type === 'COLD_CRASH' && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-500/30">
                                     ❄️ Cold Crash
                                   </span>
                                 )}
                                 {t.type === 'PURGE' && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-500/20 text-orange-800 dark:text-orange-300 border border-orange-300 dark:border-orange-500/30">
                                     ⚗️ Purga
                                   </span>
                                 )}
                                 {t.type === 'MEASUREMENT' && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-500/20 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30">
                                     📊 Medição
                                   </span>
                                 )}
                                 {t.amount && (
-                                  <span className="text-[11px] font-mono font-bold text-slate-400">
+                                  <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">
                                     ({t.amount} {t.unit || 'KG'})
                                   </span>
                                 )}
                               </div>
                               {t.notes && (
-                                <p className="text-[11px] text-slate-400 line-clamp-1">
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-1">
                                   {t.notes}
                                 </p>
                               )}
@@ -2045,8 +2049,8 @@ export default function ProducaoPage() {
 
                           {/* Tanque */}
                           <td className="p-3.5 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1.5 font-bold text-white text-xs">
-                              <Cylinder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span className="inline-flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs">
+                              <Cylinder className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                               <span>{t.tankName}</span>
                             </span>
                           </td>
@@ -2054,10 +2058,10 @@ export default function ProducaoPage() {
                           {/* Lote / Cerveja */}
                           <td className="p-3.5 whitespace-nowrap">
                             <div className="space-y-0.5">
-                              <span className="font-mono text-amber-300 font-bold text-xs block">
+                              <span className="font-mono text-amber-700 dark:text-amber-300 font-bold text-xs block">
                                 #{t.batchNumber}
                               </span>
-                              <span className="text-[11px] text-slate-400 block truncate max-w-[150px]">
+                              <span className="text-[11px] text-slate-600 dark:text-slate-400 block truncate max-w-[150px]">
                                 {t.recipeName}
                               </span>
                             </div>
@@ -2066,12 +2070,12 @@ export default function ProducaoPage() {
                           {/* Data Prevista */}
                           <td className="p-3.5 whitespace-nowrap">
                             <span className={`text-xs font-bold ${
-                              isLate ? 'text-rose-300 font-black' : isToday ? 'text-amber-300 font-black' : 'text-slate-300'
+                              isLate ? 'text-rose-700 dark:text-rose-300 font-black' : isToday ? 'text-amber-700 dark:text-amber-300 font-black' : 'text-slate-700 dark:text-slate-300'
                             }`}>
                               {formatDate(t.dueDate)}
                             </span>
                             {t.completedAt && (
-                              <span className="block text-[10px] text-emerald-400 font-medium">
+                              <span className="block text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
                                 Feito em {formatDateShort(t.completedAt)}
                               </span>
                             )}
@@ -2082,7 +2086,7 @@ export default function ProducaoPage() {
                             <button
                               type="button"
                               onClick={() => setSelectedBatchForManager(t.batch)}
-                              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 text-xs font-bold transition inline-flex items-center gap-1"
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 border border-slate-200 hover:border-amber-300 dark:border-slate-700 text-xs font-bold transition inline-flex items-center gap-1"
                               title="Abrir Gestor do Lote na Adega"
                             >
                               <Activity className="w-3.5 h-3.5" />
@@ -2109,12 +2113,12 @@ export default function ProducaoPage() {
                     key={`${t.batchId}-${t.id}`}
                     className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                       isCompleted
-                        ? 'bg-slate-900/50 border-slate-800 opacity-60'
+                        ? 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 opacity-60'
                         : isLate
-                        ? 'bg-rose-950/20 border-rose-500 shadow-md shadow-rose-950/30 ring-1 ring-rose-500/30'
+                        ? 'bg-rose-50/80 dark:bg-rose-950/20 border-2 border-rose-300 dark:border-rose-500 shadow-sm ring-1 ring-rose-300/50 dark:ring-rose-500/30'
                         : isToday
-                        ? 'bg-amber-950/20 border-amber-400 shadow-md shadow-amber-950/30 ring-1 ring-amber-400/40'
-                        : 'bg-slate-900 border-slate-800'
+                        ? 'bg-amber-50/80 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-400 shadow-sm ring-1 ring-amber-300/50 dark:ring-amber-400/40'
+                        : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs'
                     }`}
                   >
                     <div className="space-y-2.5">
@@ -2122,25 +2126,25 @@ export default function ProducaoPage() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {isCompleted ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
                               ✓ Concluída
                             </span>
                           ) : isLate ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white keep-white shadow-xs animate-pulse">
                               🚨 Atrasada ({Math.abs(t.daysDiff)}d)
                             </span>
                           ) : isToday ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 shadow-xs">
                               ⚡ Vence Hoje
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                               📅 Em {t.daysDiff}d
                             </span>
                           )}
 
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-amber-300 border border-slate-700 flex items-center gap-1">
-                            <Cylinder className="w-3 h-3" />
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-amber-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                            <Cylinder className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                             {t.tankName}
                           </span>
                         </div>
@@ -2150,12 +2154,12 @@ export default function ProducaoPage() {
                           onClick={() => handleToggleTask(t)}
                           className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
                             isCompleted
-                              ? 'bg-emerald-500 border-emerald-500 text-white'
+                              ? 'bg-emerald-500 border-emerald-500 text-white keep-white'
                               : isLate
-                              ? 'bg-rose-950/60 border-rose-500 text-rose-400 hover:border-rose-300'
+                              ? 'bg-white dark:bg-rose-950/60 border-2 border-rose-500 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:border-rose-400'
                               : isToday
-                              ? 'bg-amber-950/60 border-amber-400 text-amber-300 hover:border-amber-300'
-                              : 'bg-slate-800 border-slate-600 hover:border-amber-500 text-transparent'
+                              ? 'bg-white dark:bg-amber-950/60 border-2 border-amber-500 text-amber-600 dark:text-amber-300 hover:bg-amber-100 dark:hover:border-amber-300'
+                              : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-amber-500 text-transparent'
                           }`}
                           title={isCompleted ? 'Marcar como Pendente' : 'Marcar como Concluída'}
                         >
@@ -2168,28 +2172,28 @@ export default function ProducaoPage() {
                         <h4
                           className={`text-sm font-bold ${
                             isCompleted
-                              ? 'line-through text-slate-500'
+                              ? 'line-through text-slate-400 dark:text-slate-500'
                               : isLate
-                              ? 'text-rose-100'
+                              ? 'text-rose-950 dark:text-rose-100'
                               : isToday
-                              ? 'text-amber-100'
-                              : 'text-white'
+                              ? 'text-amber-950 dark:text-amber-100'
+                              : 'text-slate-900 dark:text-white'
                           }`}
                         >
                           {t.title}
                         </h4>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
-                          <span className="font-mono text-amber-300 font-bold">#{t.batchNumber}</span>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          <span className="font-mono text-amber-700 dark:text-amber-300 font-bold">#{t.batchNumber}</span>
                           <span>•</span>
                           <span className="truncate">{t.recipeName}</span>
                           {t.amount && (
-                            <span className="font-mono font-bold text-slate-300 ml-auto">
+                            <span className="font-mono font-bold text-slate-700 dark:text-slate-300 ml-auto">
                               {t.amount} {t.unit || 'KG'}
                             </span>
                           )}
                         </div>
                         {t.notes && (
-                          <p className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded-lg mt-2 border border-slate-800/80">
+                          <p className="text-xs text-slate-600 dark:text-slate-400 bg-white/80 dark:bg-slate-950/50 p-2 rounded-lg mt-2 border border-slate-200 dark:border-slate-800/80">
                             {t.notes}
                           </p>
                         )}
@@ -2197,10 +2201,10 @@ export default function ProducaoPage() {
                     </div>
 
                     {/* Footer do Card */}
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80 text-xs">
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                        <span className={isLate ? 'text-rose-400 font-bold' : isToday ? 'text-amber-400 font-bold' : 'text-slate-300'}>
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80 text-xs">
+                      <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                        <span className={isLate ? 'text-rose-700 dark:text-rose-400 font-bold' : isToday ? 'text-amber-700 dark:text-amber-400 font-bold' : 'text-slate-700 dark:text-slate-300'}>
                           {formatDate(t.dueDate)}
                         </span>
                       </span>
@@ -2208,7 +2212,7 @@ export default function ProducaoPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedBatchForManager(t.batch)}
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold transition flex items-center gap-1"
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 hover:text-amber-800 dark:text-amber-300 border border-slate-200 hover:border-amber-300 dark:border-transparent text-xs font-bold transition flex items-center gap-1"
                       >
                         <Activity className="w-3.5 h-3.5" />
                         <span>Adega</span>
