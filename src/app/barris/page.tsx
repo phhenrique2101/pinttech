@@ -32,8 +32,11 @@ import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
 import KegTimelineModal from '@/components/kegs/KegTimelineModal';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
+import KegTransferTab from '@/components/kegs/KegTransferTab';
+import KegQuickFillTab from '@/components/kegs/KegQuickFillTab';
 
 export default function BarrisPage() {
+  const [activeTab, setActiveTab] = useState<'KEGS' | 'TRANSFER' | 'QUICK_FILL'>('KEGS');
   const [kegs, setKegs] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,13 +331,13 @@ export default function BarrisPage() {
   return (
     <div className="space-y-6 pb-12">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
+          <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
             <Cylinder className="w-5 h-5 text-amber-600" />
             Controle & Rastreabilidade de Barris
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Gerenciamento de ativos, litragens de 5L a 50L+, inativação, exclusão e scanner rápido
           </p>
         </div>
@@ -347,7 +350,7 @@ export default function BarrisPage() {
               setFastCode('');
               setFastScannerModalOpen(true);
             }}
-            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-black rounded-xl shadow-md shadow-amber-500/25 flex items-center gap-1.5 transition-all active:scale-95"
+            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 text-xs font-black rounded-xl shadow-md shadow-amber-500/25 flex items-center gap-1.5 transition-all active:scale-95"
           >
             <Zap className="w-4 h-4 fill-current" />
             <span>Bipar & Cadastrar Barris (Rápido)</span>
@@ -355,7 +358,7 @@ export default function BarrisPage() {
 
           <button
             onClick={() => setBatchKegModalOpen(true)}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 flex items-center gap-1.5 transition-all"
+            className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 transition-all"
           >
             <Layers className="w-4 h-4 text-amber-600" />
             <span>Cadastrar em Lote</span>
@@ -363,7 +366,7 @@ export default function BarrisPage() {
 
           <button
             onClick={() => setNewKegModalOpen(true)}
-            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all active:scale-95"
+            className="px-3.5 py-2 bg-slate-900 dark:bg-amber-500 hover:bg-slate-800 dark:hover:bg-amber-600 text-white dark:text-slate-950 text-xs font-black rounded-xl flex items-center gap-1.5 transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Barril</span>
@@ -371,6 +374,67 @@ export default function BarrisPage() {
         </div>
       </div>
 
+      {/* Main Operational Tabs: Barris | Trasfega & Blends | Envase Rápido */}
+      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs max-w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveTab('KEGS')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'KEGS'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Cylinder className="w-4 h-4" />
+          <span>Barris</span>
+          <span
+            className={`text-[10px] py-0.5 px-1.5 rounded-full font-black ${
+              activeTab === 'KEGS'
+                ? 'bg-slate-950/20 text-slate-950'
+                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+            }`}
+          >
+            {kegs.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('TRANSFER')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'TRANSFER'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+          }`}
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span>Trasfega & Blends</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('QUICK_FILL')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'QUICK_FILL'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Zap className="w-4 h-4 fill-current" />
+          <span>Envase Rápido (Avulso)</span>
+        </button>
+      </div>
+
+      {activeTab === 'TRANSFER' && (
+        <KegTransferTab kegs={kegs} onSuccess={fetchKegs} />
+      )}
+
+      {activeTab === 'QUICK_FILL' && (
+        <KegQuickFillTab kegs={kegs} onSuccess={fetchKegs} />
+      )}
+
+      {activeTab === 'KEGS' && (
+        <>
       {/* Filters Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
         <form onSubmit={handleSearchSubmit} className="relative w-full md:w-80">
@@ -683,6 +747,8 @@ export default function BarrisPage() {
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* MODAL 1: ⚡ MODO BIPAR & CADASTRAR BARRIS (SCANNER RÁPIDO) */}
       {fastScannerModalOpen && (

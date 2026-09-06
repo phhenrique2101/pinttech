@@ -19,11 +19,13 @@ import {
   Trash2,
   Sliders,
   Wrench,
+  Zap,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
 import KegTimelineModal from '@/components/kegs/KegTimelineModal';
 
-type ScannerMode = 'LOOKUP' | 'FILL' | 'EXPEDITION' | 'DELIVER' | 'RETURN' | 'SANITIZE';
+type ScannerMode = 'LOOKUP' | 'FILL' | 'TRANSFER' | 'EXPEDITION' | 'DELIVER' | 'RETURN' | 'SANITIZE';
 
 export default function ScannerPage() {
   const [mode, setMode] = useState<ScannerMode>('LOOKUP');
@@ -38,9 +40,28 @@ export default function ScannerPage() {
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
 
-  // Envase Parcial Option
+  // Envase: Opção Lote vs Avulso / Rápido
+  const [fillSourceType, setFillSourceType] = useState<'BATCH' | 'QUICK'>('BATCH');
+  const [quickBeerName, setQuickBeerName] = useState('');
+  const [quickBatchNumber, setQuickBatchNumber] = useState('');
   const [isPartialFill, setIsPartialFill] = useState(false);
   const [fillVolumeLiters, setFillVolumeLiters] = useState('35');
+
+  // Trasfega & Blends (Transfer) State
+  const [transferStep, setTransferStep] = useState<'SOURCE' | 'TARGET'>('SOURCE');
+  const [transferSources, setTransferSources] = useState<
+    Array<{ kegId: string; kegCode: string; beerName: string; batchNumber?: string; volume: number; maxVolume: number }>
+  >([]);
+  const [transferTarget, setTransferTarget] = useState<{
+    kegId: string;
+    kegCode: string;
+    capacity: number;
+    beerName?: string;
+    status: string;
+  } | null>(null);
+  const [isTransferBlend, setIsTransferBlend] = useState(false);
+  const [transferCustomBeerName, setTransferCustomBeerName] = useState('');
+  const [transferCustomBatch, setTransferCustomBatch] = useState('');
 
   // Recolha Options (Vazio, Parcialmente Cheio ou Cheio Retornado ao Estoque)
   const [returnCondition, setReturnCondition] = useState<'VAZIO_SUJO' | 'PARCIALMENTE_CHEIO' | 'CHEIO_RETORNADO'>('VAZIO_SUJO');
@@ -92,6 +113,62 @@ export default function ScannerPage() {
 
         setScannedItem(data.item);
         setItemType(data.type);
+      } else if (mode === 'TRANSFER') {
+        // Modo Trasfega & Blends: consulta o barril bipado
+        const res = await fetch('/api/kegs/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, action: 'LOOKUP' }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Código não encontrado');
+        if (data.type !== 'KEG') {
+          throw new Error('Apenas barris podem ser selecionados para trasfega');
+        }
+
+        const keg = data.item;
+        if (transferStep === 'SOURCE') {
+          if (transferSources.some((s) => s.kegId === keg.id)) {
+            throw new Error(`Barril ${keg.code} já foi adicionado como origem`);
+          }
+          if (transferTarget?.kegId === keg.id) {
+            throw new Error(`Barril ${keg.code} já está definido como destino`);
+          }
+          const vol = keg.currentVolumeLiters || keg.capacity;
+          const newSources = [
+            ...transferSources,
+            {
+              kegId: keg.id,
+              kegCode: keg.code,
+              beerName: keg.currentBeerName || 'Cerveja',
+              batchNumber: keg.currentBatch?.batchNumber || '',
+              volume: vol,
+              maxVolume: vol,
+            },
+          ];
+          setTransferSources(newSources);
+          if (!transferCustomBeerName && keg.currentBeerName) {
+            setTransferCustomBeerName(keg.currentBeerName);
+          }
+          setFeedbackMessage({ text: `Barril de origem ${keg.code} (${vol}L) adicionado!`, type: 'success' });
+        } else {
+          // TARGET
+          if (transferSources.some((s) => s.kegId === keg.id)) {
+            throw new Error(`Barril ${keg.code} já é origem e não pode ser o destino`);
+          }
+          setTransferTarget({
+            kegId: keg.id,
+            kegCode: keg.code,
+            capacity: keg.capacity,
+            beerName: keg.currentBeerName,
+            status: keg.status,
+          });
+          setFeedbackMessage({ text: `Barril destino ${keg.code} (${keg.capacity}L) selecionado!`, type: 'success' });
+        }
+
+        setScannedItem(keg);
+        setItemType('KEG');
       } else {
         // Direct Action Mode (FILL, SANITIZE, EXPEDITION, DELIVER, RETURN)
         const payload: any = {
@@ -100,7 +177,15 @@ export default function ScannerPage() {
         };
 
         if (mode === 'FILL') {
-          payload.batchId = selectedBatchId;
+          if (fillSourceType === 'BATCH') {
+            if (!selectedBatchId) throw new Error('Selecione um lote de produção');
+            payload.batchId = selectedBatchId;
+          } else {
+            if (!quickBeerName.trim()) throw new Error('Informe o nome da cerveja para o envase avulso');
+            payload.isQuickFill = true;
+            payload.quickBeerName = quickBeerName.trim();
+            payload.quickBatchNumber = quickBatchNumber.trim();
+          }
           if (isPartialFill && fillVolumeLiters) {
             payload.volumeLiters = parseFloat(fillVolumeLiters);
           }
@@ -140,6 +225,46 @@ export default function ScannerPage() {
     }
   };
 
+  const handleExecuteTransfer = async () => {
+    if (!transferTarget) {
+      setFeedbackMessage({ text: 'Selecione o barril de destino', type: 'error' });
+      return;
+    }
+    if (transferSources.length === 0) {
+      setFeedbackMessage({ text: 'Adicione ao menos um barril de origem', type: 'error' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/kegs/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetKegId: transferTarget.kegId,
+          sources: transferSources.map((s) => ({ kegId: s.kegId, volumeToTransfer: s.volume })),
+          customBeerName: isTransferBlend ? transferCustomBeerName : undefined,
+          customBatchNumber: isTransferBlend ? transferCustomBatch : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao processar trasfega');
+
+      setFeedbackMessage({ text: data.message, type: 'success' });
+      setTransferSources([]);
+      setTransferTarget(null);
+      setIsTransferBlend(false);
+      setTransferStep('SOURCE');
+      if (data.targetKeg) {
+        setScannedItem(data.targetKeg);
+        setItemType('KEG');
+      }
+    } catch (err: any) {
+      setFeedbackMessage({ text: err.message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const info = KEG_STATUS_MAP[status] || { label: status, bg: 'bg-slate-100', color: 'text-slate-800', border: 'border-slate-200' };
     return (
@@ -165,7 +290,7 @@ export default function ScannerPage() {
       </div>
 
       {/* Mode Selector Tabs */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+      <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <button
           onClick={() => { setMode('LOOKUP'); setFeedbackMessage(null); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
@@ -188,6 +313,18 @@ export default function ScannerPage() {
         >
           <Beer className={`w-4 h-4 ${mode === 'FILL' ? 'text-slate-950 stroke-[2.5]' : 'text-purple-600'}`} />
           <span>Envase</span>
+        </button>
+
+        <button
+          onClick={() => { setMode('TRANSFER'); setFeedbackMessage(null); }}
+          className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+            mode === 'TRANSFER'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+          }`}
+        >
+          <ArrowRightLeft className={`w-4 h-4 ${mode === 'TRANSFER' ? 'text-slate-950 stroke-[2.5]' : 'text-blue-600'}`} />
+          <span>Trasfega</span>
         </button>
 
         <button
@@ -242,22 +379,82 @@ export default function ScannerPage() {
       {/* Context Options per Mode */}
       {mode === 'FILL' && (
         <div className="p-4 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/60 rounded-2xl space-y-3 animate-in fade-in text-xs shadow-xs">
-          <div>
-            <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
-              🍺 Selecione o Lote de Cerveja a Envasar:
-            </label>
-            <select
-              value={selectedBatchId}
-              onChange={(e) => setSelectedBatchId(e.target.value)}
-              className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
+          {/* Segmented Switch: Lote do Tanque vs Avulso / Rápido */}
+          <div className="flex bg-purple-100/70 dark:bg-purple-900/40 p-1 rounded-xl gap-1">
+            <button
+              type="button"
+              onClick={() => setFillSourceType('BATCH')}
+              className={`flex-1 py-1.5 rounded-lg font-black transition-all flex items-center justify-center gap-1.5 ${
+                fillSourceType === 'BATCH'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-purple-900 dark:text-purple-200 hover:bg-white/40'
+              }`}
             >
-              {batches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.recipe?.name} ({b.batchNumber}) - {b.tank?.name || 'Tanque'} ({b.volumePlannedLiters}L)
-                </option>
-              ))}
-            </select>
+              <Beer className="w-3.5 h-3.5" />
+              <span>Lote do Tanque</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFillSourceType('QUICK')}
+              className={`flex-1 py-1.5 rounded-lg font-black transition-all flex items-center justify-center gap-1.5 ${
+                fillSourceType === 'QUICK'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-purple-900 dark:text-purple-200 hover:bg-white/40'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              <span>Avulso / Rápido</span>
+            </button>
           </div>
+
+          {fillSourceType === 'BATCH' ? (
+            <div>
+              <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
+                🍺 Selecione o Lote de Cerveja a Envasar:
+              </label>
+              <select
+                value={selectedBatchId}
+                onChange={(e) => setSelectedBatchId(e.target.value)}
+                className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
+              >
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.recipe?.name} ({b.batchNumber}) - {b.tank?.name || 'Tanque'} ({b.volumePlannedLiters}L)
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
+                  ⚡ Nome do Chopp / Cerveja:
+                </label>
+                <input
+                  type="text"
+                  value={quickBeerName}
+                  onChange={(e) => setQuickBeerName(e.target.value)}
+                  placeholder="Ex: Pilsen Puro Malte, IPA Cigana, Cerveja X..."
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
+                />
+              </div>
+              <div>
+                <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
+                  🏷️ Número do Lote (opcional):
+                </label>
+                <input
+                  type="text"
+                  value={quickBatchNumber}
+                  onChange={(e) => setQuickBatchNumber(e.target.value)}
+                  placeholder="Ex: AV-01, LOTE-102..."
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
+                />
+              </div>
+              <p className="text-[11px] text-purple-900/80 dark:text-purple-300">
+                Ideal para cervejas sem brassagem cadastrada, cervejarias parceiras ou ajustes de furo de estoque.
+              </p>
+            </div>
+          )}
 
           {/* Opção de Litragem Parcial */}
           <div className="p-3 bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800/60 rounded-xl space-y-2 shadow-2xs">
@@ -285,6 +482,185 @@ export default function ScannerPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {mode === 'TRANSFER' && (
+        <div className="p-4 bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/60 rounded-2xl space-y-3 animate-in fade-in text-xs shadow-xs">
+          <div className="flex items-center justify-between">
+            <label className="font-black text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
+              <ArrowRightLeft className="w-4 h-4 text-blue-600" />
+              Trasfega & Blends
+            </label>
+            <div className="flex gap-1 bg-blue-100/70 dark:bg-blue-900/40 p-0.5 rounded-lg text-[10px] font-bold">
+              <button
+                type="button"
+                onClick={() => setTransferStep('SOURCE')}
+                className={`px-2 py-1 rounded-md transition-all ${
+                  transferStep === 'SOURCE' ? 'bg-blue-600 text-white font-black shadow-2xs' : 'text-blue-900 dark:text-blue-200'
+                }`}
+              >
+                1. Origem ({transferSources.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransferStep('TARGET')}
+                className={`px-2 py-1 rounded-md transition-all ${
+                  transferStep === 'TARGET' ? 'bg-blue-600 text-white font-black shadow-2xs' : 'text-blue-900 dark:text-blue-200'
+                }`}
+              >
+                2. Destino {transferTarget ? '✓' : ''}
+              </button>
+            </div>
+          </div>
+
+          {transferStep === 'SOURCE' ? (
+            <div className="space-y-2">
+              <div className="p-2.5 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/60 rounded-xl">
+                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  👉 <strong>BiP Barril de Origem:</strong> Aponte a câmera para os barris que deseja juntar ou transferir.
+                </p>
+              </div>
+              {transferSources.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-[11px] font-black text-slate-700 dark:text-slate-300">
+                    <span>Origens Bipadas ({transferSources.length}):</span>
+                    <span>Total: {transferSources.reduce((acc, s) => acc + s.volume, 0)} Litros</span>
+                  </div>
+                  {transferSources.map((s, idx) => (
+                    <div key={s.kegId} className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between">
+                      <div>
+                        <div className="font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <span>{s.kegCode}</span>
+                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.5 rounded">
+                            {s.beerName}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Disponível: {s.maxVolume}L {s.batchNumber ? `| Lote: ${s.batchNumber}` : ''}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0.5"
+                            max={s.maxVolume}
+                            value={s.volume}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setTransferSources((prev) => prev.map((item, i) => (i === idx ? { ...item, volume: val } : item)));
+                            }}
+                            className="w-16 px-1.5 py-1 text-center font-black bg-blue-50/50 dark:bg-slate-950 border border-blue-300 dark:border-blue-700 rounded-lg text-xs"
+                          />
+                          <span className="text-[10px] font-bold text-slate-500">L</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setTransferSources((prev) => prev.filter((_, i) => i !== idx))}
+                          className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-lg"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setTransferStep('TARGET')}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1 shadow-xs"
+                  >
+                    <span>Avançar para Barril Destino</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="p-2.5 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/60 rounded-xl">
+                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  👉 <strong>BiP Barril Destino:</strong> Aponte a câmera para o barril vazio ou higienizado que receberá a cerveja.
+                </p>
+              </div>
+
+              {transferTarget && (
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center justify-between">
+                  <div>
+                    <div className="font-black text-emerald-950 dark:text-emerald-200 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Destino: {transferTarget.kegCode}</span>
+                      <span className="text-[10px] bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 px-1.5 py-0.5 rounded font-bold">
+                        {transferTarget.capacity}L
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-emerald-800 dark:text-emerald-300">
+                      Receberá {transferSources.reduce((acc, s) => acc + s.volume, 0)}L de cerveja
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTransferTarget(null)}
+                    className="text-[10px] font-bold text-slate-500 underline"
+                  >
+                    Trocar
+                  </button>
+                </div>
+              )}
+
+              {/* Blend / Customização de Nome e Lote */}
+              <div className="p-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/60 rounded-xl space-y-2">
+                <label className="flex items-center gap-2 font-black text-blue-950 dark:text-blue-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isTransferBlend}
+                    onChange={(e) => setIsTransferBlend(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Criar Blend ou Personalizar Nome & Lote</span>
+                </label>
+
+                {isTransferBlend && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 animate-in fade-in">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Nome do Blend / Cerveja:</label>
+                      <input
+                        type="text"
+                        value={transferCustomBeerName}
+                        onChange={(e) => setTransferCustomBeerName(e.target.value)}
+                        placeholder="Ex: Blend Especial Safra 2026"
+                        className="w-full px-2.5 py-1.5 bg-blue-50/50 dark:bg-slate-950 border border-blue-300 dark:border-blue-700 rounded-lg text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Novo Lote:</label>
+                      <input
+                        type="text"
+                        value={transferCustomBatch}
+                        onChange={(e) => setTransferCustomBatch(e.target.value)}
+                        placeholder="Ex: BLEND-01"
+                        className="w-full px-2.5 py-1.5 bg-blue-50/50 dark:bg-slate-950 border border-blue-300 dark:border-blue-700 rounded-lg text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Botão de Confirmação */}
+              {transferSources.length > 0 && transferTarget && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleExecuteTransfer}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Confirmar Trasfega / Blend ({transferSources.reduce((acc, s) => acc + s.volume, 0)}L)</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

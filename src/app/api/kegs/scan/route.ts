@@ -117,21 +117,32 @@ export async function POST(req: NextRequest) {
         }
 
         case 'FILL': {
-          // Envase de Lote (Com suporte a volume cheio ou parcial)
-          if (!batchId) {
-            return NextResponse.json({ error: 'Selecione um lote de produção para envasar' }, { status: 400 });
+          // Envase de Lote OU Envase Avulso / Rápido
+          const isQuickFill = Boolean(body.isQuickFill || !batchId);
+          let beerName = 'Cerveja Artesanal';
+          let batchNumber = '';
+          let resolvedBatchId: string | null = null;
+
+          if (isQuickFill) {
+            if (!body.quickBeerName && !body.beerName) {
+              return NextResponse.json({ error: 'Informe o nome da cerveja para o envase avulso' }, { status: 400 });
+            }
+            beerName = (body.quickBeerName || body.beerName).trim();
+            batchNumber = (body.quickBatchNumber || body.batchNumber || '').trim();
+          } else {
+            const batch = await prisma.productionBatch.findUnique({
+              where: { id: batchId },
+              include: { recipe: true },
+            });
+
+            if (!batch) {
+              return NextResponse.json({ error: 'Lote de produção não encontrado' }, { status: 404 });
+            }
+            beerName = batch.recipe?.name || 'Cerveja Artesanal';
+            batchNumber = batch.batchNumber;
+            resolvedBatchId = batch.id;
           }
 
-          const batch = await prisma.productionBatch.findUnique({
-            where: { id: batchId },
-            include: { recipe: true },
-          });
-
-          if (!batch) {
-            return NextResponse.json({ error: 'Lote de produção não encontrado' }, { status: 404 });
-          }
-
-          const beerName = batch.recipe?.name || 'Cerveja Artesanal';
           const envasadoLitros = volumeLiters ? parseFloat(volumeLiters) : keg.capacity;
           const isPartial = envasadoLitros < keg.capacity;
 
@@ -139,12 +150,14 @@ export async function POST(req: NextRequest) {
             where: { id: keg.id },
             data: {
               status: 'EM_ESTOQUE',
-              currentBatchId: batch.id,
+              currentBatchId: resolvedBatchId,
               currentBeerName: beerName,
               currentVolumeLiters: envasadoLitros,
               lastFilledAt: new Date(),
               currentClientId: null,
-              notes: isPartial
+              notes: isQuickFill
+                ? `Envase Avulso: ${beerName}${batchNumber ? ` (Lote: ${batchNumber})` : ''}. ${notes || ''}`
+                : isPartial
                 ? `Envase Parcial: ${envasadoLitros}L de ${keg.capacity}L. ${notes || ''}`
                 : notes || keg.notes,
             },
@@ -154,20 +167,24 @@ export async function POST(req: NextRequest) {
             data: {
               breweryId,
               kegId: keg.id,
-              batchId: batch.id,
-              action: isPartial ? 'ENVASE_PARCIAL' : 'ENVASE',
+              batchId: resolvedBatchId,
+              action: isQuickFill ? (isPartial ? 'ENVASE_PARCIAL' : 'ENVASE_AVULSO') : (isPartial ? 'ENVASE_PARCIAL' : 'ENVASE'),
               volumeLiters: envasadoLitros,
               fromStatus: keg.status,
               toStatus: 'EM_ESTOQUE',
               userId: session.userId,
               userName: session.name,
-              notes: notes || `Envasado lote ${batch.batchNumber} (${beerName}) - Volume: ${envasadoLitros}L`,
+              notes: isQuickFill
+                ? `Envase Avulso: ${beerName} (${batchNumber ? `Lote ${batchNumber}` : 'Sem lote'}) - ${envasadoLitros}L`
+                : notes || `Envasado lote ${batchNumber} (${beerName}) - Volume: ${envasadoLitros}L`,
             },
           });
 
           return NextResponse.json({
             success: true,
-            message: isPartial
+            message: isQuickFill
+              ? `Barril ${cleanCode} envasado como "${beerName}" (${envasadoLitros}L)!`
+              : isPartial
               ? `Barril ${cleanCode} envasado parcialmente (${envasadoLitros}L de ${keg.capacity}L)!`
               : `Barril ${cleanCode} envasado com sucesso (${envasadoLitros}L de ${beerName})!`,
             item: updated,

@@ -180,7 +180,7 @@ export default function PowerBiIntegrationPage() {
       formula: 'Eficiência Volume (%) = DIVIDE(SUM(Fato_Producao_Lotes[volume_produced_liters]), SUM(Fato_Producao_Lotes[volume_planned_liters]), 0)',
     },
     {
-      title: 'Total de Barris no Parque (Frota)',
+      title: 'Total de Barris (Frota)',
       category: 'BARRIS',
       desc: 'Contagem total de vasilhames cadastrados.',
       formula: 'Total Barris Frota = COUNTROWS(Fato_Barris_Posicao)',

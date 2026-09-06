@@ -120,7 +120,7 @@ AVERAGE(Fato_Producao_Lotes[measured_ibu])
 
 ## 3. 🛢️ Logística, Gestão de Barris & Giro de Ativos
 
-### Total de Barris no Parque (Frota)
+### Total de Barris (Frota)
 ```dax
 Total Barris Frota = 
 COUNTROWS(Fato_Barris_Posicao)

@@ -236,7 +236,7 @@ JOIN "Brewery" b ON b."id" = pb."breweryId"
 JOIN "BeerRecipe" r ON r."id" = pb."recipeId"
 LEFT JOIN "Tank" t ON t."id" = pb."tankId";
 
--- 10. FATO: POSIÇÃO ATUAL DOS BARRIS (SNAPSHOT DO PARQUE)
+-- 10. FATO: POSIÇÃO ATUAL DOS BARRIS (SNAPSHOT DE BARRIS)
 CREATE OR REPLACE VIEW vw_bi_fato_barris_posicao_atual AS
 SELECT
   k."id" AS keg_id,
