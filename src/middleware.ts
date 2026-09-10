@@ -22,6 +22,25 @@ export function middleware(req: NextRequest) {
   // Detecta se a requisição veio através do subdomínio brew (ex: brew.pinttech.com.br ou brew.localhost:3000)
   const isBrewSubdomain = host.startsWith('brew.') || host.includes('brew.');
 
+  // Detecta se a requisição veio através do subdomínio da calculadora ou caminho público /calculadora
+  const isCalculadoraSubdomain = host.startsWith('calculadora.') || host.includes('calculadora.');
+  const isCalculadoraPath = url.pathname === '/calculadora' || url.pathname.startsWith('/calculadora');
+
+  // A Calculadora Cervejeira é 100% pública, standalone e não requer login
+  if (isCalculadoraSubdomain) {
+    if (url.pathname === '/' || url.pathname === '') {
+      url.pathname = '/calculadora';
+      return NextResponse.rewrite(url);
+    }
+    if (isCalculadoraPath) {
+      return NextResponse.next();
+    }
+  }
+
+  if (isCalculadoraPath) {
+    return NextResponse.next();
+  }
+
   const token = req.cookies.get('pinttech_token')?.value;
   const isAuthenticated = isTokenValid(token);
 

@@ -184,6 +184,36 @@ export function calculateMeasurementMetrics(
   return { abv, attenuationPercent, brix };
 }
 
+/**
+ * Correção de Densidade por Temperatura para densímetros de vidro calibrados.
+ * Ajusta a densidade lida (SG) com base na temperatura da amostra e na temperatura de calibração do densímetro (°C).
+ */
+export function correctHydrometerTemp(
+  measuredSg: number,
+  measuredTempC: number,
+  calibratedTempC: number = 20
+): number {
+  if (!measuredSg || measuredSg <= 0) return 1.000;
+  const normSg = measuredSg > 50 ? measuredSg / 1000 : measuredSg;
+  const tF = measuredTempC * 1.8 + 32;
+  const calF = calibratedTempC * 1.8 + 32;
+
+  // Polinômio ASBC/USDA de expansão térmica da água
+  const pMeasured =
+    1.00130346 -
+    0.00013472212 * tF +
+    0.0000020405259 * Math.pow(tF, 2) -
+    0.00000000232820948 * Math.pow(tF, 3);
+  const pCalibrated =
+    1.00130346 -
+    0.00013472212 * calF +
+    0.0000020405259 * Math.pow(calF, 2) -
+    0.00000000232820948 * Math.pow(calF, 3);
+
+  const correctedSg = normSg * (pMeasured / pCalibrated);
+  return Math.round(correctedSg * 1000) / 1000;
+}
+
 export function litersToGallons(liters: number): number {
   return liters * 0.264172;
 }
