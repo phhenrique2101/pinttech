@@ -42,7 +42,6 @@ export default function CalculadoraCervejeiraPage() {
   const [refOgSg, setRefOgSg] = useState<string>('1.054');
   const [refOgBrix, setRefOgBrix] = useState<string>('13.3');
   const [currentBrixInput, setCurrentBrixInput] = useState<string>('6.5');
-  const [wcfInput, setWcfInput] = useState<string>('1.00');
 
   const fgCalcResults = useMemo(() => {
     let baseOgSg = 1.050;
@@ -57,7 +56,7 @@ export default function CalculadoraCervejeiraPage() {
     }
 
     const currentBrix = parseFloat(currentBrixInput.replace(',', '.'));
-    const wcf = parseFloat(wcfInput.replace(',', '.')) || 1.0;
+    const wcf = 1.00; // Fator de correção padrão (WCF 1.00)
 
     if (isNaN(currentBrix) || currentBrix <= 0) {
       return null;
@@ -88,7 +87,7 @@ export default function CalculadoraCervejeiraPage() {
       caloriesPint: calories.calPint,
       caloriesCan: Math.round(calories.cal100ml * 3.55),
     };
-  }, [ogInputUnit, refOgSg, refOgBrix, currentBrixInput, wcfInput]);
+  }, [ogInputUnit, refOgSg, refOgBrix, currentBrixInput]);
 
   // -------------------------------------------------------------
   // ABA 2: CONVERSOR DE MOSTO CRU (OG: BRIX ⟷ SG)
@@ -387,7 +386,7 @@ export default function CalculadoraCervejeiraPage() {
               </div>
 
               {/* GRID DE ENTRADA */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {/* 1. OG INICIAL */}
                 <div className={`rounded-2xl p-5 border space-y-3 ${
                   isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
@@ -516,49 +515,6 @@ export default function CalculadoraCervejeiraPage() {
                         }`}
                       >
                         {preset}°Bx
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 3. FATOR DE CORREÇÃO DO REFRATÔMETRO (WCF) */}
-                <div className={`rounded-2xl p-5 border space-y-3 ${
-                  isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <label className={`text-xs font-black ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                      3. Fator de Correção (WCF)
-                    </label>
-                    <span className="text-[10px] font-black text-slate-500">Padrão: 1.00</span>
-                  </div>
-                  <input
-                    type="text"
-                    value={wcfInput}
-                    onChange={(e) => setWcfInput(e.target.value)}
-                    placeholder="1.00"
-                    className={`w-full rounded-xl px-4 py-3 text-base font-mono font-black border-2 focus:outline-none transition-all shadow-xs ${
-                      isDarkMode
-                        ? 'bg-slate-900 border-slate-700 text-slate-200 focus:border-slate-500'
-                        : 'bg-white border-slate-300 text-slate-900 focus:border-slate-500'
-                    }`}
-                  />
-                  <span className={`text-xs font-medium block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Wort Correction Factor. Calibração óptica do aparelho.
-                  </span>
-
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {['1.00', '1.02', '1.04'].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => setWcfInput(val)}
-                        className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                            : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-200'
-                        }`}
-                      >
-                        WCF {val}
                       </button>
                     ))}
                   </div>
