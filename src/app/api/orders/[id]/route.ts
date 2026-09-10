@@ -114,13 +114,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
     }
 
-    const finalSubtotal = subtotal !== undefined ? parseFloat(subtotal) : computedSubtotal;
+    const hasFinancialChanges =
+      subtotal !== undefined ||
+      Array.isArray(items) ||
+      deliveryFee !== undefined ||
+      cautionDeposit !== undefined ||
+      discount !== undefined ||
+      totalAmount !== undefined;
+
+    const finalSubtotal = subtotal !== undefined
+      ? parseFloat(subtotal)
+      : (Array.isArray(items) ? computedSubtotal : existing.subtotal);
     const finalDeliveryFee = deliveryFee !== undefined ? parseFloat(deliveryFee) : existing.deliveryFee;
     const finalCautionDeposit = cautionDeposit !== undefined ? parseFloat(cautionDeposit) : existing.cautionDeposit;
     const finalDiscount = discount !== undefined ? parseFloat(discount) : existing.discount;
     const finalTotal = totalAmount !== undefined
       ? parseFloat(totalAmount)
-      : Math.max(0, finalSubtotal + finalDeliveryFee + finalCautionDeposit - finalDiscount);
+      : (hasFinancialChanges
+          ? Math.max(0, finalSubtotal + finalDeliveryFee + finalCautionDeposit - finalDiscount)
+          : existing.totalAmount);
 
     const paid = existing.paidAmount || 0;
     const remaining = Math.max(0, finalTotal - paid);

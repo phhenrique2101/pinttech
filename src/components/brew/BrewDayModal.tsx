@@ -20,6 +20,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { parseBreweryGravity, sgToBrix } from '@/lib/brewing/calculations';
 
 interface BrewDayModalProps {
   recipe: any;
@@ -82,7 +83,7 @@ export default function BrewDayModal({
         tankId: tankId || null,
         status: 'BRASSAGEM',
         volumePlannedLiters: volumePlannedLiters,
-        measuredOg: measuredOg ? parseFloat(measuredOg) : recipe.og || null,
+        measuredOg: parseBreweryGravity(measuredOg) || recipe.og || null,
         phMash: phMash ? parseFloat(phMash) : null,
         phBoil: phBoil ? parseFloat(phBoil) : null,
         notes: notes.trim() || `Brassagem iniciada via PintTech Brew Studio (${recipe.name})`,
@@ -238,9 +239,17 @@ export default function BrewDayModal({
                   type="text"
                   value={measuredOg}
                   onChange={(e) => setMeasuredOg(e.target.value)}
-                  placeholder={recipe?.og ? recipe.og.toFixed(3) : '1.050'}
+                  placeholder={recipe?.og ? recipe.og.toFixed(3) : '1.050 ou 1050'}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none"
                 />
+                {(() => {
+                  const pOg = parseBreweryGravity(measuredOg) || recipe?.og;
+                  return pOg ? (
+                    <span className="text-[10px] font-bold text-amber-700 block mt-1">
+                      ≈ {sgToBrix(pOg).toFixed(1)} °Bx / Plato
+                    </span>
+                  ) : null;
+                })()}
               </div>
 
               <div>

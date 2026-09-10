@@ -92,6 +92,98 @@ export function platoToSg(plato: number): number {
   return 1 + (plato / (258.6 - ((plato / 258.2) * 227.1)));
 }
 
+export function brixToSg(brix: number): number {
+  return platoToSg(brix);
+}
+
+export function sgToBrix(sg: number): number {
+  return sgToPlato(sg);
+}
+
+/**
+ * Normaliza valores de gravidade informados por cervejeiros.
+ * Suporta formatos como "1.040", "1,040", "1040" (pontos) -> 1.040.
+ */
+export function parseBreweryGravity(input: string | number | null | undefined): number | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input === 'number') {
+    if (isNaN(input) || input <= 0) return null;
+    return input > 50 ? input / 1000 : input;
+  }
+  const clean = input.toString().replace(',', '.').trim();
+  const val = parseFloat(clean);
+  if (isNaN(val) || val <= 0) return null;
+  return val > 50 ? val / 1000 : val;
+}
+
+/**
+ * Correção de Refratômetro durante a fermentação (com presença de álcool).
+ * Utiliza a equação cúbica de Sean Terrill (padrão mundial do BeerSmith e Brewer's Friend).
+ */
+export function correctRefractometerBrix(
+  ogSg: number,
+  currentBrix: number,
+  wortCorrectionFactor: number = 1.0
+): { fgSg: number; realBrix: number; abv: number; attenuationPercent: number } {
+  if (!ogSg || ogSg <= 1.0 || !currentBrix || currentBrix <= 0) {
+    const rawSg = brixToSg(currentBrix || 0);
+    return { fgSg: rawSg, realBrix: currentBrix || 0, abv: 0, attenuationPercent: 0 };
+  }
+
+  const wcf = wortCorrectionFactor > 0 ? wortCorrectionFactor : 1.0;
+  const ri = currentBrix / wcf;
+  const ogBrix = sgToPlato(ogSg);
+
+  // Sean Terrill Cubic Formula
+  const fg =
+    1.001843 -
+    0.002318474 * ogBrix +
+    0.000007775 * Math.pow(ogBrix, 2) -
+    0.000000034 * Math.pow(ogBrix, 3) +
+    0.00574 * ri -
+    0.00003344 * Math.pow(ri, 2) +
+    0.000000086 * Math.pow(ri, 3);
+
+  const roundedFg = Math.max(0.990, Math.min(ogSg, Math.round(fg * 1000) / 1000));
+  const abv = calculateAbv(ogSg, roundedFg);
+  const realBrix = Math.max(0, Math.round(sgToPlato(roundedFg) * 10) / 10);
+  const attenuationPercent =
+    ogSg > 1.0
+      ? Math.max(0, Math.min(100, Math.round(((ogSg - roundedFg) / (ogSg - 1.0)) * 1000) / 10))
+      : 0;
+
+  return {
+    fgSg: roundedFg,
+    realBrix,
+    abv,
+    attenuationPercent,
+  };
+}
+
+/**
+ * Calcula métricas de medição (ABV, atenuação e Brix equivalente) a partir de OG e SG atual.
+ */
+export function calculateMeasurementMetrics(
+  ogSg: number,
+  currentSg: number
+): { abv: number; attenuationPercent: number; brix: number } {
+  const normSg = currentSg > 50 ? currentSg / 1000 : currentSg;
+  const normOg = ogSg > 50 ? ogSg / 1000 : ogSg;
+  const brix = Math.max(0, Math.round(sgToPlato(normSg) * 10) / 10);
+
+  if (!normOg || normOg <= 1.0 || !normSg || normSg >= normOg) {
+    return { abv: 0, attenuationPercent: 0, brix };
+  }
+
+  const abv = calculateAbv(normOg, normSg);
+  const attenuationPercent = Math.max(
+    0,
+    Math.min(100, Math.round(((normOg - normSg) / (normOg - 1.0)) * 1000) / 10)
+  );
+
+  return { abv, attenuationPercent, brix };
+}
+
 export function litersToGallons(liters: number): number {
   return liters * 0.264172;
 }

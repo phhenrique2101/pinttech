@@ -121,8 +121,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Auto-calculate attenuation and ABV if OG and FG are provided
-    const numOg = measuredOg ? parseFloat(measuredOg) : null;
-    const numFg = measuredFg ? parseFloat(measuredFg) : null;
+    const parseGrav = (v: any) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+      if (isNaN(n) || n <= 0) return null;
+      return n > 50 ? n / 1000 : n;
+    };
+
+    const numOg = parseGrav(measuredOg);
+    const numFg = parseGrav(measuredFg);
     let calcAbv = measuredAbv ? parseFloat(measuredAbv) : null;
     let calcAtt = attenuationPercent ? parseFloat(attenuationPercent) : null;
     if (numOg && numFg && numOg > 1.0 && numFg >= 0.99) {

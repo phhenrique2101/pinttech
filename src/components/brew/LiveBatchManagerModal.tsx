@@ -29,6 +29,14 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateShort, getLocalDateString } from '@/lib/utils';
+import {
+  brixToSg,
+  sgToBrix,
+  parseBreweryGravity,
+  correctRefractometerBrix,
+  calculateMeasurementMetrics,
+  calculateAbv,
+} from '@/lib/brewing/calculations';
 
 export interface TankTaskItem {
   id: string;
@@ -45,10 +53,16 @@ export interface TankTaskItem {
 export interface FermentationLogItem {
   id: string;
   date: string; // YYYY-MM-DD
-  gravity: number; // ex: 1.025
+  gravity: number; // ex: 1.025 (SG normalizada)
   tempCelsius: number; // ex: 19.5
   ph?: number; // ex: 4.4
   notes?: string;
+  brix?: number; // ex: 6.5
+  inputUnit?: 'SG' | 'BRIX';
+  rawInputBrix?: number; // Leitura original se foi em Brix
+  isRefractometerCorrected?: boolean;
+  abv?: number; // ex: 5.2
+  attenuation?: number; // ex: 78
 }
 
 export interface LiveBatchIngredient {
@@ -440,33 +454,138 @@ export default function LiveBatchManagerModal({
     if (batch.fermentationLogsJson) {
       try {
         const parsed = JSON.parse(batch.fermentationLogsJson);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.map((item: any) => ({
+            ...item,
+            gravity: item.gravity > 50 ? item.gravity / 1000 : item.gravity,
+          }));
+        }
       } catch (e) {}
     }
     return [];
   }, [batch]);
 
   const [logs, setLogs] = useState<FermentationLogItem[]>(initialLogs);
+  const [logInputUnit, setLogInputUnit] = useState<'SG' | 'BRIX'>('SG');
   const [newLogDate, setNewLogDate] = useState<string>(todayStr);
   const [newLogGravity, setNewLogGravity] = useState<string>('');
+  const [newLogBrix, setNewLogBrix] = useState<string>('');
+  const [applyRefractometerCorrection, setApplyRefractometerCorrection] = useState<boolean>(true);
   const [newLogTemp, setNewLogTemp] = useState<string>('19.0');
   const [newLogPh, setNewLogPh] = useState<string>('');
   const [newLogNotes, setNewLogNotes] = useState<string>('');
+  const [fgUpdatedFeedback, setFgUpdatedFeedback] = useState<boolean>(false);
+
+  // OG de referência do lote para cálculos de correção e ABV
+  const referenceOg = useMemo(() => {
+    const parsedBatchOg = parseBreweryGravity(measuredOg || batch.measuredOg);
+    if (parsedBatchOg && parsedBatchOg > 1.0) return parsedBatchOg;
+
+    const parsedRecipeOg = parseBreweryGravity(batch.recipe?.og);
+    if (parsedRecipeOg && parsedRecipeOg > 1.0) return parsedRecipeOg;
+
+    if (logs.length > 0) {
+      const sorted = [...logs].sort((a, b) => a.date.localeCompare(b.date));
+      const firstG = sorted[0].gravity > 50 ? sorted[0].gravity / 1000 : sorted[0].gravity;
+      if (firstG >= 1.020) return firstG;
+    }
+
+    return 1.050; // valor padrão para base de cálculo se nada for informado
+  }, [measuredOg, batch.measuredOg, batch.recipe?.og, logs]);
+
+  // Cálculo e preview em tempo real ao digitar Brix ou SG
+  const liveMeasurementPreview = useMemo(() => {
+    if (logInputUnit === 'BRIX') {
+      if (!newLogBrix.trim()) return null;
+      const brixVal = parseFloat(newLogBrix.replace(',', '.'));
+      if (isNaN(brixVal) || brixVal <= 0) return null;
+
+      if (applyRefractometerCorrection && referenceOg > 1.0) {
+        const corrected = correctRefractometerBrix(referenceOg, brixVal);
+        return {
+          sg: corrected.fgSg,
+          rawBrix: brixVal,
+          realBrix: corrected.realBrix,
+          abv: corrected.abv,
+          attenuation: corrected.attenuationPercent,
+          isCorrected: true,
+        };
+      } else {
+        const rawSg = Math.round(brixToSg(brixVal) * 1000) / 1000;
+        const metrics = calculateMeasurementMetrics(referenceOg, rawSg);
+        return {
+          sg: rawSg,
+          rawBrix: brixVal,
+          realBrix: brixVal,
+          abv: metrics.abv,
+          attenuation: metrics.attenuationPercent,
+          isCorrected: false,
+        };
+      }
+    } else {
+      if (!newLogGravity.trim()) return null;
+      const parsedSg = parseBreweryGravity(newLogGravity);
+      if (!parsedSg) return null;
+      const metrics = calculateMeasurementMetrics(referenceOg, parsedSg);
+      return {
+        sg: parsedSg,
+        rawBrix: metrics.brix,
+        realBrix: metrics.brix,
+        abv: metrics.abv,
+        attenuation: metrics.attenuationPercent,
+        isCorrected: false,
+      };
+    }
+  }, [logInputUnit, newLogBrix, newLogGravity, applyRefractometerCorrection, referenceOg]);
+
+  // Logs enriquecidos com SG normalizada, Brix equivalente e ABV calculado (retrocompatível)
+  const enrichedLogs = useMemo(() => {
+    return logs.map((log) => {
+      const normGravity = log.gravity > 50 ? log.gravity / 1000 : log.gravity;
+      const metrics = calculateMeasurementMetrics(referenceOg, normGravity);
+      return {
+        ...log,
+        gravity: normGravity,
+        brix: log.brix ?? metrics.brix,
+        abv: log.abv ?? metrics.abv,
+        attenuation: log.attenuation ?? metrics.attenuationPercent,
+      };
+    });
+  }, [logs, referenceOg]);
+
+  // Última medição registrada
+  const latestLog = useMemo(() => {
+    if (enrichedLogs.length === 0) return null;
+    return [...enrichedLogs].sort((a, b) => a.date.localeCompare(b.date))[enrichedLogs.length - 1];
+  }, [enrichedLogs]);
 
   const handleAddLog = () => {
-    if (!newLogGravity) return;
+    if (!liveMeasurementPreview) return;
     const item: FermentationLogItem = {
       id: `log-${Date.now()}`,
       date: newLogDate,
-      gravity: parseFloat(newLogGravity),
+      gravity: liveMeasurementPreview.sg,
       tempCelsius: parseFloat(newLogTemp) || 19.0,
-      ph: newLogPh ? parseFloat(newLogPh) : undefined,
+      ph: newLogPh ? parseFloat(newLogPh.replace(',', '.')) : undefined,
       notes: newLogNotes.trim() || undefined,
+      brix: liveMeasurementPreview.realBrix,
+      inputUnit: logInputUnit,
+      rawInputBrix: logInputUnit === 'BRIX' ? liveMeasurementPreview.rawBrix : undefined,
+      isRefractometerCorrected: liveMeasurementPreview.isCorrected,
+      abv: liveMeasurementPreview.abv,
+      attenuation: liveMeasurementPreview.attenuation,
     };
     setLogs([...logs, item]);
     setNewLogGravity('');
+    setNewLogBrix('');
     setNewLogPh('');
     setNewLogNotes('');
+  };
+
+  const handleApplyLatestFg = (fgVal: number) => {
+    setMeasuredFg(fgVal.toFixed(3));
+    setFgUpdatedFeedback(true);
+    setTimeout(() => setFgUpdatedFeedback(false), 3000);
   };
 
   const handleRemoveLog = (id: string) => {
@@ -516,8 +635,8 @@ export default function LiveBatchManagerModal({
         volumeProducedLiters: volumeProduced,
         costPerLiter: batchCostPerLiter,
         totalCost: batchTotalCost,
-        measuredOg: measuredOg ? parseFloat(measuredOg) : null,
-        measuredFg: measuredFg ? parseFloat(measuredFg) : null,
+        measuredOg: parseBreweryGravity(measuredOg),
+        measuredFg: parseBreweryGravity(measuredFg),
         phMash: computedMashPh,
         phBoil: computedBoilPh,
         phFermentationStart: phFermentationStart ? parseFloat(phFermentationStart) : null,
@@ -532,7 +651,7 @@ export default function LiveBatchManagerModal({
         notes: notes.trim() || null,
         customRecipeDataJson: JSON.stringify(customObj),
         tankTasksJson: JSON.stringify(tasks),
-        fermentationLogsJson: JSON.stringify(logs),
+        fermentationLogsJson: JSON.stringify(enrichedLogs),
         ingredients: batchIngredients.map((item) => ({
           inventoryItemId: item.inventoryItemId || null,
           inventoryLotId: item.inventoryLotId || null,
@@ -1161,77 +1280,260 @@ export default function LiveBatchManagerModal({
           {/* ABA 3: CURVA DE FERMENTAÇÃO & MEDIÇÕES */}
           {activeTab === 'FERMENTATION_LOG' && (
             <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-cyan-600" />
-                  <span>Histórico de Medições Diárias (Atenuação & Temperatura)</span>
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Registre as medições de densidade (SG), temperatura do tanque e pH ao longo da fermentação.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-cyan-600" />
+                    <span>Histórico de Medições Diárias (Atenuação & Temperatura)</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Registre densidade em SG ou °Brix com correção automática de refratômetro, cálculo de teor alcoólico (% ABV) e temperatura.
+                  </p>
+                </div>
+
+                {latestLog && (
+                  <button
+                    type="button"
+                    onClick={() => handleApplyLatestFg(latestLog.gravity)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-black transition-all shadow-sm self-start sm:self-auto"
+                    title="Preenche a FG do lote com o valor da última medição"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-700" />
+                    <span>{fgUpdatedFeedback ? '✓ FG Atualizada!' : `Definir ${latestLog.gravity.toFixed(3)} como FG`}</span>
+                  </button>
+                )}
               </div>
 
-              {/* Registro Rápido */}
-              <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Data da Medição</label>
-                  <input
-                    type="date"
-                    value={newLogDate}
-                    onChange={(e) => setNewLogDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                  />
+              {/* CARDS DE RESUMO DA FERMENTAÇÃO (KPIs) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">OG de Referência</span>
+                  <div className="text-base font-black text-amber-800 mt-0.5">
+                    {referenceOg.toFixed(3)} <span className="text-xs font-bold text-amber-600">SG</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-600 block mt-0.5">
+                    ≈ {sgToBrix(referenceOg).toFixed(1)} °Bx
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Densidade (SG)</label>
-                  <input
-                    type="text"
-                    value={newLogGravity}
-                    onChange={(e) => setNewLogGravity(e.target.value)}
-                    placeholder="ex: 1.020"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none"
-                  />
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Última Densidade</span>
+                  <div className="text-base font-black text-cyan-800 mt-0.5">
+                    {latestLog ? `${latestLog.gravity.toFixed(3)} ` : '— '}
+                    <span className="text-xs font-bold text-cyan-600">SG</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-600 block mt-0.5">
+                    {latestLog ? `≈ ${(latestLog.brix ?? sgToBrix(latestLog.gravity)).toFixed(1)} °Bx` : 'Sem medições'}
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Temp. Tanque (°C)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={newLogTemp}
-                    onChange={(e) => setNewLogTemp(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                  />
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Teor Alcoólico Atual</span>
+                  <div className="text-base font-black text-emerald-700 mt-0.5">
+                    {latestLog && latestLog.abv ? `${latestLog.abv.toFixed(1)}%` : '0.0%'} <span className="text-xs font-bold text-emerald-600">ABV</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-600 block mt-0.5">
+                    {latestLog && latestLog.attenuation ? `${latestLog.attenuation.toFixed(1)}% atenuação` : 'Início / Pré-fermentação'}
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">pH Atual</label>
-                  <input
-                    type="text"
-                    value={newLogPh}
-                    onChange={(e) => setNewLogPh(e.target.value)}
-                    placeholder="ex: 4.5"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                  />
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tanque & pH Atual</span>
+                  <div className="text-base font-black text-slate-800 mt-0.5">
+                    {latestLog ? `${latestLog.tempCelsius}°C` : (tempFermentation ? `${tempFermentation}°C` : '—')}
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-600 block mt-0.5">
+                    {latestLog?.ph ? `pH: ${latestLog.ph.toFixed(2)}` : 'pH não aferido'}
+                  </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleAddLog}
-                  className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-black text-xs rounded-xl shadow-sm transition-all"
-                >
-                  + Gravar Medição
-                </button>
               </div>
 
-              {/* Tabela de Medições */}
+              {/* REGISTRO RÁPIDO COM OPÇÃO SG / BRIX E CORREÇÃO AUTOMÁTICA */}
+              <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                {/* SELETOR DE UNIDADE & CONTROLE DE CORREÇÃO DE REFRATÔMETRO */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Unidade de Medição:</span>
+                    <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setLogInputUnit('SG')}
+                        className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
+                          logInputUnit === 'SG'
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        SG (Densímetro)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLogInputUnit('BRIX')}
+                        className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
+                          logInputUnit === 'BRIX'
+                            ? 'bg-cyan-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        °Brix (Refratômetro)
+                      </button>
+                    </div>
+                  </div>
+
+                  {logInputUnit === 'BRIX' && (
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={applyRefractometerCorrection}
+                        onChange={(e) => setApplyRefractometerCorrection(e.target.checked)}
+                        className="rounded text-cyan-600 focus:ring-cyan-500 w-4 h-4"
+                      />
+                      <span>Correção de Álcool (Refratômetro em Fermentação - Sean Terrill)</span>
+                    </label>
+                  )}
+                </div>
+
+                {/* FORMULÁRIO DE INPUT */}
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Data da Medição</label>
+                    <input
+                      type="date"
+                      value={newLogDate}
+                      onChange={(e) => setNewLogDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+
+                  {logInputUnit === 'BRIX' ? (
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Leitura (°Brix)
+                      </label>
+                      <input
+                        type="text"
+                        value={newLogBrix}
+                        onChange={(e) => setNewLogBrix(e.target.value)}
+                        placeholder="ex: 6.5 ou 12.0"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-cyan-700 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Densidade (SG)
+                      </label>
+                      <input
+                        type="text"
+                        value={newLogGravity}
+                        onChange={(e) => setNewLogGravity(e.target.value)}
+                        placeholder="ex: 1.020 ou 1020"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Temp. Tanque (°C)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={newLogTemp}
+                      onChange={(e) => setNewLogTemp(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">pH Atual</label>
+                    <input
+                      type="text"
+                      value={newLogPh}
+                      onChange={(e) => setNewLogPh(e.target.value)}
+                      placeholder="ex: 4.4"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Observações</label>
+                    <input
+                      type="text"
+                      value={newLogNotes}
+                      onChange={(e) => setNewLogNotes(e.target.value)}
+                      placeholder="Ex: Amostra límpida"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddLog}
+                    disabled={!liveMeasurementPreview}
+                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl shadow-sm transition-all"
+                  >
+                    + Gravar Medição
+                  </button>
+                </div>
+
+                {/* PREVIEW DINÂMICO EM TEMPO REAL AO DIGITAR BRIX OU SG */}
+                {liveMeasurementPreview && (
+                  <div className="p-3 bg-cyan-50/70 border border-cyan-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div>
+                        <span className="text-[10px] font-bold text-cyan-800 uppercase block">
+                          {logInputUnit === 'BRIX' && liveMeasurementPreview.isCorrected ? 'SG Corrigida (Refratômetro):' : 'Densidade (SG):'}
+                        </span>
+                        <span className="font-mono font-black text-sm text-cyan-950">
+                          {liveMeasurementPreview.sg.toFixed(3)}
+                        </span>
+                      </div>
+
+                      <div className="h-6 w-px bg-cyan-200" />
+
+                      <div>
+                        <span className="text-[10px] font-bold text-cyan-800 uppercase block">Extrato (°Bx / Plato):</span>
+                        <span className="font-mono font-bold text-xs text-cyan-900">
+                          ≈ {liveMeasurementPreview.realBrix.toFixed(1)} °Bx
+                        </span>
+                      </div>
+
+                      <div className="h-6 w-px bg-cyan-200" />
+
+                      <div>
+                        <span className="text-[10px] font-bold text-cyan-800 uppercase block">Teor Alcoólico Atual:</span>
+                        <span className="font-mono font-black text-xs text-emerald-700">
+                          {liveMeasurementPreview.abv.toFixed(1)}% ABV
+                        </span>
+                      </div>
+
+                      <div className="h-6 w-px bg-cyan-200" />
+
+                      <div>
+                        <span className="text-[10px] font-bold text-cyan-800 uppercase block">Atenuação:</span>
+                        <span className="font-mono font-bold text-xs text-slate-700">
+                          {liveMeasurementPreview.attenuation.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="text-[11px] font-bold text-cyan-800">
+                      {logInputUnit === 'BRIX' && liveMeasurementPreview.isCorrected
+                        ? `✓ Correção Sean Terrill aplicada (OG base: ${referenceOg.toFixed(3)})`
+                        : `OG base: ${referenceOg.toFixed(3)}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* TABELA DE MEDIÇÕES */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-sm">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
                       <th className="p-3">Data</th>
-                      <th className="p-3 text-right">Densidade (SG)</th>
+                      <th className="p-3 text-right">Densidade (SG / °Bx)</th>
+                      <th className="p-3 text-center">Teor Alcoólico (ABV)</th>
                       <th className="p-3 text-right">Temperatura</th>
                       <th className="p-3 text-right">pH</th>
                       <th className="p-3">Observações</th>
@@ -1239,24 +1541,59 @@ export default function LiveBatchManagerModal({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {logs.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-bold text-slate-900">{formatDate(item.date)}</td>
-                        <td className="p-3 text-right font-black text-amber-700">{item.gravity.toFixed(3)}</td>
-                        <td className="p-3 text-right font-bold text-cyan-700">{item.tempCelsius}°C</td>
-                        <td className="p-3 text-right font-bold text-slate-700">{item.ph ? item.ph.toFixed(2) : '-'}</td>
-                        <td className="p-3 text-slate-600 font-medium">{item.notes || '-'}</td>
-                        <td className="p-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveLog(item.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                    {enrichedLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-slate-400 font-medium">
+                          Nenhuma medição registrada ainda. Use o formulário acima para registrar SG ou °Brix.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      enrichedLogs.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-bold text-slate-900">{formatDate(item.date)}</td>
+                          <td className="p-3 text-right">
+                            <span className="font-black text-amber-700 block text-xs font-mono">
+                              {item.gravity.toFixed(3)} SG
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-500 block">
+                              ≈ {(item.brix ?? sgToBrix(item.gravity)).toFixed(1)} °Bx
+                              {item.rawInputBrix ? ` (Lido: ${item.rawInputBrix}°Bx)` : ''}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {item.abv && item.abv > 0 ? (
+                              <div>
+                                <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800">
+                                  {item.abv.toFixed(1)}% v/v
+                                </span>
+                                {item.attenuation !== undefined && (
+                                  <span className="block text-[10px] font-bold text-slate-500 mt-0.5">
+                                    {item.attenuation.toFixed(1)}% aten.
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                0.0% (Início / OG)
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-right font-bold text-cyan-700">{item.tempCelsius}°C</td>
+                          <td className="p-3 text-right font-bold text-slate-700">{item.ph ? item.ph.toFixed(2) : '-'}</td>
+                          <td className="p-3 text-slate-600 font-medium">{item.notes || '-'}</td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLog(item.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Remover medição"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1393,30 +1730,53 @@ export default function LiveBatchManagerModal({
                     <label className="block text-xs font-bold text-slate-700 mb-1">OG Medida (Inicial)</label>
                     <input
                       type="text"
-                      placeholder="Ex: 1.054"
+                      placeholder="Ex: 1.054 ou 1054"
                       value={measuredOg}
                       onChange={(e) => setMeasuredOg(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none"
                     />
+                    {(() => {
+                      const pOg = parseBreweryGravity(measuredOg);
+                      return pOg ? (
+                        <span className="text-[10px] font-bold text-amber-700 block mt-1">
+                          ≈ {sgToBrix(pOg).toFixed(1)} °Bx / Plato
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">FG Medida (Final)</label>
                     <input
                       type="text"
-                      placeholder="Ex: 1.010"
+                      placeholder="Ex: 1.010 ou 1010"
                       value={measuredFg}
                       onChange={(e) => setMeasuredFg(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-cyan-700 focus:outline-none"
                     />
+                    {(() => {
+                      const pFg = parseBreweryGravity(measuredFg);
+                      return pFg ? (
+                        <span className="text-[10px] font-bold text-cyan-700 block mt-1">
+                          ≈ {sgToBrix(pFg).toFixed(1)} °Bx / Plato
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Teor Alcoólico (% ABV Estimado)</label>
                     <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-slate-800">
-                      {measuredOg && measuredFg && parseFloat(measuredOg) > 1 && parseFloat(measuredFg) > 0.9
-                        ? `${Math.max(0, ((parseFloat(measuredOg) - parseFloat(measuredFg)) * 131.25)).toFixed(1)}% v/v`
-                        : 'Preencha OG e FG'}
+                      {(() => {
+                        const pOg = parseBreweryGravity(measuredOg);
+                        const pFg = parseBreweryGravity(measuredFg);
+                        if (pOg && pFg && pOg > pFg && pOg > 1.0) {
+                          const abv = calculateAbv(pOg, pFg);
+                          const att = Math.round(((pOg - pFg) / (pOg - 1.0)) * 1000) / 10;
+                          return `${abv.toFixed(1)}% v/v (${att}% aten.)`;
+                        }
+                        return 'Preencha OG e FG';
+                      })()}
                     </div>
                   </div>
                 </div>

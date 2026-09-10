@@ -106,8 +106,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ? numCostPerLiter * (volProd || volPlanned)
       : existing.totalCost;
 
-    const numOg = measuredOg !== undefined ? (measuredOg ? parseFloat(measuredOg) : null) : existing.measuredOg;
-    const numFg = measuredFg !== undefined ? (measuredFg ? parseFloat(measuredFg) : null) : existing.measuredFg;
+    const parseGrav = (v: any) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+      if (isNaN(n) || n <= 0) return null;
+      return n > 50 ? n / 1000 : n;
+    };
+
+    const numOg = measuredOg !== undefined ? parseGrav(measuredOg) : existing.measuredOg;
+    const numFg = measuredFg !== undefined ? parseGrav(measuredFg) : existing.measuredFg;
     let calcAbv = measuredAbv !== undefined ? (measuredAbv ? parseFloat(measuredAbv) : null) : existing.measuredAbv;
     let calcAtt = attenuationPercent !== undefined ? (attenuationPercent ? parseFloat(attenuationPercent) : null) : existing.attenuationPercent;
 
@@ -426,11 +433,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       updateData.notes = body.notes;
     }
 
+    const parseGravPatch = (v: any) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+      if (isNaN(n) || n <= 0) return null;
+      return n > 50 ? n / 1000 : n;
+    };
+
     if (body.measuredOg !== undefined) {
-      updateData.measuredOg = body.measuredOg ? parseFloat(body.measuredOg) : null;
+      updateData.measuredOg = parseGravPatch(body.measuredOg);
     }
     if (body.measuredFg !== undefined) {
-      updateData.measuredFg = body.measuredFg ? parseFloat(body.measuredFg) : null;
+      updateData.measuredFg = parseGravPatch(body.measuredFg);
     }
     if (body.measuredAbv !== undefined) {
       updateData.measuredAbv = body.measuredAbv ? parseFloat(body.measuredAbv) : null;
