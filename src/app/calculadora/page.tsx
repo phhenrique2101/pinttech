@@ -490,26 +490,6 @@ export default function CalculadoraCervejeiraPage() {
                       </span>
                     </div>
                   )}
-
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {['1.045', '1.054', '1.065', '1.080'].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => {
-                          handleOgUnitChange('SG');
-                          setRefOgSg(preset);
-                        }}
-                        className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                            : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-200 hover:border-amber-300'
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* 2. LEITURA ATUAL NO REFRATÔMETRO */}
@@ -533,23 +513,6 @@ export default function CalculadoraCervejeiraPage() {
                   <span className={`text-xs font-medium block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                     Valor medido na escala do aparelho com álcool.
                   </span>
-
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {['5.5', '6.5', '7.0', '8.0'].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setCurrentBrixInput(preset)}
-                        className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                            : 'bg-white hover:bg-cyan-50 text-slate-800 border-slate-200 hover:border-cyan-300'
-                        }`}
-                      >
-                        {preset}°Bx
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
 
@@ -746,22 +709,6 @@ export default function CalculadoraCervejeiraPage() {
                             : 'bg-white border-slate-300 text-amber-800 focus:border-amber-500'
                         }`}
                       />
-                      <div className="flex flex-wrap gap-2 pt-4">
-                        {['10.0', '12.0', '13.5', '15.0', '18.0', '20.0'].map((b) => (
-                          <button
-                            key={b}
-                            type="button"
-                            onClick={() => setBrixValue(b)}
-                            className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
-                              isDarkMode
-                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                                : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-200 hover:border-amber-300'
-                            }`}
-                          >
-                            {b}°Bx
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   ) : (
                     <div>
@@ -779,22 +726,6 @@ export default function CalculadoraCervejeiraPage() {
                             : 'bg-white border-slate-300 text-amber-800 focus:border-amber-500'
                         }`}
                       />
-                      <div className="flex flex-wrap gap-2 pt-4">
-                        {['1.040', '1.048', '1.055', '1.062', '1.075', '1.085'].map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => setSgValue(s)}
-                            className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
-                              isDarkMode
-                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                                : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-200 hover:border-amber-300'
-                            }`}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   )}
                 </div>
