@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Flame,
@@ -467,6 +467,24 @@ export default function LiveBatchManagerModal({
 
   const [logs, setLogs] = useState<FermentationLogItem[]>(initialLogs);
   const [logInputUnit, setLogInputUnit] = useState<'SG' | 'BRIX'>('SG');
+
+  // Restaurar preferência de unidade de medição do dispositivo ('SG' ou 'BRIX')
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pinttech_measurement_unit');
+      if (saved === 'BRIX' || saved === 'SG') {
+        setLogInputUnit(saved);
+      }
+    } catch {}
+  }, []);
+
+  const handleUnitChange = (unit: 'SG' | 'BRIX') => {
+    setLogInputUnit(unit);
+    try {
+      localStorage.setItem('pinttech_measurement_unit', unit);
+    } catch {}
+  };
+
   const [newLogDate, setNewLogDate] = useState<string>(todayStr);
   const [newLogGravity, setNewLogGravity] = useState<string>('');
   const [newLogBrix, setNewLogBrix] = useState<string>('');
@@ -1357,7 +1375,7 @@ export default function LiveBatchManagerModal({
                     <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200">
                       <button
                         type="button"
-                        onClick={() => setLogInputUnit('SG')}
+                        onClick={() => handleUnitChange('SG')}
                         className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
                           logInputUnit === 'SG'
                             ? 'bg-amber-600 text-white shadow-sm'
@@ -1368,7 +1386,7 @@ export default function LiveBatchManagerModal({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setLogInputUnit('BRIX')}
+                        onClick={() => handleUnitChange('BRIX')}
                         className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
                           logInputUnit === 'BRIX'
                             ? 'bg-cyan-600 text-white shadow-sm'

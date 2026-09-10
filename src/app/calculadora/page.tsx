@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Calculator,
@@ -39,6 +39,38 @@ export default function CalculadoraCervejeiraPage() {
   // ABA 1: CORREÇÃO DE FG COM REFRATÔMETRO NA FERMENTAÇÃO
   // -------------------------------------------------------------
   const [ogInputUnit, setOgInputUnit] = useState<'SG' | 'BRIX'>('SG');
+
+  // Restaurar preferências do dispositivo (unidade de medição e tema)
+  useEffect(() => {
+    try {
+      const savedUnit = localStorage.getItem('pinttech_measurement_unit');
+      if (savedUnit === 'BRIX' || savedUnit === 'SG') {
+        setOgInputUnit(savedUnit);
+      }
+      const savedTheme = localStorage.getItem('pinttech_theme');
+      if (savedTheme === 'dark') {
+        setIsDarkMode(true);
+      } else if (savedTheme === 'light') {
+        setIsDarkMode(false);
+      }
+    } catch {}
+  }, []);
+
+  const handleOgUnitChange = (unit: 'SG' | 'BRIX') => {
+    setOgInputUnit(unit);
+    try {
+      localStorage.setItem('pinttech_measurement_unit', unit);
+    } catch {}
+  };
+
+  const toggleDarkMode = () => {
+    const nextTheme = !isDarkMode;
+    setIsDarkMode(nextTheme);
+    try {
+      localStorage.setItem('pinttech_theme', nextTheme ? 'dark' : 'light');
+    } catch {}
+  };
+
   const [refOgSg, setRefOgSg] = useState<string>('1.054');
   const [refOgBrix, setRefOgBrix] = useState<string>('13.3');
   const [currentBrixInput, setCurrentBrixInput] = useState<string>('6.5');
@@ -229,7 +261,7 @@ export default function CalculadoraCervejeiraPage() {
             {/* TOGGLE MODO CLARO / ESCURO */}
             <button
               type="button"
-              onClick={() => setIsDarkMode(!isDarkMode)}
+              onClick={toggleDarkMode}
               className={`p-2 rounded-xl border transition-all ${
                 isDarkMode
                   ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700'
@@ -400,7 +432,7 @@ export default function CalculadoraCervejeiraPage() {
                     }`}>
                       <button
                         type="button"
-                        onClick={() => setOgInputUnit('SG')}
+                        onClick={() => handleOgUnitChange('SG')}
                         className={`px-2.5 py-1 rounded-md transition-all ${
                           ogInputUnit === 'SG'
                             ? 'bg-amber-600 text-white shadow-xs'
@@ -411,7 +443,7 @@ export default function CalculadoraCervejeiraPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setOgInputUnit('BRIX')}
+                        onClick={() => handleOgUnitChange('BRIX')}
                         className={`px-2.5 py-1 rounded-md transition-all ${
                           ogInputUnit === 'BRIX'
                             ? 'bg-amber-600 text-white shadow-xs'
@@ -465,7 +497,7 @@ export default function CalculadoraCervejeiraPage() {
                         key={preset}
                         type="button"
                         onClick={() => {
-                          setOgInputUnit('SG');
+                          handleOgUnitChange('SG');
                           setRefOgSg(preset);
                         }}
                         className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
