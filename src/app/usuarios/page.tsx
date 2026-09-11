@@ -31,6 +31,7 @@ import {
   Download,
 } from 'lucide-react';
 import { ROLE_MAP, formatDate } from '@/lib/utils';
+import TelegramConnectCard from '@/components/telegram/TelegramConnectCard';
 
 interface ModulePermission {
   id: string;
@@ -321,6 +322,9 @@ export default function UsuariosPage() {
           <span>Cadastrar Novo Usuário</span>
         </button>
       </div>
+
+      {/* Card de Conexão com Telegram Bot */}
+      <TelegramConnectCard />
 
       {/* Search Bar */}
       <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
