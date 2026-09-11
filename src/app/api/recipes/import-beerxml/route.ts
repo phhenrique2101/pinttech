@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { xmlContent } = await req.json();
+    const { xmlContent, description: customDescription } = await req.json();
     if (!xmlContent || typeof xmlContent !== 'string') {
       return NextResponse.json({ error: 'Conteúdo BeerXML não fornecido' }, { status: 400 });
     }
@@ -73,36 +73,81 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const recipe = await prisma.beerRecipe.create({
-        data: {
+      const recipeDescription = (customDescription && typeof customDescription === 'string' && customDescription.trim())
+        ? customDescription.trim()
+        : p.tasteNotes?.trim() || p.notes?.trim() || `Importada via BeerXML (Brewfather / BeerSmith)`;
+
+      const existingRecipe = await prisma.beerRecipe.findFirst({
+        where: {
           breweryId: session.breweryId,
           name: p.name.trim(),
-          style: p.style.trim(),
-          og,
-          fg,
-          abv,
-          ibu,
-          ebc,
-          batchYieldLiters: batchSize,
-          boilTimeMinutes: p.boilTimeMinutes || 60,
-          efficiencyPercent: efficiency,
-          description: p.notes || `Importada via BeerXML (Brewfather / BeerSmith)`,
-          bjcpStyleCode: bjcpMatch?.code || null,
-          mashScheduleJson: p.mashSteps.length > 0 ? JSON.stringify(p.mashSteps) : null,
-          recipeDataJson: JSON.stringify({
-            fermentables: p.fermentables,
-            hops: p.hops,
-            yeast: p.yeast,
-            mashSteps: p.mashSteps,
-          }),
-          ingredients: {
-            create: ingredientsData,
-          },
-        },
-        include: {
-          ingredients: true,
         },
       });
+
+      let recipe;
+      if (existingRecipe) {
+        recipe = await prisma.beerRecipe.update({
+          where: { id: existingRecipe.id },
+          data: {
+            style: p.style.trim(),
+            og,
+            fg,
+            abv,
+            ibu,
+            ebc,
+            batchYieldLiters: batchSize,
+            boilTimeMinutes: p.boilTimeMinutes || 60,
+            efficiencyPercent: efficiency,
+            description: recipeDescription,
+            bjcpStyleCode: bjcpMatch?.code || existingRecipe.bjcpStyleCode,
+            mashScheduleJson: p.mashSteps.length > 0 ? JSON.stringify(p.mashSteps) : existingRecipe.mashScheduleJson,
+            recipeDataJson: JSON.stringify({
+              fermentables: p.fermentables,
+              hops: p.hops,
+              yeast: p.yeast,
+              mashSteps: p.mashSteps,
+              tasteNotes: p.tasteNotes,
+              notes: p.notes,
+            }),
+          },
+          include: {
+            ingredients: true,
+          },
+        });
+      } else {
+        recipe = await prisma.beerRecipe.create({
+          data: {
+            breweryId: session.breweryId,
+            name: p.name.trim(),
+            style: p.style.trim(),
+            og,
+            fg,
+            abv,
+            ibu,
+            ebc,
+            batchYieldLiters: batchSize,
+            boilTimeMinutes: p.boilTimeMinutes || 60,
+            efficiencyPercent: efficiency,
+            description: recipeDescription,
+            bjcpStyleCode: bjcpMatch?.code || null,
+            mashScheduleJson: p.mashSteps.length > 0 ? JSON.stringify(p.mashSteps) : null,
+            recipeDataJson: JSON.stringify({
+              fermentables: p.fermentables,
+              hops: p.hops,
+              yeast: p.yeast,
+              mashSteps: p.mashSteps,
+              tasteNotes: p.tasteNotes,
+              notes: p.notes,
+            }),
+            ingredients: {
+              create: ingredientsData,
+            },
+          },
+          include: {
+            ingredients: true,
+          },
+        });
+      }
 
       createdRecipes.push(recipe);
     }

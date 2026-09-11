@@ -88,13 +88,17 @@ export default function BeerXmlImporterModal({
           setError('Nenhuma receita cervejeira reconhecida no formato BeerXML');
         } else {
           const rec = recipes[0];
+          console.log('[ImporterModal] Receita carregada do XML:', {
+            name: rec.name,
+            tasteNotes: rec.tasteNotes,
+            notes: rec.notes,
+          });
           setParsedRecipe(rec);
-          setRecipeNotes(rec.notes || rec.tasteNotes || '');
+          setRecipeNotes(rec.tasteNotes || rec.notes || '');
           setCommercialDenomination(`Cerveja Clara Puro Malte Tipo ${rec.style}`);
 
-          // Suggest empty tank if available
-          const freeTank = tanks.find((t) => t.status === 'LIVRE');
-          if (freeTank) setTankId(freeTank.id);
+          // Deixa o tanque de destino sem tanque por padrão conforme solicitado
+          setTankId('');
 
           // Build ingredients list for MAPA traceability
           const ingRows: IngredientRow[] = [];
@@ -197,7 +201,10 @@ export default function BeerXmlImporterModal({
       const resRecipe = await fetch('/api/recipes/import-beerxml', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xmlContent: fileContent }),
+        body: JSON.stringify({
+          xmlContent: fileContent,
+          description: recipeNotes.trim() || undefined,
+        }),
       });
 
       const recipeData = await resRecipe.json();
@@ -223,6 +230,7 @@ export default function BeerXmlImporterModal({
         mapaRegistration: mapaRegistration.trim(),
         commercialDenomination: commercialDenomination.trim(),
         technicalResponsible: technicalResponsible.trim(),
+        sensoryNotes: parsedRecipe.tasteNotes?.trim() || recipeNotes.trim() || undefined,
         notes: recipeNotes.trim() || undefined,
         yeastStrain: parsedRecipe.yeast?.name || null,
         yeastLot: ingredients.find((i) => i.category === 'LEVEDURA')?.supplierLot || 'LOTE-LEV-PADRAO',
@@ -398,12 +406,12 @@ export default function BeerXmlImporterModal({
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
                   <FileText className="w-4 h-4 text-amber-400" />
-                  <span>Observações e Instruções da Receita (BeerXML Notes):</span>
+                  <span>Observações & Notas Sensoriais da Receita (Taste Notes / Instruções):</span>
                 </div>
                 <textarea
                   value={recipeNotes}
                   onChange={(e) => setRecipeNotes(e.target.value)}
-                  placeholder="Nenhuma observação informada no arquivo XML. Digite aqui instruções técnicas ou notas sensoriais do mestre cervejeiro..."
+                  placeholder="Nenhuma anotação sensorial ou observação encontrada no arquivo XML. Digite aqui instruções técnicas ou notas sensoriais do mestre cervejeiro..."
                   className="w-full bg-slate-950/80 border border-amber-500/30 rounded-xl p-3 text-xs text-slate-200 outline-none focus:ring-1 focus:ring-amber-400 h-20 resize-none font-mono"
                 />
               </div>

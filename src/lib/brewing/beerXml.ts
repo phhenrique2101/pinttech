@@ -47,17 +47,27 @@ function decodeXmlEntities(str: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
     .trim();
 }
 
 function extractTagValue(xml: string, tag: string): string | null {
-  const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
+  if (!xml) return null;
+  const regex = new RegExp(`<(?:[a-zA-Z0-9_]+:)?${tag}(?:\\s+[^>]*)?>([\\s\\S]*?)<\\/(?:[a-zA-Z0-9_]+:)?${tag}>`, 'i');
   const match = xml.match(regex);
-  return match ? decodeXmlEntities(match[1]) : null;
+  if (!match) return null;
+
+  let val = match[1].trim();
+  val = val.replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i, '$1').trim();
+  val = val.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1').trim();
+
+  return decodeXmlEntities(val);
 }
 
 function extractAllBlocks(xml: string, blockTag: string): string[] {
-  const regex = new RegExp(`<${blockTag}>([\\s\\S]*?)<\\/${blockTag}>`, 'gi');
+  if (!xml) return [];
+  const regex = new RegExp(`<(?:[a-zA-Z0-9_]+:)?${blockTag}(?:\\s+[^>]*)?>([\\s\\S]*?)<\\/(?:[a-zA-Z0-9_]+:)?${blockTag}>`, 'gi');
   const matches: string[] = [];
   let match;
   while ((match = regex.exec(xml)) !== null) {
@@ -159,20 +169,42 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
   const blocksToProcess = recipeBlocks.length > 0 ? recipeBlocks : [xmlContent];
 
   for (const block of blocksToProcess) {
-    const name = extractTagValue(block, 'NAME') || 'Receita Importada';
-    const styleName = extractTagValue(block, 'STYLE') ? extractTagValue(extractTagValue(block, 'STYLE') || '', 'NAME') || 'Estilo Desconhecido' : 'Estilo Desconhecido';
-    const type = extractTagValue(block, 'TYPE') || 'All Grain';
-    const brewer = extractTagValue(block, 'BREWER') || undefined;
-    const batchYieldLiters = parseFloat(extractTagValue(block, 'BATCH_SIZE') || '500');
-    const boilTimeMinutes = parseInt(extractTagValue(block, 'BOIL_TIME') || '60', 10);
-    const efficiencyPercent = parseFloat(extractTagValue(block, 'EFFICIENCY') || '75');
-    const og = extractTagValue(block, 'OG') ? parseFloat(extractTagValue(block, 'OG')!) : undefined;
-    const fg = extractTagValue(block, 'FG') ? parseFloat(extractTagValue(block, 'FG')!) : undefined;
-    const abv = extractTagValue(block, 'ABV') ? parseFloat(extractTagValue(block, 'ABV')!) : undefined;
-    const ibu = extractTagValue(block, 'IBU') ? Math.round(parseFloat(extractTagValue(block, 'IBU')!)) : undefined;
-    const estColorSrm = extractTagValue(block, 'EST_COLOR') ? parseFloat(extractTagValue(block, 'EST_COLOR')!) : undefined;
+    // Isola as tags de nível de receita removendo sub-blocos de insumos para evitar que tags filhas (como <NOTES> de um <HOP>)
+    // sejam indevidamente capturadas como anotações da própria receita
+    const cleanRecipeBlock = block
+      .replace(/<(?:[a-zA-Z0-9_]+:)?FERMENTABLES(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?FERMENTABLES>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?HOPS(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?HOPS>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?YEASTS(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?YEASTS>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?MISCS(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?MISCS>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?MASH(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?MASH>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?WATERS(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?WATERS>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?STYLE(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?STYLE>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?FERMENTABLE(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?FERMENTABLE>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?HOP(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?HOP>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?YEAST(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?YEAST>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?MISC(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?MISC>/gi, '')
+      .replace(/<(?:[a-zA-Z0-9_]+:)?MASH_STEP(?:\s+[^>]*)?>[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?MASH_STEP>/gi, '');
+
+    const name = extractTagValue(cleanRecipeBlock, 'NAME') || extractTagValue(block, 'NAME') || 'Receita Importada';
+    const styleBlock = extractTagValue(block, 'STYLE');
+    const styleName = styleBlock ? extractTagValue(styleBlock, 'NAME') || 'Estilo Desconhecido' : 'Estilo Desconhecido';
+    const type = extractTagValue(cleanRecipeBlock, 'TYPE') || 'All Grain';
+    const brewer = extractTagValue(cleanRecipeBlock, 'BREWER') || undefined;
+    const batchYieldLiters = parseFloat(extractTagValue(cleanRecipeBlock, 'BATCH_SIZE') || '500');
+    const boilTimeMinutes = parseInt(extractTagValue(cleanRecipeBlock, 'BOIL_TIME') || '60', 10);
+    const efficiencyPercent = parseFloat(extractTagValue(cleanRecipeBlock, 'EFFICIENCY') || '75');
+    const og = extractTagValue(cleanRecipeBlock, 'OG') ? parseFloat(extractTagValue(cleanRecipeBlock, 'OG')!) : undefined;
+    const fg = extractTagValue(cleanRecipeBlock, 'FG') ? parseFloat(extractTagValue(cleanRecipeBlock, 'FG')!) : undefined;
+    const abv = extractTagValue(cleanRecipeBlock, 'ABV') ? parseFloat(extractTagValue(cleanRecipeBlock, 'ABV')!) : undefined;
+    const ibu = extractTagValue(cleanRecipeBlock, 'IBU') ? Math.round(parseFloat(extractTagValue(cleanRecipeBlock, 'IBU')!)) : undefined;
+    const estColorSrm = extractTagValue(cleanRecipeBlock, 'EST_COLOR') ? parseFloat(extractTagValue(cleanRecipeBlock, 'EST_COLOR')!) : undefined;
     const ebc = estColorSrm ? Math.round(estColorSrm * 1.97 * 10) / 10 : undefined;
-    const notes = extractTagValue(block, 'NOTES') || undefined;
+    const notes =
+      extractTagValue(cleanRecipeBlock, 'NOTES') ||
+      extractTagValue(cleanRecipeBlock, 'F_R_NOTES') ||
+      extractTagValue(cleanRecipeBlock, 'COMMENTS') ||
+      extractTagValue(cleanRecipeBlock, 'DESCRIPTION') ||
+      undefined;
 
     // Fermentables
     const fermentables: FermentableItem[] = [];
@@ -257,7 +289,28 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
       };
     }
 
-    const tasteNotes = extractTagValue(block, 'TASTE_NOTES') || undefined;
+    const tasteNotes =
+      extractTagValue(cleanRecipeBlock, 'TASTE_NOTES') ||
+      extractTagValue(cleanRecipeBlock, 'TASTING_NOTES') ||
+      extractTagValue(cleanRecipeBlock, 'TASTENOTES') ||
+      extractTagValue(cleanRecipeBlock, 'TASTE_NOTE') ||
+      extractTagValue(cleanRecipeBlock, 'TASTING_NOTE') ||
+      extractTagValue(cleanRecipeBlock, 'TASTINGNOTES') ||
+      extractTagValue(cleanRecipeBlock, 'F_R_TASTE_NOTES') ||
+      extractTagValue(cleanRecipeBlock, 'SENSORY_NOTES') ||
+      extractTagValue(cleanRecipeBlock, 'TASTE_DESCRIPTION') ||
+      extractTagValue(cleanRecipeBlock, 'FLAVOR_NOTES') ||
+      extractTagValue(cleanRecipeBlock, 'AROMA_NOTES') ||
+      extractTagValue(block, 'TASTE_NOTES') ||
+      extractTagValue(block, 'TASTING_NOTES') ||
+      extractTagValue(block, 'TASTENOTES') ||
+      extractTagValue(block, 'TASTE_NOTE') ||
+      extractTagValue(block, 'TASTING_NOTE') ||
+      extractTagValue(block, 'TASTINGNOTES') ||
+      extractTagValue(block, 'F_R_TASTE_NOTES') ||
+      extractTagValue(block, 'SENSORY_NOTES') ||
+      extractTagValue(block, 'TASTE_DESCRIPTION') ||
+      undefined;
 
     // Miscs (Adjuntos, Sais, Clarificantes, Açúcares)
     const miscs: MiscItem[] = [];
@@ -312,6 +365,8 @@ export function parseBeerXml(xmlContent: string): ParsedBeerXmlRecipe[] {
         stepTimeMinutes: mTime,
       });
     }
+
+    console.log('[BeerXML Parser Extracted]', { name, tasteNotes, notes });
 
     recipes.push({
       name,
@@ -380,7 +435,10 @@ export function exportToBeerXml(recipe: {
   if (recipe.abv) xml += `    <ABV>${recipe.abv.toFixed(1)}</ABV>\n`;
   if (recipe.ibu) xml += `    <IBU>${recipe.ibu}</IBU>\n`;
   xml += `    <EST_COLOR>${srm.toFixed(1)}</EST_COLOR>\n`;
-  if (recipe.description) xml += `    <NOTES>${escapeXml(recipe.description)}</NOTES>\n`;
+  if (recipe.description) {
+    xml += `    <NOTES>${escapeXml(recipe.description)}</NOTES>\n`;
+    xml += `    <TASTE_NOTES>${escapeXml(recipe.description)}</TASTE_NOTES>\n`;
+  }
 
   // Fermentables
   xml += `    <FERMENTABLES>\n`;
