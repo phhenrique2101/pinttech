@@ -449,20 +449,42 @@ export default function LiveBatchManagerModal({
     return vol > 0 ? batchTotalCost / vol : 0;
   }, [batchTotalCost, volumeProduced, volumePlanned]);
 
-  // 2.1 CUSTO POR LITRO E PREÇO DE VENDA DA RECEITA / LOTE
+  const effectiveBatchVolume = useMemo(() => {
+    return volumeProduced || volumePlanned || 500;
+  }, [volumeProduced, volumePlanned]);
+
+  // 2.1 CUSTO TOTAL BRUTO DO TANQUE E CUSTO POR LITRO (SINCRONIZAÇÃO BIDIRECIONAL)
   const initialCostPerLiter = useMemo(() => {
     if (batch.costPerLiter !== null && batch.costPerLiter !== undefined && batch.costPerLiter > 0) {
-      return String(batch.costPerLiter);
+      return batch.costPerLiter.toFixed(2);
     }
     if (batch.recipe?.costPerLiter !== null && batch.recipe?.costPerLiter !== undefined && batch.recipe.costPerLiter > 0) {
-      return String(batch.recipe.costPerLiter);
+      return batch.recipe.costPerLiter.toFixed(2);
     }
     if (batchCostPerLiter > 0) {
-      return String(batchCostPerLiter.toFixed(2));
+      return batchCostPerLiter.toFixed(2);
     }
     return '';
   }, [batch, batchCostPerLiter]);
 
+  const initialTotalCost = useMemo(() => {
+    if (batch.totalCost !== null && batch.totalCost !== undefined && batch.totalCost > 0) {
+      return batch.totalCost.toFixed(2);
+    }
+    const vol = volumeProduced || volumePlanned || 500;
+    if (batch.costPerLiter && batch.costPerLiter > 0) {
+      return (batch.costPerLiter * vol).toFixed(2);
+    }
+    if (batch.recipe?.costPerLiter && batch.recipe.costPerLiter > 0) {
+      return (batch.recipe.costPerLiter * vol).toFixed(2);
+    }
+    if (batchTotalCost > 0) {
+      return batchTotalCost.toFixed(2);
+    }
+    return '';
+  }, [batch, batchTotalCost, volumeProduced, volumePlanned]);
+
+  const [totalCostManual, setTotalCostManual] = useState<string>(initialTotalCost);
   const [costPerLiterManual, setCostPerLiterManual] = useState<string>(initialCostPerLiter);
 
   const initialSalePrice = useMemo(() => {
@@ -477,32 +499,69 @@ export default function LiveBatchManagerModal({
 
   const [salePricePerLiter, setSalePricePerLiter] = useState<string>(initialSalePrice);
 
+  // Quando o cervejeiro digita o Custo Bruto Total do Tanque:
+  // Calcula instantaneamente o Custo por Litro (CPV = Total / Volume)
+  const handleTotalCostChange = (val: string) => {
+    setTotalCostManual(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0 && effectiveBatchVolume > 0) {
+      const perLiter = num / effectiveBatchVolume;
+      setCostPerLiterManual(perLiter.toFixed(2));
+    } else if (val === '') {
+      setCostPerLiterManual('');
+    }
+  };
+
+  // Quando o cervejeiro digita o Custo por Litro (CPV):
+  // Calcula instantaneamente o Custo Bruto Total (Total = Custo/L * Volume)
+  const handleCostPerLiterChange = (val: string) => {
+    setCostPerLiterManual(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0 && effectiveBatchVolume > 0) {
+      const total = num * effectiveBatchVolume;
+      setTotalCostManual(total.toFixed(2));
+    } else if (val === '') {
+      setTotalCostManual('');
+    }
+  };
+
+  // Puxar soma dos insumos da tabela
+  const handlePullFromIngredients = () => {
+    if (batchCostPerLiter > 0 || batchTotalCost > 0) {
+      setCostPerLiterManual(batchCostPerLiter.toFixed(2));
+      setTotalCostManual((batchTotalCost || batchCostPerLiter * effectiveBatchVolume).toFixed(2));
+    }
+  };
+
+  // Quando o volume produzido for alterado, mantém os custos consistentes
+  const handleVolumeProducedChange = (newVol: number) => {
+    setVolumeProduced(newVol);
+    if (newVol > 0) {
+      const numTotal = parseFloat(totalCostManual);
+      const numPerLiter = parseFloat(costPerLiterManual);
+      if (!isNaN(numTotal) && numTotal > 0) {
+        setCostPerLiterManual((numTotal / newVol).toFixed(2));
+      } else if (!isNaN(numPerLiter) && numPerLiter > 0) {
+        setTotalCostManual((numPerLiter * newVol).toFixed(2));
+      }
+    }
+  };
+
   const effectiveCostPerLiter = useMemo(() => {
-    if (costPerLiterManual !== '' && !isNaN(parseFloat(costPerLiterManual))) {
-      return parseFloat(costPerLiterManual);
-    }
-    if (batchCostPerLiter > 0) {
-      return batchCostPerLiter;
-    }
-    if (batch.costPerLiter && batch.costPerLiter > 0) {
-      return batch.costPerLiter;
-    }
-    if (batch.recipe?.costPerLiter && batch.recipe.costPerLiter > 0) {
-      return batch.recipe.costPerLiter;
+    const num = parseFloat(costPerLiterManual);
+    if (!isNaN(num) && num >= 0) return num;
+    const numTot = parseFloat(totalCostManual);
+    if (!isNaN(numTot) && numTot >= 0 && effectiveBatchVolume > 0) {
+      return numTot / effectiveBatchVolume;
     }
     return 0;
-  }, [costPerLiterManual, batchCostPerLiter, batch]);
-
-  const effectiveBatchVolume = useMemo(() => {
-    return volumeProduced || volumePlanned || 500;
-  }, [volumeProduced, volumePlanned]);
+  }, [costPerLiterManual, totalCostManual, effectiveBatchVolume]);
 
   const effectiveTotalCost = useMemo(() => {
-    if (costPerLiterManual === '' && batchTotalCost > 0) {
-      return batchTotalCost;
-    }
+    const numTot = parseFloat(totalCostManual);
+    if (!isNaN(numTot) && numTot >= 0) return numTot;
     return effectiveCostPerLiter * effectiveBatchVolume;
-  }, [costPerLiterManual, batchTotalCost, effectiveCostPerLiter, effectiveBatchVolume]);
+  }, [totalCostManual, effectiveCostPerLiter, effectiveBatchVolume]);
 
   const numSalePrice = useMemo(() => {
     return parseFloat(salePricePerLiter) || 0;
@@ -1354,66 +1413,101 @@ export default function LiveBatchManagerModal({
               {/* Resumo & Edição de Custos e Valor da Receita */}
               <div className="p-5 bg-gradient-to-br from-slate-50 via-white to-amber-50/20 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200/80 pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700">
-                      <DollarSign className="w-4 h-4" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700">
+                      <DollarSign className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                        Valor da Receita, Custos (CPV) & Margem do Lote
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                        <span>Precificação, Custo Bruto do Tanque & Margem</span>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                          {effectiveBatchVolume}L no Tanque
+                        </span>
                       </h4>
                       <p className="text-[11px] text-slate-500">
-                        Edite o custo por litro (CPV) e o valor de venda. Os valores serão salvos no lote e sincronizados com a receita.
+                        Digite o <strong>Custo Total Bruto</strong> do tanque para calcular o <strong>Custo por Litro</strong> automaticamente, ou altere o custo unitário diretamente.
                       </p>
                     </div>
                   </div>
 
-                  {batchCostPerLiter > 0 && (
+                  {(batchCostPerLiter > 0 || batchTotalCost > 0) && (
                     <button
                       type="button"
-                      onClick={() => setCostPerLiterManual(batchCostPerLiter.toFixed(2))}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-bold shadow-xs transition-colors self-start sm:self-auto"
+                      onClick={handlePullFromIngredients}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-bold shadow-xs transition-colors self-start sm:self-auto"
                       title="Usar soma exata dos insumos calculados na tabela acima"
                     >
-                      <RotateCcw className="w-3 h-3 text-slate-500" />
-                      <span>Puxar da Tabela ({formatCurrency(batchCostPerLiter)}/L)</span>
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Puxar da Tabela ({formatCurrency(batchTotalCost || batchCostPerLiter * effectiveBatchVolume)})</span>
                     </button>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                  {/* Custo por Litro (CPV) */}
-                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1.5">
+                  {/* Custo Total Bruto do Tanque */}
+                  <div className="p-3.5 bg-amber-50/40 rounded-xl border-2 border-amber-300/80 shadow-xs space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-slate-600">Custo / Litro (CPV)</label>
-                      <span className="text-[10px] font-bold text-slate-400">R$ / L</span>
+                      <label className="text-[11px] font-black text-amber-900 flex items-center gap-1">
+                        <span>Custo Total do Tanque</span>
+                      </label>
+                      <span className="text-[10px] font-extrabold bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded">
+                        Bruto ({effectiveBatchVolume}L)
+                      </span>
                     </div>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-amber-700">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={totalCostManual}
+                        onChange={(e) => handleTotalCostChange(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-white border border-amber-300 rounded-lg pl-10 pr-3 py-2 text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-amber-800 font-bold pt-0.5">
+                      <span>Gera Custo / Litro:</span>
+                      <span className="font-black text-amber-950">{formatCurrency(effectiveCostPerLiter)} / L</span>
+                    </div>
+                  </div>
+
+                  {/* Custo por Litro (CPV) */}
+                  <div className="p-3.5 bg-emerald-50/40 rounded-xl border-2 border-emerald-300/80 shadow-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black text-emerald-900 flex items-center gap-1">
+                        <span>Custo / Litro (CPV)</span>
+                      </label>
+                      <span className="text-[10px] font-extrabold bg-emerald-200/70 text-emerald-900 px-1.5 py-0.5 rounded">
+                        R$ / Litro
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-emerald-700">R$</span>
                       <input
                         type="number"
                         step="0.01"
                         min="0"
                         value={costPerLiterManual}
-                        onChange={(e) => setCostPerLiterManual(e.target.value)}
-                        placeholder={batchCostPerLiter > 0 ? batchCostPerLiter.toFixed(2) : "0.00"}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                        onChange={(e) => handleCostPerLiterChange(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-white border border-emerald-300 rounded-lg pl-10 pr-3 py-2 text-sm font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
-                      <span>Custo Total ({effectiveBatchVolume}L):</span>
-                      <strong className="text-slate-800 font-bold">{formatCurrency(effectiveTotalCost)}</strong>
+                    <div className="flex items-center justify-between text-[10px] text-emerald-800 font-bold pt-0.5">
+                      <span>Total ({effectiveBatchVolume}L):</span>
+                      <span className="font-black text-emerald-950">{formatCurrency(effectiveTotalCost)}</span>
                     </div>
                   </div>
 
                   {/* Preço de Venda / Litro */}
                   <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-emerald-800">Preço de Venda / Litro</label>
-                      <span className="text-[10px] font-bold text-emerald-600">Catálogo</span>
+                      <label className="text-[11px] font-bold text-slate-700">Preço de Venda / Litro</label>
+                      <span className="text-[10px] font-bold text-slate-400">Catálogo</span>
                     </div>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">R$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">R$</span>
                       <input
                         type="number"
                         step="0.01"
@@ -1421,55 +1515,41 @@ export default function LiveBatchManagerModal({
                         value={salePricePerLiter}
                         onChange={(e) => setSalePricePerLiter(e.target.value)}
                         placeholder="18.00"
-                        className="w-full bg-emerald-50/50 border border-emerald-300 rounded-lg pl-9 pr-3 py-2 text-sm font-black text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-10 pr-3 py-2 text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
                       <span>Venda Total Projetada:</span>
-                      <strong className="text-emerald-700 font-bold">{formatCurrency(totalEstimatedRevenue)}</strong>
+                      <strong className="text-slate-800 font-bold">{formatCurrency(totalEstimatedRevenue)}</strong>
                     </div>
                   </div>
 
-                  {/* Margem Bruta Estimada */}
-                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                  {/* Margem Bruta & Lucro do Tanque */}
+                  <div className="p-3.5 bg-gradient-to-br from-emerald-50 to-emerald-100/60 rounded-xl border border-emerald-200 shadow-xs flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-600">Margem Bruta Estimada</span>
+                        <span className="text-[11px] font-bold text-emerald-900">Margem Bruta Estimada</span>
                         <span
                           className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                             grossMarginPercent >= 50
-                              ? 'bg-emerald-100 text-emerald-800'
+                              ? 'bg-emerald-200 text-emerald-900'
                               : grossMarginPercent >= 30
-                              ? 'bg-amber-100 text-amber-800'
+                              ? 'bg-amber-200 text-amber-900'
                               : grossMarginPercent > 0
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-slate-100 text-slate-600'
+                              ? 'bg-rose-200 text-rose-900'
+                              : 'bg-slate-200 text-slate-700'
                           }`}
                         >
                           {grossMarginPercent >= 50 ? 'Ótima' : grossMarginPercent >= 30 ? 'Adequada' : grossMarginPercent > 0 ? 'Atenção' : 'Sem Margem'}
                         </span>
                       </div>
-                      <div className="text-2xl font-black text-slate-900 mt-1">
+                      <div className="text-2xl font-black text-emerald-950 mt-1">
                         {grossMarginPercent.toFixed(1)}%
                       </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100 mt-2 flex items-center justify-between">
-                      <span>Lucro Bruto / Litro:</span>
-                      <strong className="text-slate-800 font-bold">{formatCurrency(Math.max(0, numSalePrice - effectiveCostPerLiter))} / L</strong>
-                    </div>
-                  </div>
-
-                  {/* Lucro Total Estimado */}
-                  <div className="p-3.5 bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-xl border border-emerald-200/80 shadow-xs flex flex-col justify-between">
-                    <div>
-                      <span className="text-[11px] font-bold text-emerald-900">Lucro Bruto Total do Lote</span>
-                      <div className="text-2xl font-black text-emerald-800 mt-1">
-                        {formatCurrency(totalEstimatedProfit)}
-                      </div>
-                    </div>
-                    <div className="text-[10px] text-emerald-800/80 pt-1 border-t border-emerald-200/60 mt-2 flex items-center justify-between">
-                      <span>Volume Base:</span>
-                      <strong className="font-bold">{effectiveBatchVolume} Litros</strong>
+                    <div className="text-[10px] text-emerald-800 pt-1 border-t border-emerald-200/80 mt-2 flex items-center justify-between font-bold">
+                      <span>Lucro Total Tanque:</span>
+                      <strong className="font-black text-emerald-950">{formatCurrency(totalEstimatedProfit)}</strong>
                     </div>
                   </div>
                 </div>
@@ -1918,28 +1998,72 @@ export default function LiveBatchManagerModal({
                     <input
                       type="number"
                       value={volumeProduced}
-                      onChange={(e) => setVolumeProduced(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => handleVolumeProducedChange(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none text-right"
                     />
                   </div>
                 </div>
 
                 {/* PRECIFICAÇÃO DA RECEITA & CUSTOS DO LOTE */}
-                <div className="p-4 bg-emerald-50/40 border border-emerald-200/80 rounded-2xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
-                      <DollarSign className="w-4 h-4 text-emerald-600" />
-                      Valor de Venda da Receita & Custo por Litro (CPV)
+                <div className="p-4 bg-gradient-to-br from-amber-50/40 via-white to-emerald-50/30 border border-amber-200/80 rounded-2xl space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-amber-600" />
+                      Precificação, Custo do Tanque & Margem
                     </span>
-                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/60 px-2 py-0.5 rounded-lg border border-emerald-200">
-                      Margem Bruta: <strong>{grossMarginPercent.toFixed(1)}%</strong>
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-lg border border-emerald-200">
+                        Margem: <strong>{grossMarginPercent.toFixed(1)}%</strong>
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                        Lucro Projetado: <strong className="text-emerald-700">{formatCurrency(totalEstimatedProfit)}</strong>
+                      </span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Preço de Venda / Litro (R$)</label>
+                      <label className="block text-[11px] font-bold text-amber-900 mb-1">
+                        Custo Total Bruto Tanque ({effectiveBatchVolume}L)
+                      </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">R$</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-amber-700">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={totalCostManual}
+                          onChange={(e) => handleTotalCostChange(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full bg-white border-2 border-amber-300 rounded-xl pl-9 pr-3 py-1.5 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                        Custo / Litro (CPV)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-700">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={costPerLiterManual}
+                          onChange={(e) => handleCostPerLiterChange(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full bg-white border-2 border-emerald-300 rounded-xl pl-9 pr-3 py-1.5 text-xs font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Preço de Venda / Litro
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
                         <input
                           type="number"
                           step="0.01"
@@ -1947,22 +2071,7 @@ export default function LiveBatchManagerModal({
                           value={salePricePerLiter}
                           onChange={(e) => setSalePricePerLiter(e.target.value)}
                           placeholder="18.00"
-                          className="w-full bg-white border border-emerald-300 rounded-xl pl-9 pr-3 py-2 text-xs font-black text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Custo por Litro / CPV (R$)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={costPerLiterManual}
-                          onChange={(e) => setCostPerLiterManual(e.target.value)}
-                          placeholder={batchCostPerLiter > 0 ? batchCostPerLiter.toFixed(2) : "0.00"}
-                          className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                          className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-1.5 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                         />
                       </div>
                     </div>
