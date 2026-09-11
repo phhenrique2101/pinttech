@@ -27,6 +27,7 @@ import {
   Boxes,
   RotateCcw,
   ShieldCheck,
+  FileText,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateShort, getLocalDateString } from '@/lib/utils';
 import {
@@ -2345,14 +2346,22 @@ export default function LiveBatchManagerModal({
                 </div>
 
                 {/* ANÁLISE SENSORIAL */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Análise Sensorial, Degustação & Liberação do Lote</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-amber-600" />
+                      <span>Análise Sensorial, Degustação & Liberação do Lote</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-slate-400">
+                      Redimensionável (arraste o canto inferior para expandir)
+                    </span>
+                  </div>
                   <textarea
-                    rows={2}
+                    rows={8}
                     value={sensoryNotes}
                     onChange={(e) => setSensoryNotes(e.target.value)}
-                    placeholder="Perfil aromático, atenuação, formação de espuma, liberação técnica para envase..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none"
+                    placeholder="Perfil aromático, atenuação, formação de espuma, instruções da receita e brassagem, liberação técnica para envase..."
+                    className="w-full bg-white border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-800 leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-y min-h-[180px] shadow-xs"
                   />
                 </div>
               </div>
