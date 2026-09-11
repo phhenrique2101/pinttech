@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Acesso restrito a administradores' }, { status: 403 });
     }
 
-    const host = req.headers.get('host') || 'pinttech.com.br';
+    let host = req.headers.get('host') || 'www.pinttech.com.br';
+    if (host === 'pinttech.com.br') host = 'www.pinttech.com.br';
     const protocol = host.includes('localhost') ? 'http' : 'https';
     const defaultUrl = `${protocol}://${host}/api/webhook/telegram`;
 

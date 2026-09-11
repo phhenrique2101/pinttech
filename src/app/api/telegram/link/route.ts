@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     });
 
     const botInfo = await getMe();
-    const botUsername = botInfo?.result?.username || 'PintTechBot';
+    const botUsername = botInfo?.result?.username || process.env.TELEGRAM_BOT_USERNAME || 'saboresdomaltebot';
 
     return NextResponse.json({
       token: linkToken,
