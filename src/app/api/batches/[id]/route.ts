@@ -65,6 +65,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       volumeProducedLiters,
       costPerLiter,
       totalCost,
+      salePricePerLiter,
+      recipeCostPerLiter,
       tankId,
       notes,
       measuredOg,
@@ -305,7 +307,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         }
       }
 
-      return tx.productionBatch.update({
+      const updatedBatch = await tx.productionBatch.update({
         where: { id: params.id },
         data: {
           batchNumber: batchNumber?.trim() || existing.batchNumber,
@@ -352,6 +354,31 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           },
         },
       });
+
+      // Se foi enviado novo preço de venda ou custo de receita, sincroniza com a receita original
+      if (existing.recipeId && (salePricePerLiter !== undefined || recipeCostPerLiter !== undefined || (numCostPerLiter !== undefined && numCostPerLiter !== null))) {
+        const recipeUpdateData: any = {};
+        if (salePricePerLiter !== undefined && salePricePerLiter !== null && !isNaN(parseFloat(salePricePerLiter))) {
+          const sPrice = parseFloat(salePricePerLiter);
+          recipeUpdateData.salePricePerLiter = sPrice;
+          recipeUpdateData.suggestedPricePerLiter = sPrice;
+        }
+        if (recipeCostPerLiter !== undefined && recipeCostPerLiter !== null && !isNaN(parseFloat(recipeCostPerLiter))) {
+          recipeUpdateData.costPerLiter = parseFloat(recipeCostPerLiter);
+        } else if (numCostPerLiter !== undefined && numCostPerLiter !== null && !isNaN(numCostPerLiter)) {
+          recipeUpdateData.costPerLiter = numCostPerLiter;
+        }
+
+        if (Object.keys(recipeUpdateData).length > 0) {
+          const updatedRecipe = await tx.beerRecipe.update({
+            where: { id: existing.recipeId },
+            data: recipeUpdateData,
+          });
+          (updatedBatch as any).recipe = updatedRecipe;
+        }
+      }
+
+      return updatedBatch;
     });
 
     // If status changed to FINALIZADO or tank released, free the tank

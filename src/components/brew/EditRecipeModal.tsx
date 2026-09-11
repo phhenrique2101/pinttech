@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Save, Beer, ShieldCheck, FileText, Activity } from 'lucide-react';
+import { X, Save, Beer, ShieldCheck, FileText, Activity, DollarSign } from 'lucide-react';
 
 interface EditRecipeModalProps {
   recipe: any;
@@ -20,6 +20,16 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
   const [ibu, setIbu] = useState(recipe.ibu ? String(recipe.ibu) : '');
   const [ebc, setEbc] = useState(recipe.ebc ? String(recipe.ebc) : '');
   const [batchYieldLiters, setBatchYieldLiters] = useState(recipe.batchYieldLiters ? String(recipe.batchYieldLiters) : '500');
+  const [salePricePerLiter, setSalePricePerLiter] = useState(
+    recipe.salePricePerLiter !== null && recipe.salePricePerLiter !== undefined
+      ? String(recipe.salePricePerLiter)
+      : (recipe.suggestedPricePerLiter ? String(recipe.suggestedPricePerLiter) : '18.00')
+  );
+  const [costPerLiter, setCostPerLiter] = useState(
+    recipe.costPerLiter !== null && recipe.costPerLiter !== undefined
+      ? String(recipe.costPerLiter)
+      : '0.00'
+  );
   const [description, setDescription] = useState(recipe.description || '');
 
   const [loading, setLoading] = useState(false);
@@ -47,6 +57,8 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
         ibu: ibu ? parseInt(ibu, 10) : null,
         ebc: ebc ? parseFloat(ebc) : null,
         batchYieldLiters: batchYieldLiters ? parseFloat(batchYieldLiters) : 500,
+        salePricePerLiter: salePricePerLiter ? parseFloat(salePricePerLiter) : 0,
+        costPerLiter: costPerLiter ? parseFloat(costPerLiter) : 0,
         description: description.trim() || null,
       };
 
@@ -154,6 +166,55 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
                   placeholder="Ex: Cerveja Clara Puro Malte"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* PRECIFICAÇÃO & CUSTOS DA RECEITA */}
+          <div className="p-3.5 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-black text-emerald-400">
+                <DollarSign className="w-4 h-4" />
+                <span>Valor de Venda & Custo da Receita (R$ / Litro)</span>
+              </div>
+              {parseFloat(salePricePerLiter) > 0 && (
+                <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+                  Margem: {(((parseFloat(salePricePerLiter) - (parseFloat(costPerLiter) || 0)) / parseFloat(salePricePerLiter)) * 100).toFixed(1)}%
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">Preço de Venda / Litro (R$)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-500">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={salePricePerLiter}
+                    onChange={(e) => setSalePricePerLiter(e.target.value)}
+                    placeholder="18.00"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-emerald-300 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">Custo por Litro / CPV (R$)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={costPerLiter}
+                    onChange={(e) => setCostPerLiter(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-slate-200 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
               </div>
             </div>
           </div>
