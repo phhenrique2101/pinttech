@@ -838,33 +838,56 @@ export default function PedidosPage() {
   const resolveBeerPrice = (recipe: any, capacity: number = 50, tableId?: string) => {
     if (!recipe) return 20 * capacity;
     const baseLiter = Number(recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 20);
-    const costLiter = Number(recipe.costPerLiter || baseLiter);
+    const costLiter = Number(recipe.costPerLiter || 0);
 
     const targetTableId = tableId || priceTables.find((t) => t.isDefault)?.id;
     const table = priceTables.find((t) => t.id === targetTableId);
 
     if (!table) {
-      return baseLiter * capacity;
+      return Math.round(baseLiter * capacity * 100) / 100;
     }
 
-    // 1. Preço fixado customizado para essa receita nessa tabela
-    const item = (table.items || []).find((it: any) => it.recipeId === recipe.id);
-    if (item && Number(item.pricePerLiter) > 0) {
-      return Math.round(Number(item.pricePerLiter) * capacity * 100) / 100;
-    }
+    let pricePerLiter = baseLiter;
 
-    // 2. Tabela no modelo PREÇO DE CUSTO (AT_COST)
+    // 1. Tabela no modelo PREÇO DE CUSTO (AT_COST)
     if (table.type === 'AT_COST') {
-      return Math.round(costLiter * capacity * 100) / 100;
+      pricePerLiter = costLiter > 0 ? costLiter : baseLiter;
+    }
+    // 2. Custo + Margem %
+    else if (table.type === 'COST_PLUS_PERCENT') {
+      const margin = Number(table.adjustmentPercent || 0);
+      pricePerLiter = (costLiter > 0 ? costLiter : baseLiter) * (1 + margin / 100);
+    }
+    // 3. Custo + Valor Fixo R$
+    else if (table.type === 'COST_PLUS_FIXED') {
+      const fixed = Number(table.fixedAddition || table.adjustmentPercent || 0);
+      pricePerLiter = (costLiter > 0 ? costLiter : baseLiter) + fixed;
+    }
+    // 4. Desconto Geral (%) sobre preço base
+    else if (table.type === 'DISCOUNT_PERCENT') {
+      const disc = Number(table.adjustmentPercent || 0);
+      pricePerLiter = baseLiter * (1 - disc / 100);
+    }
+    // 5. Acréscimo Geral (%) sobre preço base
+    else if (table.type === 'MARKUP_PERCENT') {
+      const markup = Number(table.adjustmentPercent || 0);
+      pricePerLiter = baseLiter * (1 + markup / 100);
+    }
+    // 6. Padrão Base da Cervejaria
+    else if (table.type === 'STANDARD') {
+      pricePerLiter = baseLiter;
+    }
+    // 7. Tabela Personalizada / Customizada (CUSTOM)
+    else {
+      const item = (table.items || []).find((it: any) => it.recipeId === recipe.id);
+      if (item && Number(item.pricePerLiter) > 0) {
+        pricePerLiter = Number(item.pricePerLiter);
+      } else {
+        pricePerLiter = baseLiter;
+      }
     }
 
-    // 3. Tabela com percentual de ajuste sobre o preço base
-    if (table.adjustmentPercent) {
-      const adjusted = baseLiter * (1 + Number(table.adjustmentPercent) / 100);
-      return Math.round(adjusted * capacity * 100) / 100;
-    }
-
-    return baseLiter * capacity;
+    return Math.round(pricePerLiter * capacity * 100) / 100;
   };
 
   const handleNewPriceTableChange = (tableId: string) => {
