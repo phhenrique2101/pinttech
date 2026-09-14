@@ -176,6 +176,48 @@ export async function POST(req: NextRequest) {
         const batchNumber = cleanStr(row.batchNumber || row.lote || row.batch);
         const clientName = cleanStr(row.clientName || row.client || row.cliente || row.currentClient || row.pdv || row.posse || row.comodato);
 
+        // Preço por litro e Custo por litro da cerveja
+        const rawPrice = cleanNumber(
+          row.pricePerLiter ??
+          row.price ??
+          row.precoPorLitro ??
+          row.preçoPorLitro ??
+          row.precoLitro ??
+          row.preçoLitro ??
+          row.preco ??
+          row.preço ??
+          row.valorLitro ??
+          row.valorPorLitro ??
+          row.valor,
+          0
+        );
+
+        const rawKegPrice = cleanNumber(
+          row.kegPrice ??
+          row.precoBarril ??
+          row.preçoBarril ??
+          row.valorBarril ??
+          row.precoDoBarril ??
+          row.preçoDoBarril,
+          0
+        );
+
+        let pricePerLiter = rawPrice;
+        if (pricePerLiter === 0 && rawKegPrice > 0 && capacity > 0) {
+          pricePerLiter = parseFloat((rawKegPrice / capacity).toFixed(2));
+        }
+
+        const costPerLiter = cleanNumber(
+          row.costPerLiter ??
+          row.cost ??
+          row.custo ??
+          row.custoPorLitro ??
+          row.custoLitro ??
+          row.custoFabricacao ??
+          row.custoFabricação,
+          0
+        );
+
         let currentVolumeLiters: number | null = null;
         if (row.currentVolumeLiters !== undefined && row.currentVolumeLiters !== null && row.currentVolumeLiters !== '') {
           currentVolumeLiters = cleanNumber(row.currentVolumeLiters, 0);
@@ -225,23 +267,41 @@ export async function POST(req: NextRequest) {
                 where: { breweryId, name: { equals: recipeName, mode: 'insensitive' } },
               });
 
+              const initialPrice = pricePerLiter > 0 ? pricePerLiter : 18.0;
+              const initialCost = costPerLiter > 0 ? costPerLiter : 4.5;
+
               if (!recipe) {
                 recipe = await prisma.beerRecipe.create({
                   data: {
                     breweryId,
                     name: recipeName,
                     style: beerStyle || 'Estilo Artesanal',
-                    suggestedPricePerLiter: 20.0,
-                    costPerLiter: 4.5,
+                    suggestedPricePerLiter: initialPrice,
+                    salePricePerLiter: initialPrice,
+                    costPerLiter: initialCost,
                   },
                 });
-              } else if (beerStyle && (recipe.style === 'Estilo Artesanal' || !recipe.style)) {
-                recipe = await prisma.beerRecipe.update({
-                  where: { id: recipe.id },
-                  data: { style: beerStyle },
-                });
+              } else {
+                const recipeUpdates: any = {};
+                if (beerStyle && (recipe.style === 'Estilo Artesanal' || !recipe.style)) {
+                  recipeUpdates.style = beerStyle;
+                }
+                if (pricePerLiter > 0) {
+                  recipeUpdates.suggestedPricePerLiter = pricePerLiter;
+                  recipeUpdates.salePricePerLiter = pricePerLiter;
+                }
+                if (costPerLiter > 0) {
+                  recipeUpdates.costPerLiter = costPerLiter;
+                }
+                if (Object.keys(recipeUpdates).length > 0) {
+                  recipe = await prisma.beerRecipe.update({
+                    where: { id: recipe.id },
+                    data: recipeUpdates,
+                  });
+                }
               }
 
+              const batchCost = costPerLiter > 0 ? costPerLiter : (recipe.costPerLiter || 4.5);
               batch = await prisma.productionBatch.create({
                 data: {
                   breweryId,
@@ -249,8 +309,18 @@ export async function POST(req: NextRequest) {
                   batchNumber: batchCode,
                   volumePlannedLiters: 1000,
                   volumeProducedLiters: 1000,
+                  costPerLiter: batchCost,
+                  totalCost: batchCost * 1000,
                   status: 'PRONTO_ENVASE',
                   notes: 'Importado via planilha de dados',
+                },
+              });
+            } else if (costPerLiter > 0 && (!batch.costPerLiter || batch.costPerLiter === 0)) {
+              await prisma.productionBatch.update({
+                where: { id: batch.id },
+                data: {
+                  costPerLiter,
+                  totalCost: (batch.volumeProducedLiters || 1000) * costPerLiter,
                 },
               });
             }
