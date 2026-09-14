@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN' && session.role !== 'SALES' && session.role !== 'FINANCE') {
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'SALES', 'FINANCE'];
+    if (!allowedRoles.includes(session.role)) {
       return NextResponse.json({ error: 'Permissão negada para criar tabelas de preço' }, { status: 403 });
     }
 
@@ -88,6 +89,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Deduplicate items by recipeId
+    const seenRecipes = new Set<string>();
+    const sanitizedItems: any[] = [];
+    if (Array.isArray(items)) {
+      for (const it of items) {
+        if (it.recipeId && it.pricePerLiter !== undefined && !seenRecipes.has(it.recipeId)) {
+          seenRecipes.add(it.recipeId);
+          sanitizedItems.push({
+            recipeId: it.recipeId,
+            pricePerLiter: parseFloat(it.pricePerLiter) || 0,
+            notes: it.notes || null,
+          });
+        }
+      }
+    }
+
     const priceTable = await prisma.priceTable.create({
       data: {
         breweryId,
@@ -98,13 +115,7 @@ export async function POST(req: NextRequest) {
         isDefault: Boolean(isDefault),
         active: true,
         items: {
-          create: items
-            .filter((it: any) => it.recipeId && it.pricePerLiter !== undefined)
-            .map((it: any) => ({
-              recipeId: it.recipeId,
-              pricePerLiter: parseFloat(it.pricePerLiter) || 0,
-              notes: it.notes || null,
-            })),
+          create: sanitizedItems,
         },
       },
       include: {

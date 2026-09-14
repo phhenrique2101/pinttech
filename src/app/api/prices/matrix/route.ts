@@ -33,6 +33,15 @@ export async function GET(req: NextRequest) {
       const model = r.pricingModel || 'MANUAL';
       const salePrice = r.salePricePerLiter || r.suggestedPricePerLiter || (cost > 0 ? cost * 1.5 : 18.0);
 
+      let parsedExt: any = {};
+      if (r.recipeDataJson) {
+        try {
+          parsedExt = JSON.parse(r.recipeDataJson);
+        } catch {}
+      }
+
+      const costPlusFixedValue = parsedExt.costPlusFixedValue !== undefined ? Number(parsedExt.costPlusFixedValue) : 5.0;
+      const roundingRule = parsedExt.roundingRule || 'NONE';
       const calculatedMarkupPrice = cost > 0 ? cost * (1 + margin / 100) : salePrice;
 
       return {
@@ -46,6 +55,8 @@ export async function GET(req: NextRequest) {
         suggestedPricePerLiter: r.suggestedPricePerLiter || salePrice,
         pricingModel: model,
         profitMarginPercent: margin,
+        costPlusFixedValue,
+        roundingRule,
         calculatedMarkupPrice: parseFloat(calculatedMarkupPrice.toFixed(2)),
         // Preços dos tamanhos padrão de barril
         keg20L: parseFloat((salePrice * 20).toFixed(2)),
@@ -72,7 +83,8 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN' && session.role !== 'BREWER' && session.role !== 'FINANCE') {
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'SALES', 'FINANCE'];
+    if (!allowedRoles.includes(session.role)) {
       return NextResponse.json({ error: 'Permissão negada para alterar precificação' }, { status: 403 });
     }
 
@@ -125,18 +137,40 @@ export async function PUT(req: NextRequest) {
 
           const cost = up.costPerLiter !== undefined ? parseFloat(up.costPerLiter) : undefined;
           const margin = up.profitMarginPercent !== undefined ? parseFloat(up.profitMarginPercent) : undefined;
+          const fixedAddition = up.costPlusFixedValue !== undefined ? parseFloat(up.costPlusFixedValue) : undefined;
+          const roundingRule = up.roundingRule || 'NONE';
           const model = up.pricingModel;
 
           let salePrice = up.salePricePerLiter !== undefined ? parseFloat(up.salePricePerLiter) : undefined;
 
-          // Se o modelo for AT_COST, o preço de venda é o próprio custo
-          if (model === 'AT_COST' && cost !== undefined && cost > 0) {
-            salePrice = cost;
-          } else if (model === 'MARKUP' && cost !== undefined && margin !== undefined && cost > 0) {
-            salePrice = parseFloat((cost * (1 + margin / 100)).toFixed(2));
+          // Se salePrice não foi explicitamente enviado, calcula conforme o modelo
+          if (salePrice === undefined) {
+            if (model === 'AT_COST' && cost !== undefined && cost > 0) {
+              salePrice = cost;
+            } else if ((model === 'MARKUP' || model === 'PERCENT') && cost !== undefined && margin !== undefined && cost > 0) {
+              salePrice = parseFloat((cost * (1 + margin / 100)).toFixed(2));
+            } else if (model === 'COST_PLUS_FIXED' && cost !== undefined && fixedAddition !== undefined && cost > 0) {
+              salePrice = parseFloat((cost + fixedAddition).toFixed(2));
+            }
           }
 
-          const updateData: any = {};
+          const existingRecipe = await tx.beerRecipe.findUnique({
+            where: { id: up.id },
+            select: { recipeDataJson: true },
+          });
+
+          let extData: any = {};
+          if (existingRecipe?.recipeDataJson) {
+            try {
+              extData = JSON.parse(existingRecipe.recipeDataJson);
+            } catch {}
+          }
+          if (fixedAddition !== undefined) extData.costPlusFixedValue = fixedAddition;
+          if (roundingRule !== undefined) extData.roundingRule = roundingRule;
+
+          const updateData: any = {
+            recipeDataJson: JSON.stringify(extData),
+          };
           if (cost !== undefined) updateData.costPerLiter = cost;
           if (margin !== undefined) updateData.profitMarginPercent = margin;
           if (model !== undefined) updateData.pricingModel = model;
@@ -145,12 +179,10 @@ export async function PUT(req: NextRequest) {
             updateData.suggestedPricePerLiter = salePrice;
           }
 
-          if (Object.keys(updateData).length > 0) {
-            await tx.beerRecipe.update({
-              where: { id: up.id },
-              data: updateData,
-            });
-          }
+          await tx.beerRecipe.update({
+            where: { id: up.id },
+            data: updateData,
+          });
         }
       });
 

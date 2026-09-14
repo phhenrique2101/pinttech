@@ -47,7 +47,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN' && session.role !== 'SALES' && session.role !== 'FINANCE') {
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'BREWER', 'SALES', 'FINANCE'];
+    if (!allowedRoles.includes(session.role)) {
       return NextResponse.json({ error: 'Permissão negada para editar tabelas de preço' }, { status: 403 });
     }
 
@@ -91,17 +92,24 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           where: { priceTableId: params.id },
         });
 
-        // Inserir os novos preços
-        if (items.length > 0) {
+        // Inserir os novos preços (deduplicados por recipeId)
+        const seenRecipes = new Set<string>();
+        const sanitizedItems: any[] = [];
+        for (const it of items) {
+          if (it.recipeId && it.pricePerLiter !== undefined && !seenRecipes.has(it.recipeId)) {
+            seenRecipes.add(it.recipeId);
+            sanitizedItems.push({
+              priceTableId: params.id,
+              recipeId: it.recipeId,
+              pricePerLiter: parseFloat(it.pricePerLiter) || 0,
+              notes: it.notes || null,
+            });
+          }
+        }
+
+        if (sanitizedItems.length > 0) {
           await tx.priceTableItem.createMany({
-            data: items
-              .filter((it: any) => it.recipeId && it.pricePerLiter !== undefined)
-              .map((it: any) => ({
-                priceTableId: params.id,
-                recipeId: it.recipeId,
-                pricePerLiter: parseFloat(it.pricePerLiter) || 0,
-                notes: it.notes || null,
-              })),
+            data: sanitizedItems,
           });
         }
       }

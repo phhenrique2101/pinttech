@@ -24,8 +24,17 @@ import {
   Calculator,
   Building2,
   HelpCircle,
+  Save,
+  RotateCcw,
+  Sliders,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import {
+  applyRounding,
+  computeCalculatedPrice,
+  RoundingRule,
+  PricingModel,
+} from '@/lib/pricingUtils';
 import Link from 'next/link';
 
 interface MatrixItem {
@@ -37,8 +46,10 @@ interface MatrixItem {
   costPerLiter: number;
   salePricePerLiter: number;
   suggestedPricePerLiter: number;
-  pricingModel: 'MANUAL' | 'AT_COST' | 'MARKUP';
+  pricingModel: 'MANUAL' | 'AT_COST' | 'MARKUP' | 'PERCENT' | 'COST_PLUS_FIXED';
   profitMarginPercent: number;
+  costPlusFixedValue?: number;
+  roundingRule?: RoundingRule;
   calculatedMarkupPrice: number;
   keg20L: number;
   keg30L: number;
@@ -46,6 +57,7 @@ interface MatrixItem {
   grossMarginPerLiter: number;
   grossMarginPercent: number;
   batchesCount: number;
+  isModified?: boolean;
 }
 
 interface PriceTable {
@@ -75,8 +87,15 @@ export default function PrecosPage() {
   const [tables, setTables] = useState<PriceTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingMatrix, setSavingMatrix] = useState(false);
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
+  const [savedRowId, setSavedRowId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Ferramenta de Cálculo em Massa na Matriz
+  const [bulkModel, setBulkModel] = useState<'PERCENT' | 'AT_COST' | 'COST_PLUS_FIXED'>('PERCENT');
+  const [bulkValue, setBulkValue] = useState('60');
+  const [bulkRounding, setBulkRounding] = useState<RoundingRule>('NONE');
 
   // Modal: Nova / Editar Tabela de Preço
   const [tableModalOpen, setTableModalOpen] = useState(false);
@@ -85,9 +104,12 @@ export default function PrecosPage() {
   const [tableDescription, setTableDescription] = useState('');
   const [tableType, setTableType] = useState('CUSTOM');
   const [tableAdjustment, setTableAdjustment] = useState('0');
+  const [tableFixedAddition, setTableFixedAddition] = useState('5');
+  const [tableRounding, setTableRounding] = useState<RoundingRule>('NONE');
   const [tableIsDefault, setTableIsDefault] = useState(false);
   const [tableItemPrices, setTableItemPrices] = useState<Record<string, number>>({});
   const [savingTable, setSavingTable] = useState(false);
+  const [loadingTableItems, setLoadingTableItems] = useState(false);
 
   // Modal: Confirmação de Exclusão de Tabela
   const [deleteTableConfirm, setDeleteTableConfirm] = useState<PriceTable | null>(null);
@@ -142,17 +164,33 @@ export default function PrecosPage() {
       prev.map((item) => {
         if (item.id !== id) return item;
 
-        const updated = { ...item, [field]: value };
+        const updated = { ...item, [field]: value, isModified: true };
 
         const cost = parseFloat(String(updated.costPerLiter)) || 0;
         let salePrice = parseFloat(String(updated.salePricePerLiter)) || 0;
         const margin = parseFloat(String(updated.profitMarginPercent)) || 0;
+        const fixedVal = parseFloat(String(updated.costPlusFixedValue ?? 5)) || 0;
+        const rounding = (updated.roundingRule as RoundingRule) || 'NONE';
 
-        if (updated.pricingModel === 'AT_COST') {
-          salePrice = cost > 0 ? cost : salePrice;
-          updated.salePricePerLiter = salePrice;
-        } else if (updated.pricingModel === 'MARKUP' && cost > 0) {
-          salePrice = parseFloat((cost * (1 + margin / 100)).toFixed(2));
+        if (field === 'salePricePerLiter') {
+          // Quando o usuário digita o preço de venda manualmente, muda o modelo para MANUAL
+          // sem sobrescrever o que o usuário acabou de digitar!
+          updated.pricingModel = 'MANUAL';
+        } else if (
+          field === 'pricingModel' ||
+          field === 'profitMarginPercent' ||
+          field === 'costPlusFixedValue' ||
+          field === 'roundingRule' ||
+          (field === 'costPerLiter' && updated.pricingModel !== 'MANUAL')
+        ) {
+          // Recalcula o preço de venda de acordo com o modelo selecionado
+          salePrice = computeCalculatedPrice({
+            cost,
+            basePrice: salePrice,
+            model: updated.pricingModel,
+            adjustmentValue: updated.pricingModel === 'COST_PLUS_FIXED' ? fixedVal : margin,
+            roundingRule: rounding,
+          });
           updated.salePricePerLiter = salePrice;
         }
 
@@ -160,10 +198,93 @@ export default function PrecosPage() {
         updated.keg30L = parseFloat((salePrice * 30).toFixed(2));
         updated.keg50L = parseFloat((salePrice * 50).toFixed(2));
         updated.grossMarginPerLiter = parseFloat((salePrice - cost).toFixed(2));
-        updated.grossMarginPercent = cost > 0 ? parseFloat((((salePrice - cost) / salePrice) * 100).toFixed(1)) : 100;
+        updated.grossMarginPercent = salePrice > 0 ? parseFloat((((salePrice - cost) / salePrice) * 100).toFixed(1)) : 0;
 
         return updated;
       })
+    );
+  };
+
+  // Salvar uma única receita da matriz com 1 clique
+  const handleSaveSingleRecipe = async (id: string) => {
+    const item = matrix.find((m) => m.id === id);
+    if (!item) return;
+
+    setSavingRowId(id);
+    try {
+      const res = await fetch('/api/prices/matrix', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: [
+            {
+              id: item.id,
+              costPerLiter: item.costPerLiter,
+              salePricePerLiter: item.salePricePerLiter,
+              pricingModel: item.pricingModel,
+              profitMarginPercent: item.profitMarginPercent,
+              costPlusFixedValue: item.costPlusFixedValue,
+              roundingRule: item.roundingRule,
+            },
+          ],
+        }),
+      });
+
+      if (res.ok) {
+        setMatrix((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, isModified: false } : m))
+        );
+        setSavedRowId(id);
+        setTimeout(() => setSavedRowId(null), 3000);
+        showFeedback(`Preço de "${item.name}" salvo com sucesso!`, 'success');
+      } else {
+        const data = await res.json();
+        showFeedback(data.error || 'Erro ao salvar cerveja', 'error');
+      }
+    } catch (err) {
+      showFeedback('Erro de conexão ao salvar cerveja', 'error');
+    } finally {
+      setSavingRowId(null);
+    }
+  };
+
+  // Aplica regra em massa para todas as receitas na matriz
+  const handleApplyBulkRule = () => {
+    const val = parseFloat(bulkValue) || 0;
+    let count = 0;
+
+    setMatrix((prev) =>
+      prev.map((item) => {
+        const cost = parseFloat(String(item.costPerLiter)) || 0;
+        const newPrice = computeCalculatedPrice({
+          cost,
+          basePrice: item.salePricePerLiter,
+          model: bulkModel,
+          adjustmentValue: val,
+          roundingRule: bulkRounding,
+        });
+
+        count++;
+        return {
+          ...item,
+          pricingModel: bulkModel,
+          profitMarginPercent: bulkModel === 'PERCENT' ? val : item.profitMarginPercent,
+          costPlusFixedValue: bulkModel === 'COST_PLUS_FIXED' ? val : (item.costPlusFixedValue ?? 5),
+          roundingRule: bulkRounding,
+          salePricePerLiter: newPrice,
+          keg20L: parseFloat((newPrice * 20).toFixed(2)),
+          keg30L: parseFloat((newPrice * 30).toFixed(2)),
+          keg50L: parseFloat((newPrice * 50).toFixed(2)),
+          grossMarginPerLiter: parseFloat((newPrice - cost).toFixed(2)),
+          grossMarginPercent: newPrice > 0 ? parseFloat((((newPrice - cost) / newPrice) * 100).toFixed(1)) : 0,
+          isModified: true,
+        };
+      })
+    );
+
+    showFeedback(
+      `Regra aplicada a ${count} cerveja(s)! Clique em "Salvar Alterações" para gravar no banco.`,
+      'success'
     );
   };
 
@@ -178,6 +299,8 @@ export default function PrecosPage() {
           salePricePerLiter: m.salePricePerLiter,
           pricingModel: m.pricingModel,
           profitMarginPercent: m.profitMarginPercent,
+          costPlusFixedValue: m.costPlusFixedValue,
+          roundingRule: m.roundingRule,
         })),
       };
 
@@ -190,6 +313,7 @@ export default function PrecosPage() {
       const data = await res.json();
       if (res.ok) {
         showFeedback('Matriz de preços salva com sucesso!', 'success');
+        setMatrix((prev) => prev.map((m) => ({ ...m, isModified: false })));
         loadData();
       } else {
         showFeedback(data.error || 'Erro ao salvar preços', 'error');
@@ -198,6 +322,13 @@ export default function PrecosPage() {
       showFeedback('Erro de conexão ao salvar', 'error');
     } finally {
       setSavingMatrix(false);
+    }
+  };
+
+  // Descartar alterações não salvas
+  const handleDiscardChanges = () => {
+    if (confirm('Deseja descartar as alterações não salvas na matriz de preços?')) {
+      loadData();
     }
   };
 
@@ -229,6 +360,31 @@ export default function PrecosPage() {
     }
   };
 
+  // Recalcular todos os preços no modal da tabela com base na regra e no arredondamento selecionado
+  const handleRecalculateTablePrices = () => {
+    const adj = parseFloat(tableAdjustment) || 0;
+    const fixed = parseFloat(tableFixedAddition) || 0;
+    const updated: Record<string, number> = {};
+
+    matrix.forEach((m) => {
+      let model = tableType;
+      let val = adj;
+      if (tableType === 'COST_PLUS_FIXED') {
+        val = fixed;
+      }
+      updated[m.id] = computeCalculatedPrice({
+        cost: m.costPerLiter,
+        basePrice: m.salePricePerLiter,
+        model,
+        adjustmentValue: val,
+        roundingRule: tableRounding,
+      });
+    });
+
+    setTableItemPrices(updated);
+    showFeedback('Preços da tabela recalculados conforme a regra!', 'success');
+  };
+
   // Abrir modal de criação de tabela
   const handleOpenCreateTable = () => {
     setEditingTable(null);
@@ -236,6 +392,8 @@ export default function PrecosPage() {
     setTableDescription('');
     setTableType('CUSTOM');
     setTableAdjustment('0');
+    setTableFixedAddition('5');
+    setTableRounding('NONE');
     setTableIsDefault(false);
 
     // Preenche com os preços base atuais da matriz
@@ -254,7 +412,11 @@ export default function PrecosPage() {
     setTableDescription(table.description || '');
     setTableType(table.type || 'CUSTOM');
     setTableAdjustment(String(table.adjustmentPercent || 0));
+    setTableFixedAddition('5');
+    setTableRounding('NONE');
     setTableIsDefault(table.isDefault);
+    setTableModalOpen(true);
+    setLoadingTableItems(true);
 
     // Carregar detalhes completos com os itens da tabela
     try {
@@ -276,9 +438,9 @@ export default function PrecosPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoadingTableItems(false);
     }
-
-    setTableModalOpen(true);
   };
 
   // Salvar tabela (criar ou editar)
@@ -352,6 +514,9 @@ export default function PrecosPage() {
     }
   };
 
+  const hasUnsavedChanges = matrix.some((m) => m.isModified);
+  const modifiedCount = matrix.filter((m) => m.isModified).length;
+
   const filteredMatrix = matrix.filter(
     (m) =>
       m.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -393,6 +558,19 @@ export default function PrecosPage() {
         <div className="flex flex-wrap items-center gap-2">
           {activeTab === 'MATRIX' && (
             <>
+              {hasUnsavedChanges && (
+                <button
+                  type="button"
+                  onClick={handleDiscardChanges}
+                  disabled={savingMatrix}
+                  className="px-3.5 py-2 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 text-xs font-bold rounded-xl border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 transition-all"
+                  title="Descartar alterações não salvas"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Descartar ({modifiedCount})</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleApplyAtCostAll}
@@ -401,17 +579,27 @@ export default function PrecosPage() {
                 title="Ajusta o preço de venda de todas as receitas para ser igual ao custo de produção"
               >
                 <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Aplicar Preço de Custo em Todas</span>
+                <span>Aplicar Custo em Todas</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSaveMatrix}
                 disabled={savingMatrix}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-md shadow-amber-500/25 flex items-center gap-1.5 transition-all active:scale-95"
+                className={`px-4 py-2 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 ${
+                  hasUnsavedChanges
+                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-amber-500/30 ring-2 ring-amber-400 animate-pulse'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
               >
-                <Check className="w-4 h-4" />
-                <span>{savingMatrix ? 'Salvando...' : 'Salvar Alterações'}</span>
+                <Save className="w-4 h-4" />
+                <span>
+                  {savingMatrix
+                    ? 'Salvando...'
+                    : hasUnsavedChanges
+                    ? `Salvar Alterações (${modifiedCount})`
+                    : 'Salvar Alterações'}
+                </span>
               </button>
             </>
           )}
@@ -500,6 +688,103 @@ export default function PrecosPage() {
       {/* ========================================================================= */}
       {activeTab === 'MATRIX' && (
         <div className="space-y-4">
+          {/* CALCULADORA & AJUSTE EM MASSA DE PREÇOS */}
+          <div className="bg-gradient-to-r from-amber-500/10 via-slate-50 to-slate-50 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 p-4 sm:p-5 rounded-3xl border border-amber-200/60 dark:border-amber-900/40 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/40 dark:border-amber-900/40 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500 text-slate-950 font-black">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                    Calculadora & Ajuste em Massa de Preços
+                  </h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Defina uma regra (por Custo, Margem % ou Custo + R$) e arredondamento para aplicar em lote ou individualmente
+                  </p>
+                </div>
+              </div>
+              <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-950/60 px-2.5 py-1 rounded-lg">
+                Fórmula Automática & Arredondamento
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  1. Regra de Cálculo
+                </label>
+                <select
+                  value={bulkModel}
+                  onChange={(e) => setBulkModel(e.target.value as 'PERCENT' | 'AT_COST' | 'COST_PLUS_FIXED')}
+                  className="w-full text-xs font-bold p-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                >
+                  <option value="AT_COST">Preço de Custo (Preço = Custo)</option>
+                  <option value="PERCENT">Margem / Markup (% sobre Custo)</option>
+                  <option value="COST_PLUS_FIXED">Custo + R$ Fixo por Litro</option>
+                </select>
+              </div>
+
+              {bulkModel !== 'AT_COST' ? (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {bulkModel === 'PERCENT' ? '2. Margem / Acréscimo (%)' : '2. Valor Fixo por Litro (R$)'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step={bulkModel === 'PERCENT' ? '5' : '0.50'}
+                      min="0"
+                      value={bulkValue}
+                      onChange={(e) => setBulkValue(e.target.value)}
+                      className="w-full text-xs font-black p-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white pr-10"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      {bulkModel === 'PERCENT' ? '%' : 'R$/L'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    2. Parâmetro
+                  </label>
+                  <div className="text-xs font-bold p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-xl">
+                    100% Custo de Fabricação
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  3. Arredondamento
+                </label>
+                <select
+                  value={bulkRounding}
+                  onChange={(e) => setBulkRounding(e.target.value as RoundingRule)}
+                  className="w-full text-xs font-bold p-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                >
+                  <option value="NONE">Sem arredondar (Exato)</option>
+                  <option value="ROUND_INT">Inteiro mais próximo (.00)</option>
+                  <option value="ROUND_HALF">Meio Real (.50)</option>
+                  <option value="ROUND_NINE">Comercial .90 (ex: R$ 14,90)</option>
+                  <option value="ROUND_CEIL">Sempre p/ Cima (.00)</option>
+                </select>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={handleApplyBulkRule}
+                  className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Aplicar em Todas</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Barra de Busca e Dica */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
             <div className="relative flex-1 max-w-md">
@@ -516,7 +801,7 @@ export default function PrecosPage() {
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               <Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" />
               <span>
-                Edite os preços e custos diretamente nas colunas. Clique em <strong>Salvar Alterações</strong> ao terminar.
+                Edite os valores nas colunas ou digite o preço direto. Salve por linha ou em <strong>Salvar Alterações</strong>.
               </span>
             </div>
           </div>
@@ -529,21 +814,23 @@ export default function PrecosPage() {
                   <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     <th className="p-3.5 pl-5">Cerveja / Estilo</th>
                     <th className="p-3.5 text-right">Custo / Litro</th>
-                    <th className="p-3.5 text-center">Modelo de Preço</th>
-                    <th className="p-3.5 text-right">Margem Desejada</th>
+                    <th className="p-3.5 text-center">Modelo de Cálculo</th>
+                    <th className="p-3.5 text-right">Ajuste (% / R$)</th>
+                    <th className="p-3.5 text-center">Arredondar</th>
                     <th className="p-3.5 text-right bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-300">
                       Preço Venda / L
                     </th>
                     <th className="p-3.5 text-right">Barril 20L</th>
                     <th className="p-3.5 text-right">Barril 30L</th>
                     <th className="p-3.5 text-right">Barril 50L</th>
-                    <th className="p-3.5 text-right pr-5">Lucro Bruto / L</th>
+                    <th className="p-3.5 text-right">Lucro Bruto / L</th>
+                    <th className="p-3.5 text-center pr-5">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                   {filteredMatrix.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400">
+                      <td colSpan={11} className="p-8 text-center text-slate-400">
                         Nenhuma cerveja encontrada.
                       </td>
                     </tr>
@@ -551,12 +838,22 @@ export default function PrecosPage() {
                     filteredMatrix.map((item) => (
                       <tr
                         key={item.id}
-                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                        className={`transition-colors ${
+                          item.isModified
+                            ? 'bg-amber-50/40 dark:bg-amber-950/15 hover:bg-amber-50/60 dark:hover:bg-amber-950/30'
+                            : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                        }`}
                       >
                         {/* Nome & Estilo */}
                         <td className="p-3.5 pl-5">
-                          <div className="font-black text-slate-900 dark:text-white text-sm">
-                            {item.name}
+                          <div className="font-black text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
+                            <span>{item.name}</span>
+                            {item.isModified && (
+                              <span
+                                className="inline-block w-2 h-2 rounded-full bg-amber-500"
+                                title="Alteração não salva"
+                              />
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
                             <span>{item.style}</span>
@@ -584,48 +881,77 @@ export default function PrecosPage() {
 
                         {/* Modelo de Preço */}
                         <td className="p-3.5 text-center">
-                          <div className="inline-flex flex-col gap-1 items-center">
-                            <select
-                              value={item.pricingModel}
-                              onChange={(e) => handleMatrixChange(item.id, 'pricingModel', e.target.value)}
-                              className="text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer"
-                            >
-                              <option value="MANUAL">Manual</option>
-                              <option value="AT_COST">Preço de Custo</option>
-                              <option value="MARKUP">Markup (%)</option>
-                            </select>
-
-                            {/* Botão de Atalho Rápido */}
-                            <button
-                              type="button"
-                              onClick={() => handleMatrixChange(item.id, 'pricingModel', 'AT_COST')}
-                              className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline font-bold"
-                            >
-                              Aplicar Custo
-                            </button>
-                          </div>
+                          <select
+                            value={item.pricingModel}
+                            onChange={(e) => handleMatrixChange(item.id, 'pricingModel', e.target.value)}
+                            className="text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer"
+                          >
+                            <option value="MANUAL">Manual</option>
+                            <option value="AT_COST">Preço de Custo</option>
+                            <option value="PERCENT">Margem % (Markup)</option>
+                            <option value="COST_PLUS_FIXED">Custo + Valor Fixo R$</option>
+                          </select>
                         </td>
 
-                        {/* Margem Desejada (%) */}
+                        {/* Ajuste (Margem % ou Fixo R$) */}
                         <td className="p-3.5 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <input
-                              type="number"
-                              step="5"
-                              min="0"
-                              value={item.profitMarginPercent}
-                              onChange={(e) =>
-                                handleMatrixChange(item.id, 'profitMarginPercent', parseFloat(e.target.value) || 0)
-                              }
-                              disabled={item.pricingModel !== 'MARKUP'}
-                              className={`w-16 px-2 py-1 text-right font-bold rounded-lg border text-slate-900 dark:text-white ${
-                                item.pricingModel === 'MARKUP'
-                                  ? 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 focus:ring-1 focus:ring-amber-500'
-                                  : 'bg-slate-100 dark:bg-slate-900/60 border-transparent text-slate-400 cursor-not-allowed'
-                              }`}
-                            />
-                            <span className="text-slate-400 font-bold">%</span>
-                          </div>
+                          {item.pricingModel === 'PERCENT' || item.pricingModel === 'MARKUP' ? (
+                            <div className="inline-flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="5"
+                                min="0"
+                                value={item.profitMarginPercent}
+                                onChange={(e) =>
+                                  handleMatrixChange(item.id, 'profitMarginPercent', parseFloat(e.target.value) || 0)
+                                }
+                                className="w-16 px-2 py-1 text-right font-bold rounded-lg border bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-500"
+                              />
+                              <span className="text-slate-400 font-bold">%</span>
+                            </div>
+                          ) : item.pricingModel === 'COST_PLUS_FIXED' ? (
+                            <div className="inline-flex items-center gap-1">
+                              <span className="text-slate-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.50"
+                                min="0"
+                                value={item.costPlusFixedValue ?? 5}
+                                onChange={(e) =>
+                                  handleMatrixChange(item.id, 'costPlusFixedValue', parseFloat(e.target.value) || 0)
+                                }
+                                className="w-16 px-2 py-1 text-right font-bold rounded-lg border bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-500"
+                              />
+                            </div>
+                          ) : item.pricingModel === 'AT_COST' ? (
+                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                              = Custo
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              Manual
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Arredondamento */}
+                        <td className="p-3.5 text-center">
+                          <select
+                            value={item.roundingRule || 'NONE'}
+                            onChange={(e) => handleMatrixChange(item.id, 'roundingRule', e.target.value)}
+                            disabled={item.pricingModel === 'MANUAL'}
+                            className={`text-[11px] font-bold px-2 py-1 rounded-lg border ${
+                              item.pricingModel === 'MANUAL'
+                                ? 'bg-slate-100 dark:bg-slate-900/60 border-transparent text-slate-400 cursor-not-allowed'
+                                : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer'
+                            }`}
+                          >
+                            <option value="NONE">Exato</option>
+                            <option value="ROUND_INT">Inteiro (.00)</option>
+                            <option value="ROUND_HALF">Meio (.50)</option>
+                            <option value="ROUND_NINE">.90 Comercial</option>
+                            <option value="ROUND_CEIL">P/ Cima (.00)</option>
+                          </select>
                         </td>
 
                         {/* Preço de Venda / Litro (Destaque) */}
@@ -634,17 +960,16 @@ export default function PrecosPage() {
                             <span className="text-amber-700 dark:text-amber-400 font-bold">R$</span>
                             <input
                               type="number"
-                              step="0.50"
+                              step="0.10"
                               min="0"
                               value={item.salePricePerLiter}
                               onChange={(e) =>
                                 handleMatrixChange(item.id, 'salePricePerLiter', parseFloat(e.target.value) || 0)
                               }
-                              disabled={item.pricingModel === 'AT_COST'}
                               className={`w-24 px-2.5 py-1 text-right font-black text-sm rounded-lg border ${
-                                item.pricingModel === 'AT_COST'
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                                  : 'bg-white dark:bg-slate-800 border-amber-300 dark:border-amber-600 text-slate-900 dark:text-amber-300 focus:ring-2 focus:ring-amber-500'
+                                item.isModified
+                                  ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 text-amber-900 dark:text-amber-200 ring-2 ring-amber-400/30'
+                                  : 'bg-white dark:bg-slate-800 border-amber-300/80 dark:border-amber-600/80 text-slate-900 dark:text-amber-300 focus:ring-2 focus:ring-amber-500'
                               }`}
                             />
                           </div>
@@ -666,13 +991,44 @@ export default function PrecosPage() {
                         </td>
 
                         {/* Lucro Bruto / L */}
-                        <td className="p-3.5 text-right pr-5">
+                        <td className="p-3.5 text-right">
                           <div className="font-bold text-emerald-600 dark:text-emerald-400">
                             +{formatCurrency(item.grossMarginPerLiter)}
                           </div>
                           <div className="text-[10px] text-slate-400 font-semibold">
                             {item.grossMarginPercent}% margem
                           </div>
+                        </td>
+
+                        {/* Ação: Salvar Linha Individual */}
+                        <td className="p-3.5 text-center pr-5">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveSingleRecipe(item.id)}
+                            disabled={savingRowId === item.id}
+                            className={`p-2 rounded-xl transition-all inline-flex items-center justify-center ${
+                              savedRowId === item.id
+                                ? 'bg-emerald-500 text-white shadow-sm'
+                                : item.isModified
+                                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm animate-pulse'
+                                : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                            title={
+                              savedRowId === item.id
+                                ? 'Salvo com sucesso!'
+                                : item.isModified
+                                ? 'Salvar esta cerveja agora'
+                                : 'Salvar esta linha'
+                            }
+                          >
+                            {savingRowId === item.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : savedRowId === item.id ? (
+                              <Check className="w-4 h-4" />
+                            ) : (
+                              <Save className="w-4 h-4" />
+                            )}
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -681,6 +1037,42 @@ export default function PrecosPage() {
               </table>
             </div>
           </div>
+
+          {/* BARRA FLUTUANTE DE SALVAMENTO */}
+          {hasUnsavedChanges && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-amber-500/50 flex items-center gap-4 animate-in slide-in-from-bottom duration-200">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                </span>
+                <span className="text-xs font-bold text-slate-200">
+                  <strong className="text-amber-400">{modifiedCount}</strong>{' '}
+                  {modifiedCount === 1 ? 'cerveja modificada' : 'cervejas modificadas'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDiscardChanges}
+                  disabled={savingMatrix}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  Descartar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveMatrix}
+                  disabled={savingMatrix}
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{savingMatrix ? 'Salvando...' : 'Salvar Todas'}</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -932,17 +1324,29 @@ export default function PrecosPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Tipo de Precificação
+                    Tipo de Precificação da Tabela
                   </label>
                   <select
                     value={tableType}
-                    onChange={(e) => setTableType(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setTableType(newType);
+                      if (newType === 'AT_COST') {
+                        const updated: Record<string, number> = {};
+                        matrix.forEach((m) => {
+                          updated[m.id] = applyRounding(m.costPerLiter, tableRounding);
+                        });
+                        setTableItemPrices(updated);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white cursor-pointer"
                   >
-                    <option value="CUSTOM">Preços Específicos por Cerveja</option>
+                    <option value="CUSTOM">Preços Personalizados por Cerveja</option>
+                    <option value="AT_COST">Preço de Custo de Produção (Preço = Custo)</option>
+                    <option value="COST_PLUS_PERCENT">Custo de Produção + Margem (%)</option>
+                    <option value="COST_PLUS_FIXED">Custo de Produção + Valor Fixo (R$ por Litro)</option>
                     <option value="DISCOUNT_PERCENT">Desconto Geral (%) sobre o Preço Base</option>
                     <option value="MARKUP_PERCENT">Acréscimo Geral (%) sobre o Preço Base</option>
-                    <option value="AT_COST">Preço de Custo de Fábrica</option>
                   </select>
                 </div>
               </div>
@@ -960,83 +1364,161 @@ export default function PrecosPage() {
                 />
               </div>
 
-              {/* Ajuste em Massa (Desconto ou Acréscimo) */}
-              {(tableType === 'DISCOUNT_PERCENT' || tableType === 'MARKUP_PERCENT') && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-900/40 flex items-center gap-3">
-                  <Percent className="w-5 h-5 text-amber-600 flex-shrink-0" />
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-amber-900 dark:text-amber-200">
-                      Percentual de Ajuste (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="1"
-                      min="0"
-                      max="100"
-                      value={tableAdjustment}
-                      onChange={(e) => {
-                        const adj = parseFloat(e.target.value) || 0;
-                        setTableAdjustment(e.target.value);
-                        // Recalcular itens
-                        const updated: Record<string, number> = {};
-                        matrix.forEach((m) => {
-                          if (tableType === 'DISCOUNT_PERCENT') {
-                            updated[m.id] = parseFloat((m.salePricePerLiter * (1 - adj / 100)).toFixed(2));
-                          } else {
-                            updated[m.id] = parseFloat((m.salePricePerLiter * (1 + adj / 100)).toFixed(2));
-                          }
-                        });
-                        setTableItemPrices(updated);
-                      }}
-                      className="w-24 px-2 py-1 text-xs font-black bg-white dark:bg-slate-800 border border-amber-300 rounded-lg text-slate-900 dark:text-white mt-1"
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Painel de Cálculo e Arredondamento da Tabela */}
+              {tableType !== 'CUSTOM' && (
+                <div className="p-3.5 bg-gradient-to-r from-amber-50 to-slate-50 dark:from-amber-950/20 dark:to-slate-900 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    {tableType === 'COST_PLUS_FIXED' ? (
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-900 dark:text-amber-200 mb-1">
+                          Adicional Fixo por Litro (R$)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.50"
+                            min="0"
+                            value={tableFixedAddition}
+                            onChange={(e) => setTableFixedAddition(e.target.value)}
+                            className="w-full px-3 py-1.5 text-xs font-black bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-slate-900 dark:text-white pr-9"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                            R$/L
+                          </span>
+                        </div>
+                      </div>
+                    ) : tableType === 'AT_COST' ? (
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-900 dark:text-amber-200 mb-1">
+                          Regra de Custo
+                        </label>
+                        <div className="text-xs font-bold p-2 bg-emerald-100/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 rounded-xl border border-emerald-300/60 dark:border-emerald-800">
+                          Preço = 100% Custo
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-900 dark:text-amber-200 mb-1">
+                          Percentual de Ajuste (%)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="200"
+                            value={tableAdjustment}
+                            onChange={(e) => setTableAdjustment(e.target.value)}
+                            className="w-full px-3 py-1.5 text-xs font-black bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-slate-900 dark:text-white pr-7"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                            %
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
-              {/* Botão de Preço de Custo no Modal */}
-              {tableType === 'AT_COST' && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-900/40 text-xs text-emerald-800 dark:text-emerald-200 font-medium">
-                  Esta tabela utilizará automaticamente o custo de produção de cada cerveja como preço de venda.
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-900 dark:text-amber-200 mb-1">
+                        Regra de Arredondamento
+                      </label>
+                      <select
+                        value={tableRounding}
+                        onChange={(e) => setTableRounding(e.target.value as RoundingRule)}
+                        className="w-full px-3 py-1.5 text-xs font-bold bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-slate-900 dark:text-white"
+                      >
+                        <option value="NONE">Sem arredondar (Exato)</option>
+                        <option value="ROUND_INT">Inteiro mais próximo (.00)</option>
+                        <option value="ROUND_HALF">Meio Real (.50)</option>
+                        <option value="ROUND_NINE">Comercial .90 (ex: R$ 14,90)</option>
+                        <option value="ROUND_CEIL">Sempre p/ Cima (.00)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleRecalculateTablePrices}
+                        className="w-full py-1.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Recalcular Preços</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* Lista de Preços por Cerveja */}
               <div>
-                <label className="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2">
-                  Preços por Litro para cada Cerveja:
-                </label>
-                <div className="max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-2xl divide-y divide-slate-100 dark:divide-slate-800">
-                  {matrix.map((m) => (
-                    <div
-                      key={m.id}
-                      className="p-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-xs"
-                    >
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white">{m.name}</span>
-                        <span className="text-[10px] text-slate-400 block">{m.style}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-slate-400 text-[10px]">Preço Base: {formatCurrency(m.salePricePerLiter)}/L ➔</span>
-                        <div className="inline-flex items-center gap-1">
-                          <span className="font-bold text-amber-600">R$</span>
-                          <input
-                            type="number"
-                            step="0.50"
-                            min="0"
-                            value={tableItemPrices[m.id] ?? m.salePricePerLiter}
-                            onChange={(e) =>
-                              setTableItemPrices((prev) => ({
-                                ...prev,
-                                [m.id]: parseFloat(e.target.value) || 0,
-                              }))
-                            }
-                            className="w-20 px-2 py-1 text-right font-black bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
-                          />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                    Preços Praticados nesta Tabela:
+                  </label>
+                  {loadingTableItems && (
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold animate-pulse">
+                      Carregando preços...
+                    </span>
+                  )}
+                </div>
+
+                <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                  {matrix.map((m) => {
+                    const currentPrice = tableItemPrices[m.id] ?? m.salePricePerLiter;
+                    const profitPerLiter = currentPrice - m.costPerLiter;
+                    const profitMargin = currentPrice > 0 ? (profitPerLiter / currentPrice) * 100 : 0;
+                    return (
+                      <div
+                        key={m.id}
+                        className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-xs transition-colors"
+                      >
+                        <div>
+                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <span>{m.name}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                            <span>{m.style}</span>
+                            <span>•</span>
+                            <span className="text-slate-500 dark:text-slate-400 font-semibold">
+                              Custo: {formatCurrency(m.costPerLiter)}/L
+                            </span>
+                            <span>•</span>
+                            <span className="text-slate-500 dark:text-slate-400 font-semibold">
+                              Base: {formatCurrency(m.salePricePerLiter)}/L
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                              +{formatCurrency(profitPerLiter)}/L
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {profitMargin.toFixed(0)}% margem
+                            </div>
+                          </div>
+
+                          <div className="inline-flex items-center gap-1 bg-white dark:bg-slate-800 px-2 py-1 rounded-xl border border-amber-300 dark:border-amber-600/60 shadow-xs">
+                            <span className="font-black text-amber-600 dark:text-amber-400 text-xs">R$</span>
+                            <input
+                              type="number"
+                              step="0.10"
+                              min="0"
+                              value={tableItemPrices[m.id] ?? m.salePricePerLiter}
+                              onChange={(e) =>
+                                setTableItemPrices((prev) => ({
+                                  ...prev,
+                                  [m.id]: parseFloat(e.target.value) || 0,
+                                }))
+                              }
+                              className="w-20 px-1 py-0.5 text-right font-black text-xs bg-transparent border-0 text-slate-900 dark:text-white focus:outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
