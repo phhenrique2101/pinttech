@@ -23,6 +23,7 @@ import {
   ArrowRightLeft,
   TrendingDown,
   Package,
+  AlertTriangle,
 } from 'lucide-react';
 import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
 import KegTimelineModal from '@/components/kegs/KegTimelineModal';
@@ -119,6 +120,48 @@ export default function ScannerPage() {
 
     loadKegs();
   }, []);
+
+  // Filtrar apenas lotes que estejam efetivamente em um tanque ativo (não finalizados, cancelados ou envasados)
+  const inTankBatches = useMemo(() => {
+    return batches
+      .filter(
+        (b) =>
+          b.tankId &&
+          b.tank &&
+          b.status !== 'FINALIZADO' &&
+          b.status !== 'CANCELADO' &&
+          b.status !== 'ENVASADO'
+      )
+      .sort((a, b) => {
+        const priorityOrder: Record<string, number> = {
+          PRONTO_ENVASE: 1,
+          MATURANDO: 2,
+          FERMENTANDO: 3,
+          BRASSAGEM: 4,
+          PLANEJADO: 5,
+        };
+        const pA = priorityOrder[a.status] || 99;
+        const pB = priorityOrder[b.status] || 99;
+        if (pA !== pB) return pA - pB;
+        return (a.tank?.name || '').localeCompare(b.tank?.name || '');
+      });
+  }, [batches]);
+
+  const selectedBatch = useMemo(() => {
+    return inTankBatches.find((b) => b.id === selectedBatchId) || null;
+  }, [inTankBatches, selectedBatchId]);
+
+  // Garante que o lote selecionado seja sempre um lote presente no tanque
+  useEffect(() => {
+    if (inTankBatches.length > 0) {
+      const exists = inTankBatches.some((b) => b.id === selectedBatchId);
+      if (!exists) {
+        setSelectedBatchId(inTankBatches[0].id);
+      }
+    } else {
+      setSelectedBatchId('');
+    }
+  }, [inTankBatches, selectedBatchId]);
 
   // Group beers currently in stock by name + batch for quick fill picker
   const stockBeers = useMemo(() => {
@@ -566,21 +609,76 @@ export default function ScannerPage() {
           </div>
 
           {fillSourceType === 'BATCH' ? (
-            <div>
-              <label className="font-black text-purple-950 dark:text-purple-200 block mb-1">
-                🍺 Selecione o Lote de Cerveja a Envasar:
-              </label>
-              <select
-                value={selectedBatchId}
-                onChange={(e) => setSelectedBatchId(e.target.value)}
-                className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs"
-              >
-                {batches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.recipe?.name} ({b.batchNumber}) - {b.tank?.name || 'Tanque'} ({b.volumePlannedLiters}L)
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="font-black text-purple-950 dark:text-purple-200 block text-xs flex items-center gap-1.5">
+                  <Beer className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  🍺 Cerveja / Lote no Tanque para Envase:
+                </label>
+                <span className="text-[10px] text-purple-700 dark:text-purple-300 font-bold bg-purple-100/80 dark:bg-purple-950/60 px-2 py-0.5 rounded-full">
+                  {inTankBatches.length} no tanque
+                </span>
+              </div>
+
+              {inTankBatches.length === 0 ? (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-800 dark:text-amber-200 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Nenhuma cerveja em tanque no momento.</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                    Não há lotes ativos vinculados a tanques na adega. Para envasar chopps avulsos ou de terceiros, utilize a opção <strong>Avulso / Rápido</strong> acima.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <select
+                    value={selectedBatchId}
+                    onChange={(e) => setSelectedBatchId(e.target.value)}
+                    className="w-full p-2.5 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl font-bold text-slate-900 dark:text-white shadow-2xs text-xs cursor-pointer"
+                  >
+                    {inTankBatches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        [{b.tank?.name || 'Tanque'}] {b.recipe?.name} (Lote #{b.batchNumber}) — {b.volumeProducedLiters || b.volumePlannedLiters}L {b.status === 'PRONTO_ENVASE' ? '• 🟢 Pronto p/ Envase' : b.status === 'MATURANDO' ? '• 🟡 Maturando' : b.status === 'FERMENTANDO' ? '• 🔵 Fermentando' : b.status === 'BRASSAGEM' ? '• 🟠 Brassagem' : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedBatch && (
+                    <div className="p-2.5 bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/60 rounded-xl flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-black text-purple-950 dark:text-purple-100 flex items-center gap-1.5">
+                          <span>{selectedBatch.recipe?.name}</span>
+                          <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400">
+                            (Lote #{selectedBatch.batchNumber})
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Tanque: <strong>{selectedBatch.tank?.name}</strong> • Volume:{' '}
+                          <strong>{selectedBatch.volumeProducedLiters || selectedBatch.volumePlannedLiters}L</strong>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          selectedBatch.status === 'PRONTO_ENVASE'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
+                            : selectedBatch.status === 'MATURANDO'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
+                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300'
+                        }`}
+                      >
+                        {selectedBatch.status === 'PRONTO_ENVASE'
+                          ? 'Pronto Envase'
+                          : selectedBatch.status === 'MATURANDO'
+                          ? 'Maturando'
+                          : selectedBatch.status === 'FERMENTANDO'
+                          ? 'Fermentando'
+                          : selectedBatch.status}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

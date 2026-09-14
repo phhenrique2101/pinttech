@@ -12,6 +12,12 @@ export async function GET(req: NextRequest) {
       if (session.breweryId) where.breweryId = session.breweryId;
     }
 
+    const inTankOnly = req.nextUrl.searchParams.get('inTank') === 'true';
+    if (inTankOnly) {
+      where.tankId = { not: null };
+      where.status = { notIn: ['FINALIZADO', 'CANCELADO', 'ENVASADO'] };
+    }
+
     const batches = await prisma.productionBatch.findMany({
       where,
       include: {
