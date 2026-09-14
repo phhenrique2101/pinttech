@@ -40,12 +40,14 @@ interface BeerXmlImporterModalProps {
   tanks: any[];
   onClose: () => void;
   onBatchCreated: (batch: any) => void;
+  onRecipeImported?: (recipe: any) => void;
 }
 
 export default function BeerXmlImporterModal({
   tanks = [],
   onClose,
   onBatchCreated,
+  onRecipeImported,
 }: BeerXmlImporterModalProps) {
   const [step, setStep] = useState<'UPLOAD' | 'MAPA_FORM'>('UPLOAD');
   const [fileContent, setFileContent] = useState<string>('');
@@ -189,6 +191,36 @@ export default function BeerXmlImporterModal({
     setIngredients((prev) =>
       prev.map((ing) => (ing.id === id ? { ...ing, [field]: value } : ing))
     );
+  };
+
+  const handleSaveRecipeOnly = async () => {
+    if (!parsedRecipe) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const resRecipe = await fetch('/api/recipes/import-beerxml', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          xmlContent: fileContent,
+          description: recipeNotes.trim() || undefined,
+        }),
+      });
+
+      const recipeData = await resRecipe.json();
+      if (!resRecipe.ok) throw new Error(recipeData.error || 'Erro ao salvar dados da receita');
+
+      const createdRecipe = recipeData.recipes && recipeData.recipes[0] ? recipeData.recipes[0] : null;
+      if (onRecipeImported) {
+        onRecipeImported(createdRecipe);
+      }
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao salvar receita no catálogo');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmitTraceabilityAndBatch = async () => {
@@ -604,10 +636,11 @@ export default function BeerXmlImporterModal({
         </div>
 
         {/* Footer */}
-        <div className="p-5 border-t border-slate-800 bg-slate-950 flex items-center justify-between">
+        <div className="p-5 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {step === 'MAPA_FORM' ? (
             <>
               <button
+                type="button"
                 onClick={() => setStep('UPLOAD')}
                 disabled={loading}
                 className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition"
@@ -615,15 +648,29 @@ export default function BeerXmlImporterModal({
                 Voltar e Trocar Arquivo XML
               </button>
 
-              <button
-                onClick={handleSubmitTraceabilityAndBatch}
-                disabled={loading}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black flex items-center gap-2 shadow-xl shadow-amber-500/20 transition disabled:opacity-50"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>{loading ? 'Gravando Rastreabilidade...' : 'Registrar Rastreabilidade & Enviar para o Tanque'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveRecipeOnly}
+                  disabled={loading}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-bold flex items-center gap-2 transition disabled:opacity-50"
+                  title="Salva no Catálogo de Receitas para brassar futuramente sem criar lote agora"
+                >
+                  <Beer className="w-4 h-4 text-amber-400" />
+                  <span>{loading ? 'Salvando...' : 'Salvar no Catálogo (Brassagem Futura)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSubmitTraceabilityAndBatch}
+                  disabled={loading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black flex items-center gap-2 shadow-xl shadow-amber-500/20 transition disabled:opacity-50"
+                >
+                  <Flame className="w-4 h-4" />
+                  <span>{loading ? 'Processando...' : 'Salvar & Iniciar Brassagem Agora'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </>
           ) : (
             <div className="flex justify-end w-full">

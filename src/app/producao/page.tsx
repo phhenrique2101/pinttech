@@ -76,6 +76,17 @@ export default function ProducaoPage() {
   const [selectedBatchForManager, setSelectedBatchForManager] = useState<any | null>(null);
   const [selectedRecipeForEdit, setSelectedRecipeForEdit] = useState<any | null>(null);
 
+  // Modal de Iniciar Brassagem a partir de Receita existente
+  const [selectedRecipeForBrew, setSelectedRecipeForBrew] = useState<any | null>(null);
+  const [brewBatchNumber, setBrewBatchNumber] = useState<string>('');
+  const [brewDate, setBrewDate] = useState<string>('');
+  const [brewVolume, setBrewVolume] = useState<string>('');
+  const [brewTankId, setBrewTankId] = useState<string>('');
+  const [brewStatus, setBrewStatus] = useState<string>('BRASSAGEM');
+  const [brewOg, setBrewOg] = useState<string>('');
+  const [brewNotes, setBrewNotes] = useState<string>('');
+  const [startingBrew, setStartingBrew] = useState<boolean>(false);
+
   // Modal de Tanque (Criar / Editar)
   const [tankModalOpen, setTankModalOpen] = useState<boolean>(false);
   const [editingTank, setEditingTank] = useState<any | null>(null);
@@ -684,6 +695,61 @@ export default function ProducaoPage() {
     }
   };
 
+  const openStartBatchModal = (recipe: any) => {
+    setSelectedRecipeForBrew(recipe);
+    setBrewBatchNumber(`LOTE-${new Date().getFullYear()}-${String(Math.floor(100 + Math.random() * 900))}`);
+    setBrewDate(getLocalDateString());
+    setBrewVolume(String(recipe.batchYieldLiters || 500));
+    setBrewTankId('');
+    setBrewStatus('BRASSAGEM');
+    setBrewOg(recipe.og ? String(recipe.og.toFixed(3)) : '1.050');
+    setBrewNotes(`Brassagem iniciada a partir da receita: ${recipe.name}`);
+  };
+
+  const handleStartBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRecipeForBrew || !brewBatchNumber.trim()) return;
+    setStartingBrew(true);
+    try {
+      const payload: any = {
+        recipeId: selectedRecipeForBrew.id,
+        batchNumber: brewBatchNumber.trim().toUpperCase(),
+        brewDate: brewDate || getLocalDateString(),
+        volumePlannedLiters: parseFloat(brewVolume) || selectedRecipeForBrew.batchYieldLiters || 500,
+        volumeProducedLiters: parseFloat(brewVolume) || selectedRecipeForBrew.batchYieldLiters || 500,
+        tankId: brewTankId || null,
+        status: brewStatus || 'BRASSAGEM',
+        measuredOg: brewOg ? parseFloat(brewOg) : selectedRecipeForBrew.og || 1.050,
+        notes: brewNotes.trim() || undefined,
+        mapaRegistration: selectedRecipeForBrew.mapaRegistration || brewery?.mapaRegistration || undefined,
+        commercialDenomination: `Cerveja Puro Malte Tipo ${selectedRecipeForBrew.style || 'Ale'}`,
+        technicalResponsible: brewery?.technicalResponsible || 'Mestre Cervejeiro',
+        deductStock: false,
+      };
+
+      const res = await fetch('/api/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Erro ao iniciar brassagem.');
+        return;
+      }
+
+      await fetchData();
+      setSelectedRecipeForBrew(null);
+      setActiveTab('PRODUCTION_TANKS');
+    } catch (err) {
+      console.error(err);
+      alert('Erro de conexão ao iniciar brassagem.');
+    } finally {
+      setStartingBrew(false);
+    }
+  };
+
   // Funções de Gestão de Tanques
   const openNewTankModal = () => {
     setEditingTank(null);
@@ -930,13 +996,18 @@ export default function ProducaoPage() {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
         <div className="flex space-x-2 overflow-x-auto">
           {[
-            { id: 'PRODUCTION_TANKS', label: 'Produção & Tanques', count: tanks.length, icon: Flame },
+            {
+              id: 'PRODUCTION_TANKS',
+              label: 'Produção & Tanques',
+              count: tanks.length,
+              extraBadge: unassignedBatches.length > 0 ? `${unassignedBatches.length} em brassagem` : undefined,
+              icon: Flame,
+            },
             { id: 'HISTORY_MAPA', label: 'Lotes Finalizados', count: historicalBatches.length, icon: ShieldCheck },
             {
               id: 'RECIPES',
               label: 'Catálogo de Receitas',
               count: recipes.length,
-              extraBadge: unassignedBatches.length > 0 ? `${unassignedBatches.length} sem tanque` : undefined,
               icon: Beer,
             },
           ].map((tab) => {
@@ -1044,6 +1115,104 @@ export default function ProducaoPage() {
           {/* SUB-ABA 1: TANQUES */}
           {productionSubTab === 'TANKS' && (
             <div className="space-y-5">
+              {/* Lotes Ativos em Brassagem / Sem Tanque Atribuído */}
+              {unassignedBatches.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+                        <Flame className="w-5 h-5 text-amber-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                          <span>Lotes em Brassagem / Aguardando Fermentador</span>
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold">
+                            {unassignedBatches.length} {unassignedBatches.length === 1 ? 'lote ativo' : 'lotes ativos'}
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          Lotes em produção que ainda não foram transferidos para um tanque fermentador. Selecione um tanque livre para alocá-lo:
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-amber-500/20">
+                    {filteredUnassignedBatches.map((b) => (
+                      <div
+                        key={b.id}
+                        className="bg-slate-900 border border-amber-500/30 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between shadow-xs"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              #{b.batchNumber}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                              {b.status}
+                            </span>
+                          </div>
+                          <strong className="text-white block text-sm mt-1 truncate">
+                            {b.recipe?.name || 'Cerveja'}
+                          </strong>
+                          <span className="text-[11px] text-slate-400 block truncate">
+                            {b.recipe?.style || 'Standard'} • {b.volumeProducedLiters || b.volumePlannedLiters || 0}L • {formatDate(b.brewDate)}
+                          </span>
+                        </div>
+
+                        {/* Atribuir Tanque Rápido */}
+                        <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">
+                            Transferir para Tanque Fermentador:
+                          </label>
+                          <select
+                            defaultValue=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleAssignTankToBatch(b.id, e.target.value);
+                              }
+                            }}
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-semibold text-slate-200 outline-none focus:border-amber-500"
+                          >
+                            <option value="">Selecionar Tanque Livre...</option>
+                            {tanks.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name} ({t.capacityLiters}L) {t.status === 'LIVRE' ? '• 🟢 Livre' : '• 🟣 Ocupado'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800">
+                          <button
+                            onClick={() => setSelectedBatchForManager(b)}
+                            className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1"
+                            title="Abrir Adega & Medições"
+                          >
+                            <Activity className="w-3.5 h-3.5" />
+                            <span>Adega</span>
+                          </button>
+                          <button
+                            onClick={() => setSelectedBatchForSheet(b)}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition flex items-center justify-center gap-1 border border-slate-700"
+                            title="Ficha Oficial MAPA"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">MAPA</span>
+                          </button>
+                          <button
+                            onClick={() => openBatchStatusModal(b)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+                            title="Atualizar Status / Tanque"
+                          >
+                            <Sliders className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
           {/* Barra de Ferramentas: Contagem, Ordenação e Alternador de Visualização (Grade / Linhas) */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -2379,118 +2548,24 @@ export default function ProducaoPage() {
         </div>
       )}
 
-      {/* ABA: CATÁLOGO DE RECEITAS & LOTES SEM TANQUE */}
+      {/* ABA: CATÁLOGO DE RECEITAS */}
       {activeTab === 'RECIPES' && (
         <div className="space-y-6">
-          {/* Seção de Lotes Ativos sem Tanque Atribuído */}
-          {unassignedBatches.length > 0 && (
-            <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/40 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
-                    <AlertTriangle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200">
-                      Lotes Ativos sem Tanque Atribuído ({unassignedBatches.length})
-                    </h4>
-                    <p className="text-xs text-amber-800/90 dark:text-amber-300/80">
-                      Estes lotes estão ativos na produção mas ainda não foram vinculados a um tanque fermentador físico:
-                    </p>
-                  </div>
-                </div>
-                <span className="px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 text-xs font-mono font-bold self-start sm:self-auto shrink-0">
-                  {unassignedBatches.length} {unassignedBatches.length === 1 ? 'lote sem tanque' : 'lotes sem tanque'}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-white text-sm">Catálogo de Receitas (BeerSmith / Brewfather)</h3>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                  {filteredRecipes.length} {filteredRecipes.length === 1 ? 'receita' : 'receitas'}
                 </span>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-amber-200 dark:border-amber-500/20">
-                {filteredUnassignedBatches.map((b) => (
-                  <div
-                    key={b.id}
-                    className="bg-white dark:bg-slate-900/90 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between shadow-2xs"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
-                          #{b.batchNumber}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                          {b.status}
-                        </span>
-                      </div>
-                      <strong className="text-slate-900 dark:text-white block text-sm mt-1 truncate">
-                        {b.recipe?.name || 'Cerveja'}
-                      </strong>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate">
-                        {b.recipe?.style || 'Standard'} • {b.volumeProducedLiters || b.volumePlannedLiters || 0}L
-                      </span>
-                    </div>
-
-                    {/* Atribuir Tanque Rápido */}
-                    <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
-                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">
-                        Atribuir a Tanque:
-                      </label>
-                      <select
-                        defaultValue=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleAssignTankToBatch(b.id, e.target.value);
-                          }
-                        }}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none"
-                      >
-                        <option value="">Selecionar Tanque Livre...</option>
-                        {tanks.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name} ({t.capacityLiters}L) {t.status === 'LIVRE' ? '• Livre' : '• Ocupado'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <button
-                        onClick={() => setSelectedBatchForManager(b)}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200/80 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1"
-                        title="Abrir Adega & Medições"
-                      >
-                        <Activity className="w-3.5 h-3.5" />
-                        <span>Adega</span>
-                      </button>
-                      <button
-                        onClick={() => setSelectedBatchForSheet(b)}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center justify-center gap-1 border border-slate-200 dark:border-transparent"
-                        title="Ficha Oficial MAPA"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">MAPA</span>
-                      </button>
-                      <button
-                        onClick={() => openBatchStatusModal(b)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
-                        title="Atualizar Status / Tanque"
-                      >
-                        <Sliders className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-white text-sm">Receitas BeerSmith Importadas</h3>
               <p className="text-xs text-slate-400">
-                Fichas técnicas prontas. Você pode despachar novos lotes diretamente a partir destas receitas.
+                Portfólio de receitas prontas para serem brassadas futuramente. Inicie a brassagem de qualquer receita em 1 clique.
               </p>
             </div>
             <button
               onClick={() => setImporterModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow"
             >
               <Upload className="w-4 h-4" />
               <span>Importar Novo BeerXML</span>
@@ -2567,11 +2642,12 @@ export default function ProducaoPage() {
                     {recipe.mapaRegistration || 'Sem MAPA'}
                   </span>
                   <button
-                    onClick={() => setImporterModalOpen(true)}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition"
+                    onClick={() => openStartBatchModal(recipe)}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 transition shadow"
+                    title="Iniciar Brassagem da Receita"
                   >
-                    <Plus className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Lançar Lote via XML</span>
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>Iniciar Brassagem</span>
                   </button>
                 </div>
               </div>
@@ -2587,7 +2663,14 @@ export default function ProducaoPage() {
           onClose={() => setImporterModalOpen(false)}
           onBatchCreated={(created) => {
             fetchData();
-            setSelectedBatchForSheet(created);
+            if (created) {
+              setSelectedBatchForSheet(created);
+              setActiveTab('PRODUCTION_TANKS');
+            }
+          }}
+          onRecipeImported={() => {
+            fetchData();
+            setActiveTab('RECIPES');
           }}
         />
       )}
@@ -2613,6 +2696,166 @@ export default function ProducaoPage() {
             setSelectedBatchForManager(null);
           }}
         />
+      )}
+
+      {/* MODAL PARA INICIAR BRASSAGEM DE RECEITA EXISTENTE */}
+      {selectedRecipeForBrew && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-lg p-6 space-y-5 text-white shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                  <Flame className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white flex items-center gap-2">
+                    <span>Iniciar Brassagem</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {selectedRecipeForBrew.style || 'Estilo'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-amber-400 font-bold truncate max-w-xs">{selectedRecipeForBrew.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRecipeForBrew(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Parâmetros da Receita */}
+            <div className="grid grid-cols-4 gap-2 bg-slate-950 p-2.5 rounded-xl text-center text-xs font-mono border border-slate-800">
+              <div>
+                <span className="text-[10px] text-slate-500 font-sans block">OG Esperada</span>
+                <span className="text-slate-200 font-bold">{selectedRecipeForBrew.og?.toFixed(3) || '1.050'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 font-sans block">ABV Estimado</span>
+                <span className="text-slate-200 font-bold">{selectedRecipeForBrew.abv?.toFixed(1) || '5.0'}%</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 font-sans block">Amargor (IBU)</span>
+                <span className="text-slate-200 font-bold">{selectedRecipeForBrew.ibu || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 font-sans block">Cor (EBC)</span>
+                <span className="text-slate-200 font-bold">{selectedRecipeForBrew.ebc || '—'}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleStartBatch} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Identificação / Nº Lote *</label>
+                  <input
+                    type="text"
+                    required
+                    value={brewBatchNumber}
+                    onChange={(e) => setBrewBatchNumber(e.target.value)}
+                    placeholder="LOTE-2026-001"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-amber-300 font-mono font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Data da Brassagem</label>
+                  <input
+                    type="date"
+                    value={brewDate}
+                    onChange={(e) => setBrewDate(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-medium focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Volume Planejado (Litros) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={brewVolume}
+                    onChange={(e) => setBrewVolume(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">OG Medida (Panela)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={brewOg}
+                    onChange={(e) => setBrewOg(e.target.value)}
+                    placeholder="1.050"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Tanque de Destino (Fermentador):</label>
+                <select
+                  value={brewTankId}
+                  onChange={(e) => setBrewTankId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-medium focus:ring-1 focus:ring-amber-500 outline-none"
+                >
+                  <option value="">Em Brassagem / Sem Tanque Imediato (Atribuir após fervura)</option>
+                  {tanks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.capacityLiters}L) {t.status === 'LIVRE' ? '• 🟢 Livre' : `• 🟣 Ocupado (${t.status})`}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Se você deixar sem tanque agora, o lote ficará ativo em brassagem na aba Produção & Tanques e você poderá alocá-lo ao fermentador a qualquer momento.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Status Inicial</label>
+                <select
+                  value={brewStatus}
+                  onChange={(e) => setBrewStatus(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                >
+                  <option value="BRASSAGEM">🔥 BRASSAGEM (Cozinhando mosto na panela)</option>
+                  <option value="FERMENTANDO">🟢 FERMENTANDO (Direto no fermentador)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Observações da Brassagem</label>
+                <textarea
+                  rows={2}
+                  value={brewNotes}
+                  onChange={(e) => setBrewNotes(e.target.value)}
+                  placeholder="Ex: Brassagem piloto, temperatura de mostura em 66ºC..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-medium focus:ring-1 focus:ring-amber-500 outline-none resize-none"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecipeForBrew(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={startingBrew}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black transition disabled:opacity-50 flex items-center gap-1.5 shadow"
+                >
+                  <Flame className="w-4 h-4" />
+                  <span>{startingBrew ? 'Iniciando...' : 'Iniciar Brassagem & Ir para Produção'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* MODAL DE EDIÇÃO DE RECEITA */}
