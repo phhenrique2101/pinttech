@@ -1175,8 +1175,8 @@ export default function PedidosPage() {
     setEditItems(editItems.filter((_, i) => i !== index));
   };
 
-  const handleCreateOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateOrder = async (e?: React.FormEvent, forcedStatus: string = 'CONFIRMADO') => {
+    if (e) e.preventDefault();
 
     if (!clientId) {
       alert('Por favor, selecione ou busque um cliente para o pedido.');
@@ -1201,6 +1201,7 @@ export default function PedidosPage() {
         body: JSON.stringify({
           clientId,
           priceTableId: newPriceTableId || null,
+          status: forcedStatus,
           driverName: driverName.trim() || null,
           items: orderItems,
           equipmentIds: selectedEquipments,
@@ -1219,7 +1220,11 @@ export default function PedidosPage() {
         setNewModalOpen(false);
         loadData();
 
-        if (stockNotes.length > 0) {
+        if (forcedStatus === 'ORCAMENTO') {
+          alert(
+            `📝 Orçamento & Pré-Reserva #${createdOrder.orderNumber} registrado com sucesso!\n\nA data, chopp e chopeiras foram bloqueados preventivamente sem faturar a venda.`
+          );
+        } else if (stockNotes.length > 0) {
           alert(
             `✅ Pedido cadastrado com sucesso!\n\nℹ️ Observação de Estoque / Envase:\n${stockNotes.join('\n')}\n\nO pedido foi registrado para o planejamento de envase e produção.`
           );
@@ -1612,6 +1617,18 @@ export default function PedidosPage() {
             }`}
           >
             Em Aberto ({orders.filter(o => o.status === 'CONFIRMADO' || o.status === 'EM_SEPARACAO' || o.status === 'EM_ROTA').length})
+          </button>
+
+          <button
+            onClick={() => setStatusFilter('ORCAMENTO')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1 ${
+              statusFilter === 'ORCAMENTO'
+                ? 'bg-amber-600 text-white shadow-xs font-black'
+                : 'bg-amber-50/80 text-amber-900 border border-amber-300 border-dashed hover:bg-amber-100'
+            }`}
+          >
+            <Clock className="w-3 h-3 text-amber-600" />
+            <span>Orçamentos ({orders.filter(o => o.status === 'ORCAMENTO').length})</span>
           </button>
 
           <button
@@ -2015,6 +2032,52 @@ export default function PedidosPage() {
               </div>
             </div>
 
+            {/* Orçamento Alert & Actions Banner */}
+            {selectedOrder.status === 'ORCAMENTO' && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border-2 border-dashed border-amber-400 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-200/80 rounded-xl text-amber-800">
+                    <Clock className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-black text-sm text-amber-950">
+                        Orçamento & Pré-Reserva de Data
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                        ⏳ Aguardando Confirmação
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-800/90 mt-0.5">
+                      Este orçamento reserva preventivamente a data, chopp e chopeiras na agenda, mas ainda não foi faturado como venda definitiva.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Deseja realmente cancelar este orçamento e liberar as chopeiras e barris reservados?')) {
+                        handleQuickStatusChange(selectedOrder.id, 'CANCELADO');
+                      }
+                    }}
+                    className="px-3 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all"
+                  >
+                    Cancelar Orçamento
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickStatusChange(selectedOrder.id, 'CONFIRMADO')}
+                    className="px-4 py-2 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Efetivar & Confirmar Pedido</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Modal Tabs */}
             <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
               <button
@@ -2398,7 +2461,7 @@ export default function PedidosPage() {
                       className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center gap-1.5 text-xs transition-all"
                     >
                       <Printer className="w-4 h-4" />
-                      <span>Imprimir</span>
+                      <span>{selectedOrder.status === 'ORCAMENTO' ? 'Imprimir Orçamento' : 'Imprimir Pedido'}</span>
                     </button>
 
                     <button
@@ -3552,7 +3615,7 @@ export default function PedidosPage() {
                 );
               })()}
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setNewModalOpen(false)}
@@ -3560,13 +3623,24 @@ export default function PedidosPage() {
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Gerar Pedido</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => handleCreateOrder(e, 'ORCAMENTO')}
+                    className="px-4 py-2.5 font-bold rounded-xl border-2 border-dashed border-amber-400 bg-amber-50/90 hover:bg-amber-100 text-amber-900 transition-all text-xs active:scale-95 flex items-center gap-1.5"
+                    title="Gera orçamento e bloqueia preventivamente a data, chopp e chopeiras sem faturamento"
+                  >
+                    <Clock className="w-4 h-4 text-amber-600" />
+                    <span>Salvar Orçamento (Pré-Reserva)</span>
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Gerar Pedido Confirmado</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

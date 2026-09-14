@@ -351,6 +351,16 @@ export default function OrderCalendarView({
       };
     }
 
+    if (ev.status === 'ORCAMENTO') {
+      return {
+        bg: 'bg-amber-100/80 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50',
+        border: 'border-2 border-dashed border-amber-400 dark:border-amber-500',
+        text: 'text-amber-950 dark:text-amber-200',
+        badge: 'bg-amber-400/90 text-amber-950 font-black',
+        icon: <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400 flex-shrink-0" />,
+      };
+    }
+
     // Padrão: Pendente / Confirmado
     return {
       bg: 'bg-amber-500/20 dark:bg-amber-950/60 hover:bg-amber-500/30',
@@ -579,7 +589,14 @@ export default function OrderCalendarView({
 
                           {/* Segunda linha: Detalhes do Chopp / Volume */}
                           <div className="flex items-center justify-between text-[9px] opacity-75 font-mono">
-                            <span>#{ev.order.orderNumber}</span>
+                            <span className="flex items-center gap-1">
+                              #{ev.order.orderNumber}
+                              {ev.status === 'ORCAMENTO' && (
+                                <span className="text-[8px] bg-amber-200/90 dark:bg-amber-900/80 text-amber-950 dark:text-amber-200 px-1 py-0.2 rounded font-sans font-black">
+                                  Orçamento
+                                </span>
+                              )}
+                            </span>
                             {ev.totalLiters > 0 && <span>{ev.totalLiters}L</span>}
                           </div>
                         </div>
@@ -649,9 +666,14 @@ export default function OrderCalendarView({
                             className={`p-3 rounded-xl border cursor-pointer transition-all shadow-xs space-y-1.5 ${style.bg} ${style.border} ${style.text}`}
                           >
                             <div className="flex items-center justify-between gap-1">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 {style.icon}
                                 <span className="font-mono text-xs font-black">#{ev.order.orderNumber}</span>
+                                {ev.status === 'ORCAMENTO' && (
+                                 <span className="text-[10px] bg-amber-200/90 dark:bg-amber-900/80 text-amber-950 dark:text-amber-200 px-1.5 py-0.5 rounded font-black">
+                                   ⏳ Orçamento
+                                 </span>
+                                )}
                               </div>
                               <span className="text-[10px] font-mono font-bold bg-white/40 dark:bg-slate-900/60 px-1.5 py-0.5 rounded">
                                 {ev.time}
@@ -732,9 +754,14 @@ export default function OrderCalendarView({
                     className={`p-3 rounded-xl border cursor-pointer transition-all shadow-xs flex items-center justify-between gap-3 ${style.bg} ${style.border} ${style.text}`}
                   >
                     <div>
-                      <div className="flex items-center gap-1.5 text-xs font-black">
+                      <div className="flex items-center gap-1.5 text-xs font-black flex-wrap">
                         {style.icon}
                         <span>#{ev.order.orderNumber}</span>
+                        {ev.status === 'ORCAMENTO' && (
+                          <span className="text-[10px] bg-amber-200/90 dark:bg-amber-900/80 text-amber-950 dark:text-amber-200 px-1.5 py-0.2 rounded font-black">
+                            ⏳ Orçamento
+                          </span>
+                        )}
                         <span className="font-mono opacity-75">({ev.time})</span>
                       </div>
                       <span className="block text-xs font-bold mt-0.5">{ev.clientName}</span>

@@ -132,7 +132,7 @@ export const ROLE_MAP: Record<string, { label: string; description: string; colo
 };
 
 export const ORDER_STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  ORCAMENTO: { label: 'Orçamento', color: 'text-slate-800', bg: 'bg-slate-100' },
+  ORCAMENTO: { label: 'Orçamento (A Confirmar)', color: 'text-amber-900 dark:text-amber-200', bg: 'bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 border-dashed' },
   CONFIRMADO: { label: 'Confirmado', color: 'text-blue-800', bg: 'bg-blue-100' },
   EM_SEPARACAO: { label: 'Em Separação', color: 'text-purple-800', bg: 'bg-purple-100' },
   EM_ROTA: { label: 'Em Rota / Trânsito', color: 'text-amber-800', bg: 'bg-amber-100' },

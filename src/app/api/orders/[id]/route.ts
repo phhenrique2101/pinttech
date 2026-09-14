@@ -211,16 +211,43 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
     }
 
-    // Update primary pending transaction amount in financial if exists
+    // Update or create pending transaction in financial
     const primaryTx = await prisma.financialTransaction.findFirst({
       where: { orderId: params.id, status: 'PENDENTE' },
     });
     if (primaryTx) {
-      await prisma.financialTransaction.update({
-        where: { id: primaryTx.id },
+      if (updated.status === 'CANCELADO') {
+        await prisma.financialTransaction.update({
+          where: { id: primaryTx.id },
+          data: { status: 'CANCELADO' },
+        });
+      } else {
+        await prisma.financialTransaction.update({
+          where: { id: primaryTx.id },
+          data: {
+            amount: remaining > 0 ? remaining : finalTotal,
+            dueDate: updated.deliveryDate || new Date(),
+          },
+        });
+      }
+    } else if (
+      existing.status === 'ORCAMENTO' &&
+      updated.status !== 'ORCAMENTO' &&
+      updated.status !== 'CANCELADO' &&
+      finalTotal > 0
+    ) {
+      // Create accounts receivable now that quote is confirmed/effective
+      await prisma.financialTransaction.create({
         data: {
+          breweryId: session.breweryId,
+          orderId: updated.id,
+          type: 'RECEITA',
+          category: 'VENDA_CERVEJA',
+          description: `Venda ${existing.orderNumber} - ${existing.client.tradeName || existing.client.name}`,
           amount: remaining > 0 ? remaining : finalTotal,
           dueDate: updated.deliveryDate || new Date(),
+          status: 'PENDENTE',
+          paymentMethod: updated.paymentMethod || 'PIX',
         },
       });
     }

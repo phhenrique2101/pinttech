@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
     const {
       clientId,
       priceTableId,
+      status: initialStatus,
       deliveryDate,
       estimatedReturnDate,
       deliveryAddress,
@@ -67,8 +68,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Selecione um cliente' }, { status: 400 });
     }
 
+    const orderStatus = initialStatus === 'ORCAMENTO' ? 'ORCAMENTO' : 'CONFIRMADO';
     const orderCount = await prisma.order.count({ where: { breweryId: session.breweryId } });
-    const orderNumber = `PED-${new Date().getFullYear()}-${String(orderCount + 1).padStart(4, '0')}`;
+    const prefix = orderStatus === 'ORCAMENTO' ? 'ORC' : 'PED';
+    const orderNumber = `${prefix}-${new Date().getFullYear()}-${String(orderCount + 1).padStart(4, '0')}`;
 
     let computedSubtotal = 0;
     const processedItems: any[] = [];
@@ -130,7 +133,7 @@ export async function POST(req: NextRequest) {
         orderNumber,
         clientId,
         priceTableId: priceTableId ? String(priceTableId) : null,
-        status: 'CONFIRMADO',
+        status: orderStatus,
         deliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
         estimatedReturnDate: estimatedReturnDate ? new Date(estimatedReturnDate) : null,
         deliveryAddress,
@@ -185,10 +188,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Automatically create Accounts Receivable in Finance
+    // Automatically create Accounts Receivable in Finance (only for confirmed orders, not quotes)
     const client = await prisma.client.findUnique({ where: { id: clientId } });
 
-    if (finalTotal > 0) {
+    if (finalTotal > 0 && orderStatus !== 'ORCAMENTO') {
       await prisma.financialTransaction.create({
         data: {
           breweryId: session.breweryId,
