@@ -48,6 +48,7 @@ import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMEN
 import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import QuickClientModal from '@/components/clients/QuickClientModal';
+import OrderCalendarView from '@/components/orders/OrderCalendarView';
 
 // Função para sanitizar e extrair apenas o nome puro do produto/cerveja (sem lotes, barris, prefixos R$ ou datas)
 function cleanProductName(name: string): string {
@@ -527,7 +528,7 @@ export default function PedidosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [viewMode, setViewMode] = useState<'GRID' | 'TABLE'>('GRID');
+  const [viewMode, setViewMode] = useState<'GRID' | 'TABLE' | 'CALENDAR'>('GRID');
 
   // Selected order modal for details / edit / payment
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -1438,7 +1439,7 @@ export default function PedidosPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Alternar Visualização Cards / Tabela */}
+          {/* Alternar Visualização Cards / Tabela / Agenda */}
           <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
             <button
               onClick={() => setViewMode('GRID')}
@@ -1459,6 +1460,16 @@ export default function PedidosPage() {
             >
               <List className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Tabela</span>
+            </button>
+            <button
+              onClick={() => setViewMode('CALENDAR')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'CALENDAR' ? 'bg-amber-500 text-slate-950 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Visualização em Agenda / Calendário de Entregas"
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Agenda</span>
             </button>
           </div>
 
@@ -1539,6 +1550,18 @@ export default function PedidosPage() {
               <CalendarDays className="w-3.5 h-3.5" />
               <span>{statusFilter === 'TODAY' ? 'Mostrando Entregas de Hoje ✓' : 'Ver Entregas de Hoje'}</span>
             </button>
+
+            <button
+              onClick={() => {
+                setStatusFilter('ALL');
+                setViewMode('CALENDAR');
+              }}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-all flex items-center gap-1.5 shadow-xs"
+              title="Abrir Agenda / Calendário Completo"
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>Ver na Agenda</span>
+            </button>
           </div>
         </div>
       )}
@@ -1615,9 +1638,25 @@ export default function PedidosPage() {
         </div>
       </div>
 
-      {/* Orders View: CARDS COMPACTOS OU TABELA */}
+      {/* Orders View: CARDS, TABELA OU AGENDA */}
       {loading ? (
         <div className="text-center py-12 text-slate-400 font-medium">Carregando pedidos...</div>
+      ) : viewMode === 'CALENDAR' ? (
+        /* VISUALIZAÇÃO EM AGENDA / CALENDÁRIO DE ENTREGAS */
+        <OrderCalendarView
+          orders={filteredOrders}
+          onSelectOrder={(order) => openOrderDetails(order, 'DETAILS')}
+          onCreateOrderOnDate={(dateStr) => {
+            setClientId('');
+            setDriverName('');
+            setDeliveryAddress('');
+            setSelectedEquipments([]);
+            setOrderItems([]);
+            setNewPriceTableId(priceTables.find((t) => t.isDefault)?.id || '');
+            setDeliveryDate(dateStr);
+            setNewModalOpen(true);
+          }}
+        />
       ) : filteredOrders.length === 0 ? (
         <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 p-8 shadow-xs">
           Nenhum pedido encontrado com os filtros selecionados.
