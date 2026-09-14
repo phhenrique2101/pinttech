@@ -16,6 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           orderBy: { createdAt: 'desc' },
           take: 10,
         },
+        priceTable: true,
       },
     });
 
@@ -63,6 +64,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       zipCode,
       notes,
       creditLimit,
+      priceTableId,
     } = body;
 
     if (!name && !tradeName) {
@@ -86,6 +88,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         zipCode: zipCode !== undefined ? zipCode : client.zipCode,
         notes: notes !== undefined ? notes : client.notes,
         creditLimit: creditLimit !== undefined ? (creditLimit ? parseFloat(creditLimit) : null) : client.creditLimit,
+        priceTableId: priceTableId !== undefined ? (priceTableId || null) : client.priceTableId,
+      },
+      include: {
+        priceTable: true,
       },
     });
 

@@ -23,6 +23,7 @@ import {
   Sparkles,
   BarChart3,
   ShieldCheck,
+  Tag,
 } from 'lucide-react';
 import { CurrentUser } from './Navbar';
 
@@ -65,6 +66,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
     { label: 'Produção & Tanques', href: '/producao', icon: Flame, badge: 'MAPA', highlight: true, moduleKey: 'PRODUCAO', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Estoque & Insumos', href: '/estoque', icon: Package, moduleKey: 'ESTOQUE', roles: ['SUPER_ADMIN', 'ADMIN', 'BREWER'] },
     { label: 'Pedidos & Comodato', href: '/pedidos', icon: ShoppingCart, moduleKey: 'PEDIDOS', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
+    { label: 'Tabelas de Preço', href: '/precos', icon: Tag, moduleKey: 'PEDIDOS', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'FINANCE', 'BREWER'] },
     { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, moduleKey: 'CLIENTES', roles: ['SUPER_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS', 'FINANCE'] },
     { label: 'Financeiro Cervejaria', href: '/financeiro', icon: DollarSign, moduleKey: 'FINANCEIRO', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
     { label: 'Relatórios & Exportação', href: '/relatorios', icon: Download, moduleKey: 'RELATORIOS', roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'SALES'] },

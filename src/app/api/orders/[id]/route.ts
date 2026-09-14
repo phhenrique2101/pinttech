@@ -12,6 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       include: {
         brewery: true,
         client: true,
+        priceTable: true,
         items: {
           include: { recipe: true, keg: true },
         },
@@ -50,6 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json();
     const {
       clientId,
+      priceTableId,
       status,
       deliveryDate,
       estimatedReturnDate,
@@ -147,6 +149,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       where: { id: params.id },
       data: {
         clientId: clientId || existing.clientId,
+        priceTableId: priceTableId !== undefined ? (priceTableId || null) : existing.priceTableId,
         status: status ?? existing.status,
         deliveryDate: deliveryDate ? new Date(deliveryDate) : existing.deliveryDate,
         estimatedReturnDate: estimatedReturnDate ? new Date(estimatedReturnDate) : existing.estimatedReturnDate,
@@ -241,6 +244,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       where: { id: params.id },
       include: {
         client: true,
+        priceTable: true,
         items: { include: { recipe: true, keg: true } },
         orderEquipments: { include: { equipment: true } },
         transactions: true,

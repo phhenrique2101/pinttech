@@ -40,9 +40,12 @@ SELECT
   c."creditLimit" AS credit_limit,
   c."retainedKegsCount" AS retained_kegs_count,
   c."createdAt" AS created_at,
-  c."updatedAt" AS updated_at
+  c."updatedAt" AS updated_at,
+  c."priceTableId" AS price_table_id,
+  pt."name" AS price_table_name
 FROM "Client" c
-JOIN "Brewery" b ON b."id" = c."breweryId";
+JOIN "Brewery" b ON b."id" = c."breweryId"
+LEFT JOIN "PriceTable" pt ON pt."id" = c."priceTableId";
 
 -- 3. DIMENSÃO: RECEITAS & PRODUTOS (BEER RECIPES)
 CREATE OR REPLACE VIEW vw_bi_dim_receitas AS
@@ -185,7 +188,9 @@ SELECT
   o."cautionDeposit" AS order_caution_deposit,
   o."totalAmount" AS order_total_amount,
   o."paidAmount" AS order_paid_amount,
-  o."remainingAmount" AS order_remaining_amount
+  o."remainingAmount" AS order_remaining_amount,
+  o."priceTableId" AS price_table_id,
+  pt."name" AS price_table_name
 FROM "OrderItem" oi
 JOIN "Order" o ON o."id" = oi."orderId"
 JOIN "Brewery" b ON b."id" = o."breweryId"
@@ -193,7 +198,8 @@ JOIN "Client" c ON c."id" = o."clientId"
 LEFT JOIN "BeerRecipe" r ON r."id" = oi."recipeId"
 LEFT JOIN "ProductionBatch" pb ON pb."id" = oi."batchId"
 LEFT JOIN "Keg" k ON k."id" = oi."kegId"
-LEFT JOIN "User" u ON u."id" = o."driverUserId";
+LEFT JOIN "User" u ON u."id" = o."driverUserId"
+LEFT JOIN "PriceTable" pt ON pt."id" = o."priceTableId";
 
 -- 9. FATO: LOTES DE PRODUÇÃO & BRASSAGENS
 CREATE OR REPLACE VIEW vw_bi_fato_producao_lotes AS
@@ -349,3 +355,21 @@ FROM "InventoryMovement" im
 JOIN "Brewery" b ON b."id" = im."breweryId"
 JOIN "InventoryItem" i ON i."id" = im."inventoryItemId"
 LEFT JOIN "ProductionBatch" pb ON pb."id" = im."batchId";
+
+-- 14. DIMENSÃO: TABELAS DE PREÇO & POLÍTICAS COMERCIAIS
+CREATE OR REPLACE VIEW vw_bi_dim_tabelas_preco AS
+SELECT
+  pt."id" AS price_table_id,
+  pt."breweryId" AS brewery_id,
+  b."name" AS brewery_name,
+  pt."name" AS price_table_name,
+  pt."description" AS price_table_description,
+  pt."type" AS price_table_type,
+  pt."isDefault" AS is_default,
+  pt."adjustmentPercent" AS adjustment_percent,
+  pt."active" AS is_active,
+  pt."createdAt" AS created_at,
+  pt."updatedAt" AS updated_at
+FROM "PriceTable" pt
+JOIN "Brewery" b ON b."id" = pt."breweryId";
+

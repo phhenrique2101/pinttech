@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
         equipment: {
           select: { id: true, code: true, name: true, type: true, status: true },
         },
+        priceTable: {
+          select: { id: true, name: true, type: true, adjustmentPercent: true },
+        },
         _count: {
           select: { orders: true, kegs: true, equipment: true },
         },
@@ -40,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (!session || !session.breweryId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const body = await req.json();
-    const { name, tradeName, document, email, phone, address, number, complement, neighborhood, city, state, zipCode, notes } = body;
+    const { name, tradeName, document, email, phone, address, number, complement, neighborhood, city, state, zipCode, notes, priceTableId } = body;
 
     const resolvedName = (name || tradeName)?.trim();
     if (!resolvedName) {
@@ -63,6 +66,11 @@ export async function POST(req: NextRequest) {
         state: state?.trim() || null,
         zipCode: zipCode?.trim() || null,
         notes: notes?.trim() || null,
+        creditLimit: body.creditLimit ? parseFloat(body.creditLimit) : null,
+        priceTableId: priceTableId || null,
+      },
+      include: {
+        priceTable: true,
       },
     });
 

@@ -535,8 +535,12 @@ export default function PedidosPage() {
   const [savingOrder, setSavingOrder] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
+  // Price Tables State
+  const [priceTables, setPriceTables] = useState<any[]>([]);
+
   // Edit Order Form State
   const [editClientId, setEditClientId] = useState('');
+  const [editPriceTableId, setEditPriceTableId] = useState('');
   const [editDriverName, setEditDriverName] = useState('');
   const [editStatus, setEditStatus] = useState('CONFIRMADO');
   const [editDeliveryDate, setEditDeliveryDate] = useState('');
@@ -561,6 +565,7 @@ export default function PedidosPage() {
   // New order modal state
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [clientId, setClientId] = useState('');
+  const [newPriceTableId, setNewPriceTableId] = useState('');
   const [driverName, setDriverName] = useState('');
   const [orderItems, setOrderItems] = useState<{ recipeId: string; quantity: number; unitPrice: number; kegCapacity?: number }[]>([]);
   const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
@@ -786,22 +791,24 @@ export default function PedidosPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [oRes, cRes, rRes, eRes, kRes, uRes] = await Promise.all([
+      const [oRes, cRes, rRes, eRes, kRes, uRes, ptRes] = await Promise.all([
         fetch('/api/orders'),
         fetch('/api/clients'),
         fetch('/api/recipes'),
         fetch('/api/equipment'),
         fetch('/api/kegs'),
         fetch('/api/users'),
+        fetch('/api/prices/tables'),
       ]);
 
-      const [oData, cData, rData, eData, kData, uData] = await Promise.all([
+      const [oData, cData, rData, eData, kData, uData, ptData] = await Promise.all([
         oRes.json(),
         cRes.json(),
         rRes.json(),
         eRes.json(),
         kRes.json(),
         uRes.json(),
+        ptRes.json(),
       ]);
 
       if (Array.isArray(oData)) setOrders(oData);
@@ -814,6 +821,7 @@ export default function PedidosPage() {
       if (Array.isArray(eData)) setEquipment(eData);
       if (Array.isArray(kData)) setKegs(kData);
       if (Array.isArray(uData)) setUsers(uData);
+      if (Array.isArray(ptData)) setPriceTables(ptData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -824,6 +832,71 @@ export default function PedidosPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Helper para resolver o preço unitário do barril com base na tabela de preço selecionada
+  const resolveBeerPrice = (recipe: any, capacity: number = 50, tableId?: string) => {
+    if (!recipe) return 20 * capacity;
+    const baseLiter = Number(recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 20);
+    const costLiter = Number(recipe.costPerLiter || baseLiter);
+
+    const targetTableId = tableId || priceTables.find((t) => t.isDefault)?.id;
+    const table = priceTables.find((t) => t.id === targetTableId);
+
+    if (!table) {
+      return baseLiter * capacity;
+    }
+
+    // 1. Preço fixado customizado para essa receita nessa tabela
+    const item = (table.items || []).find((it: any) => it.recipeId === recipe.id);
+    if (item && Number(item.pricePerLiter) > 0) {
+      return Math.round(Number(item.pricePerLiter) * capacity * 100) / 100;
+    }
+
+    // 2. Tabela no modelo PREÇO DE CUSTO (AT_COST)
+    if (table.type === 'AT_COST') {
+      return Math.round(costLiter * capacity * 100) / 100;
+    }
+
+    // 3. Tabela com percentual de ajuste sobre o preço base
+    if (table.adjustmentPercent) {
+      const adjusted = baseLiter * (1 + Number(table.adjustmentPercent) / 100);
+      return Math.round(adjusted * capacity * 100) / 100;
+    }
+
+    return baseLiter * capacity;
+  };
+
+  const handleNewPriceTableChange = (tableId: string) => {
+    setNewPriceTableId(tableId);
+    setOrderItems((prev) =>
+      prev.map((it) => {
+        const r = recipes.find((rec) => rec.id === it.recipeId);
+        if (!r) return it;
+        const cap = it.kegCapacity || 50;
+        return {
+          ...it,
+          unitPrice: resolveBeerPrice(r, cap, tableId),
+        };
+      })
+    );
+  };
+
+  const handleEditPriceTableChange = (tableId: string) => {
+    setEditPriceTableId(tableId);
+    setEditItems((prev) =>
+      prev.map((it) => {
+        const r = recipes.find((rec) => rec.id === it.recipeId);
+        if (!r) return it;
+        const cap = it.kegCapacity || 50;
+        const uPrice = resolveBeerPrice(r, cap, tableId);
+        return {
+          ...it,
+          unitPrice: uPrice,
+          totalPrice: (it.quantity || 1) * uPrice,
+        };
+      })
+    );
+  };
 
   const handleClientSelectForNewOrder = (selectedId: string) => {
     setClientId(selectedId);
@@ -839,6 +912,23 @@ export default function PedidosPage() {
         .filter(Boolean)
         .join(', ');
       setDeliveryAddress(fullAddr);
+
+      // Auto-selecionar a tabela de preço configurada no cliente
+      const assignedTableId = client.priceTableId || priceTables.find((t) => t.isDefault)?.id || '';
+      if (assignedTableId) {
+        setNewPriceTableId(assignedTableId);
+        setOrderItems((prev) =>
+          prev.map((it) => {
+            const r = recipes.find((rec) => rec.id === it.recipeId);
+            if (!r) return it;
+            const cap = it.kegCapacity || 50;
+            return {
+              ...it,
+              unitPrice: resolveBeerPrice(r, cap, assignedTableId),
+            };
+          })
+        );
+      }
     }
   };
 
@@ -863,9 +953,15 @@ export default function PedidosPage() {
     if (quickClientTarget === 'NEW_ORDER') {
       setClientId(newClient.id);
       if (fullAddr) setDeliveryAddress(fullAddr);
+      if (newClient.priceTableId) {
+        setNewPriceTableId(newClient.priceTableId);
+      }
     } else {
       setEditClientId(newClient.id);
       if (fullAddr) setEditAddress(fullAddr);
+      if (newClient.priceTableId) {
+        setEditPriceTableId(newClient.priceTableId);
+      }
     }
   };
 
@@ -874,6 +970,7 @@ export default function PedidosPage() {
     setOrderModalTab(tab);
     setCopiedAddress(false);
     setEditClientId(order.clientId || '');
+    setEditPriceTableId(order.priceTableId || order.client?.priceTableId || priceTables.find((t) => t.isDefault)?.id || '');
     setEditDriverName(order.driverName || order.driverUser?.name || '');
     setEditStatus(order.status || 'CONFIRMADO');
     setEditDeliveryDate(order.deliveryDate ? new Date(order.deliveryDate).toISOString().split('T')[0] : '');
@@ -990,10 +1087,10 @@ export default function PedidosPage() {
 
     if (chosen) {
       const cap = chosen.bestCap || 50;
-      const defaultPrice = (chosen.recipe.salePricePerLiter || chosen.recipe.suggestedPricePerLiter || 20) * cap;
+      const defaultPrice = resolveBeerPrice(chosen.recipe, cap, newPriceTableId);
       setOrderItems([...orderItems, { recipeId: chosen.recipe.id, quantity: 1, unitPrice: defaultPrice, kegCapacity: cap }]);
     } else if (recipes.length > 0) {
-      const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
+      const defaultPrice = resolveBeerPrice(recipes[0], 50, newPriceTableId);
       setOrderItems([...orderItems, { recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
     }
   };
@@ -1045,7 +1142,7 @@ export default function PedidosPage() {
 
     if (chosen) {
       const cap = chosen.bestCap || 50;
-      const defaultPrice = (chosen.recipe.salePricePerLiter || chosen.recipe.suggestedPricePerLiter || 20) * cap;
+      const defaultPrice = resolveBeerPrice(chosen.recipe, cap, editPriceTableId);
       setEditItems([
         ...editItems,
         {
@@ -1058,7 +1155,7 @@ export default function PedidosPage() {
         },
       ]);
     } else if (recipes.length > 0) {
-      const defaultPrice = (recipes[0].salePricePerLiter || recipes[0].suggestedPricePerLiter || 20) * 50;
+      const defaultPrice = resolveBeerPrice(recipes[0], 50, editPriceTableId);
       setEditItems([
         ...editItems,
         {
@@ -1102,6 +1199,7 @@ export default function PedidosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId,
+          priceTableId: newPriceTableId || null,
           driverName: driverName.trim() || null,
           items: orderItems,
           equipmentIds: selectedEquipments,
@@ -1167,6 +1265,7 @@ export default function PedidosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId: editClientId,
+          priceTableId: editPriceTableId || null,
           driverName: editDriverName.trim() || null,
           status: editStatus,
           deliveryDate: editDeliveryDate || null,
@@ -1395,6 +1494,7 @@ export default function PedidosPage() {
               setDeliveryAddress('');
               setSelectedEquipments([]);
               setOrderItems([]);
+              setNewPriceTableId(priceTables.find((t) => t.isDefault)?.id || '');
               setNewModalOpen(true);
             }}
             className="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95"
@@ -1569,6 +1669,11 @@ export default function PedidosPage() {
                         >
                           {isPaid ? 'PAGO' : isPartial ? 'PARCIAL' : 'PENDENTE'}
                         </span>
+                        {order.priceTable && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200 truncate max-w-[100px]" title={`Tabela: ${order.priceTable.name}`}>
+                            {order.priceTable.name}
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-black text-slate-900 text-sm mt-0.5 truncate group-hover:text-amber-600 transition-colors">
                         {order.client?.tradeName || order.client?.name}
@@ -1711,7 +1816,14 @@ export default function PedidosPage() {
                         #{order.orderNumber}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {order.client?.tradeName || order.client?.name}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{order.client?.tradeName || order.client?.name}</span>
+                          {order.priceTable && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                              {order.priceTable.name}
+                            </span>
+                          )}
+                        </div>
                         {order.deliveryAddress && (
                           <span className="text-[10px] text-slate-400 block font-normal truncate max-w-[160px]">
                             {order.deliveryAddress}
@@ -1829,6 +1941,11 @@ export default function PedidosPage() {
                   >
                     {selectedOrder.paymentStatus === 'PAGO' ? 'PAGO' : selectedOrder.paymentStatus === 'PARCIAL' ? 'PAGAMENTO PARCIAL' : 'PAGAMENTO PENDENTE'}
                   </span>
+                  {selectedOrder.priceTable && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">
+                      Tabela: {selectedOrder.priceTable.name}
+                    </span>
+                  )}
                 </div>
                 <h3 className="text-xl font-black text-slate-900 mt-1">
                   {selectedOrder.client?.tradeName || selectedOrder.client?.name}
@@ -2270,7 +2387,7 @@ export default function PedidosPage() {
             {/* TAB 2: EDITAR PEDIDO */}
             {orderModalTab === 'EDIT' && (
               <form onSubmit={handleSaveOrderEdits} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block font-bold text-slate-700">Cliente / Ponto de Venda</label>
@@ -2296,6 +2413,9 @@ export default function PedidosPage() {
                           const addr = [c.address, c.number, c.neighborhood, c.city].filter(Boolean).join(', ');
                           setEditAddress(addr);
                         }
+                        if (c.priceTableId) {
+                          handleEditPriceTableChange(c.priceTableId);
+                        }
                       }}
                       onOpenQuickCreate={(initialName) => {
                         setQuickClientTarget('EDIT_ORDER');
@@ -2303,6 +2423,27 @@ export default function PedidosPage() {
                         setQuickClientModalOpen(true);
                       }}
                     />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Tabela de Preço</span>
+                      {editPriceTableId && priceTables.find((t) => t.id === editPriceTableId)?.type === 'AT_COST' && (
+                        <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200">Preço de Custo</span>
+                      )}
+                    </label>
+                    <select
+                      value={editPriceTableId}
+                      onChange={(e) => handleEditPriceTableChange(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="">Padrão da Cervejaria</option>
+                      {priceTables.map((pt) => (
+                        <option key={pt.id} value={pt.id}>
+                          {pt.name} {pt.isDefault ? '(Padrão)' : ''} {pt.adjustmentPercent ? `(${pt.adjustmentPercent > 0 ? '+' : ''}${pt.adjustmentPercent}%)` : ''} {pt.type === 'AT_COST' ? '(Custo)' : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -2438,7 +2579,7 @@ export default function PedidosPage() {
                                   updated[idx].recipeId = r.id;
                                   updated[idx].kegCapacity = cap;
                                   updated[idx].description = `Barril ${cap}L - ${r.name}`;
-                                  updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                  updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
                                   updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
                                   setEditItems(updated);
                                 }}
@@ -2457,7 +2598,7 @@ export default function PedidosPage() {
                                   const r = recipes.find((rec) => rec.id === updated[idx].recipeId);
                                   if (r) {
                                     updated[idx].description = `Barril ${cap}L - ${r.name}`;
-                                    updated[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                    updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
                                     updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
                                   }
                                   setEditItems(updated);
@@ -2973,7 +3114,7 @@ export default function PedidosPage() {
                 ))}
               </datalist>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Busca Digitada de Cliente */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -3005,6 +3146,28 @@ export default function PedidosPage() {
                       setQuickClientModalOpen(true);
                     }}
                   />
+                </div>
+
+                {/* Tabela de Preço */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Tabela de Preço</span>
+                    {newPriceTableId && priceTables.find((t) => t.id === newPriceTableId)?.type === 'AT_COST' && (
+                      <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200">Preço de Custo</span>
+                    )}
+                  </label>
+                  <select
+                    value={newPriceTableId}
+                    onChange={(e) => handleNewPriceTableChange(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                  >
+                    <option value="">Padrão da Cervejaria</option>
+                    {priceTables.map((pt) => (
+                      <option key={pt.id} value={pt.id}>
+                        {pt.name} {pt.isDefault ? '(Padrão)' : ''} {pt.adjustmentPercent ? `(${pt.adjustmentPercent > 0 ? '+' : ''}${pt.adjustmentPercent}%)` : ''} {pt.type === 'AT_COST' ? '(Custo)' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -3114,7 +3277,7 @@ export default function PedidosPage() {
                                   const cap = recommendedCap || item.kegCapacity || 50;
                                   newItems[idx].recipeId = r.id;
                                   newItems[idx].kegCapacity = cap;
-                                  newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                  newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
                                   setOrderItems(newItems);
                                 }}
                               />
@@ -3131,7 +3294,7 @@ export default function PedidosPage() {
                                   newItems[idx].kegCapacity = cap;
                                   const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
                                   if (r) {
-                                    newItems[idx].unitPrice = (r.salePricePerLiter || r.suggestedPricePerLiter || 20) * cap;
+                                    newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
                                   }
                                   setOrderItems(newItems);
                                 }}

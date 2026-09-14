@@ -39,6 +39,7 @@ export default function ClientesPage() {
   const [selectedClientHistory, setSelectedClientHistory] = useState<any | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [priceTables, setPriceTables] = useState<any[]>([]);
 
   // Form states (Create / Edit)
   const [formData, setFormData] = useState({
@@ -56,14 +57,23 @@ export default function ClientesPage() {
     state: '',
     creditLimit: '',
     notes: '',
+    priceTableId: '',
   });
 
   const fetchClients = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/clients');
+      const [res, ptRes] = await Promise.all([
+        fetch('/api/clients'),
+        fetch('/api/prices/tables'),
+      ]);
       const data = await res.json();
       if (Array.isArray(data)) setClients(data);
+
+      if (ptRes.ok) {
+        const ptData = await ptRes.json();
+        if (Array.isArray(ptData)) setPriceTables(ptData);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -91,6 +101,7 @@ export default function ClientesPage() {
       state: '',
       creditLimit: '',
       notes: '',
+      priceTableId: '',
     });
     setErrorMessage('');
     setNewClientModal(true);
@@ -112,6 +123,7 @@ export default function ClientesPage() {
       state: client.state || '',
       creditLimit: client.creditLimit ? String(client.creditLimit) : '',
       notes: client.notes || '',
+      priceTableId: client.priceTableId || '',
     });
     setErrorMessage('');
     setEditClientModal(client);
@@ -699,6 +711,24 @@ export default function ClientesPage() {
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tabela de Preço Padrão (Opcional)
+                </label>
+                <select
+                  value={formData.priceTableId}
+                  onChange={(e) => setFormData({ ...formData, priceTableId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">Tabela Padrão da Cervejaria</option>
+                  {priceTables.map((pt) => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name} {pt.isDefault ? '(Padrão)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Observações Comerciais</label>
                 <textarea
                   rows={2}
@@ -882,6 +912,24 @@ export default function ClientesPage() {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold uppercase focus:bg-white focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tabela de Preço Padrão (Opcional)
+                </label>
+                <select
+                  value={formData.priceTableId}
+                  onChange={(e) => setFormData({ ...formData, priceTableId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">Tabela Padrão da Cervejaria</option>
+                  {priceTables.map((pt) => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name} {pt.isDefault ? '(Padrão)' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

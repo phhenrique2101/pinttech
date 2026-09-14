@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
       include: {
         brewery: true,
         client: true,
+        priceTable: true,
         items: {
           include: {
             keg: true,
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       clientId,
+      priceTableId,
       deliveryDate,
       estimatedReturnDate,
       deliveryAddress,
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
         breweryId: session.breweryId,
         orderNumber,
         clientId,
+        priceTableId: priceTableId ? String(priceTableId) : null,
         status: 'CONFIRMADO',
         deliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
         estimatedReturnDate: estimatedReturnDate ? new Date(estimatedReturnDate) : null,
@@ -205,6 +208,7 @@ export async function POST(req: NextRequest) {
       where: { id: order.id },
       include: {
         client: true,
+        priceTable: true,
         items: true,
         orderEquipments: true,
       },

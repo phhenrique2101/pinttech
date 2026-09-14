@@ -12,6 +12,7 @@ import {
   Wrench,
   UserCheck,
   LogOut,
+  Tag,
 } from 'lucide-react';
 import { getSessionFromCookies } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -28,6 +29,7 @@ export default function MobileMenuPage() {
     { label: 'Produção & Tanques (MAPA)', href: '/producao', icon: Flame, color: 'text-amber-600 bg-amber-50 font-bold' },
     { label: 'Estoque de Insumos', href: '/estoque', icon: Package, color: 'text-emerald-600 bg-emerald-50' },
     { label: 'Pedidos & Vendas', href: '/pedidos', icon: ShoppingCart, color: 'text-indigo-600 bg-indigo-50' },
+    { label: 'Tabelas de Preço', href: '/precos', icon: Tag, color: 'text-amber-600 bg-amber-50 font-bold' },
     { label: 'Clientes & Vasilhames', href: '/clientes', icon: Users, color: 'text-cyan-600 bg-cyan-50' },
     { label: 'Módulo Financeiro', href: '/financeiro', icon: DollarSign, color: 'text-violet-600 bg-violet-50' },
     { label: 'Usuários & Permissões', href: '/usuarios', icon: UserCheck, color: 'text-slate-600 bg-slate-100' },

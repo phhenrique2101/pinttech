@@ -45,6 +45,7 @@ model Brewery {
   financialTransactions FinancialTransaction[]
   saasPayments          SaasSubscriptionPayment[]
   actionLogs            ActionLog[]
+  priceTables           PriceTable[]
 }
 
 // ----------------------------------------------------
@@ -251,6 +252,7 @@ model BeerRecipe {
   batches               ProductionBatch[]
   orderItems            OrderItem[]
   ingredients           RecipeIngredient[]
+  priceTableItems       PriceTableItem[]
 }
 
 // ----------------------------------------------------
@@ -480,6 +482,8 @@ model Client {
   creditLimit       Float?
   retainedKegsCount Int                    @default(0)
   notes             String?
+  priceTableId      String?
+  priceTable        PriceTable?            @relation(fields: [priceTableId], references: [id], onDelete: SetNull)
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
@@ -541,6 +545,8 @@ model Order {
   driverUser          User?                  @relation("DriverOrders", fields: [driverUserId], references: [id], onDelete: SetNull)
   driverName          String?
   notes               String?
+  priceTableId        String?
+  priceTable          PriceTable?            @relation(fields: [priceTableId], references: [id], onDelete: SetNull)
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
 
@@ -626,5 +632,42 @@ model ActionLog {
   canUndo      Boolean   @default(true)
   undone       Boolean   @default(false)
   createdAt    DateTime  @default(now())
+}
+
+// ----------------------------------------------------
+// TABELAS DE PREÇO & LISTAS PERSONALIZADAS
+// ----------------------------------------------------
+model PriceTable {
+  id                 String           @id @default(uuid())
+  breweryId          String
+  brewery            Brewery          @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?
+  type               String           @default("CUSTOM") // STANDARD, AT_COST, DISCOUNT_PERCENT, MARKUP_PERCENT, CUSTOM
+  adjustmentPercent  Float?           @default(0) // ex: -15 para 15% de desconto, +20 para 20% acima
+  isDefault          Boolean          @default(false)
+  active             Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  items              PriceTableItem[]
+  clients            Client[]
+  orders             Order[]
+
+  @@index([breweryId])
+}
+
+model PriceTableItem {
+  id            String      @id @default(uuid())
+  priceTableId  String
+  priceTable    PriceTable  @relation(fields: [priceTableId], references: [id], onDelete: Cascade)
+  recipeId      String
+  recipe        BeerRecipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  pricePerLiter Float
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([priceTableId, recipeId])
 }
 
