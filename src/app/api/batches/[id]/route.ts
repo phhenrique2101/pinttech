@@ -381,12 +381,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return updatedBatch;
     });
 
-    // If status changed to FINALIZADO or tank released, free the tank
+    // Synchronize tank occupation if tankId changed or batch finalized
     if (status === 'FINALIZADO' && existing.tankId) {
       await prisma.tank.update({
         where: { id: existing.tankId },
         data: { status: 'LIVRE', currentBatchId: null },
       });
+    } else if (tankId !== undefined && tankId !== existing.tankId) {
+      if (existing.tankId) {
+        await prisma.tank.update({
+          where: { id: existing.tankId },
+          data: { status: 'LIVRE', currentBatchId: null },
+        });
+      }
+      if (tankId) {
+        await prisma.tank.update({
+          where: { id: tankId },
+          data: { status: 'OCUPADO', currentBatchId: params.id },
+        });
+      }
     }
 
     await prisma.actionLog.create({

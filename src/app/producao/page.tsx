@@ -97,6 +97,7 @@ export default function ProducaoPage() {
 
   // Status update modal / quick edit
   const [editingBatchStatus, setEditingBatchStatus] = useState<any | null>(null);
+  const [editingBatchTankId, setEditingBatchTankId] = useState<string>('');
   const [newStatus, setNewStatus] = useState<string>('');
   const [newMeasuredFg, setNewMeasuredFg] = useState<string>('');
   const [newMeasuredAbv, setNewMeasuredAbv] = useState<string>('');
@@ -206,6 +207,17 @@ export default function ProducaoPage() {
   const unassignedBatches = useMemo(() => {
     return activeBatches.filter((b) => !b.tankId && !b.tank);
   }, [activeBatches]);
+
+  const filteredUnassignedBatches = useMemo(() => {
+    if (!search.trim()) return unassignedBatches;
+    const q = search.toLowerCase();
+    return unassignedBatches.filter(
+      (b) =>
+        b.batchNumber?.toLowerCase().includes(q) ||
+        b.recipe?.name?.toLowerCase().includes(q) ||
+        b.recipe?.style?.toLowerCase().includes(q)
+    );
+  }, [unassignedBatches, search]);
 
   // Busca do Lote Ativo correspondente a um Tanque
   const getTankActiveBatch = (t: any) => {
@@ -619,7 +631,10 @@ export default function ProducaoPage() {
     if (!editingBatchStatus) return;
     setSavingStatus(true);
     try {
-      const payload: any = { status: newStatus };
+      const payload: any = {
+        status: newStatus,
+        tankId: editingBatchTankId || null,
+      };
       if (newMeasuredFg) payload.measuredFg = parseFloat(newMeasuredFg);
       if (newMeasuredAbv) payload.measuredAbv = parseFloat(newMeasuredAbv);
 
@@ -647,6 +662,26 @@ export default function ProducaoPage() {
     setNewStatus(batch.status || 'FERMENTANDO');
     setNewMeasuredFg(batch.measuredFg ? String(batch.measuredFg) : '');
     setNewMeasuredAbv(batch.measuredAbv ? String(batch.measuredAbv) : '');
+    setEditingBatchTankId(batch.tankId || batch.tank?.id || '');
+  };
+
+  const handleAssignTankToBatch = async (batchId: string, tankId: string) => {
+    if (!tankId) return;
+    try {
+      const res = await fetch(`/api/batches/${batchId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankId }),
+      });
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert('Erro ao vincular lote ao tanque.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão ao vincular tanque.');
+    }
   };
 
   // Funções de Gestão de Tanques
@@ -897,7 +932,13 @@ export default function ProducaoPage() {
           {[
             { id: 'PRODUCTION_TANKS', label: 'Produção & Tanques', count: tanks.length, icon: Flame },
             { id: 'HISTORY_MAPA', label: 'Lotes Finalizados', count: historicalBatches.length, icon: ShieldCheck },
-            { id: 'RECIPES', label: 'Catálogo de Receitas', count: recipes.length, icon: Beer },
+            {
+              id: 'RECIPES',
+              label: 'Catálogo de Receitas',
+              count: recipes.length,
+              extraBadge: unassignedBatches.length > 0 ? `${unassignedBatches.length} sem tanque` : undefined,
+              icon: Beer,
+            },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -916,6 +957,11 @@ export default function ProducaoPage() {
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-slate-950 text-amber-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
                   {tab.count}
                 </span>
+                {tab.extraBadge && (
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-slate-900 text-amber-400 border border-amber-300/40' : 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40'}`}>
+                    ⚡ {tab.extraBadge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -937,80 +983,6 @@ export default function ProducaoPage() {
       {/* ABA UNIFICADA: PRODUÇÃO & TANQUES */}
       {activeTab === 'PRODUCTION_TANKS' && (
         <div className="space-y-5">
-          {/* Alerta de Lotes Ativos sem Tanque Atribuído (se houver) */}
-          {unassignedBatches.length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/40 rounded-2xl p-4 shadow-xs space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <div>
-                    <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200">
-                      Atenção: {unassignedBatches.length} {unassignedBatches.length === 1 ? 'lote ativo cadastrado sem tanque atribuído' : 'lotes ativos cadastrados sem tanque atribuído'}
-                    </h4>
-                    <p className="text-xs text-amber-800/90 dark:text-amber-300/80">
-                      Estes lotes foram lançados sem vínculo a um fermentador físico. Você pode gerenciar suas medições ou atribuir a um tanque:
-                    </p>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 text-xs font-mono font-bold shrink-0">
-                  Sem Tanque
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-amber-200 dark:border-amber-500/20">
-                {unassignedBatches.map((b) => (
-                  <div
-                    key={b.id}
-                    className="bg-white dark:bg-slate-900/90 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3.5 space-y-2 flex flex-col justify-between shadow-2xs"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
-                          #{b.batchNumber}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                          {b.status}
-                        </span>
-                      </div>
-                      <strong className="text-slate-900 dark:text-white block text-sm mt-1 truncate">
-                        {b.recipe?.name || 'Cerveja'}
-                      </strong>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate">
-                        {b.recipe?.style || 'Standard'} • {b.volumeProducedLiters || b.volumePlannedLiters || 0}L
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <button
-                        onClick={() => setSelectedBatchForManager(b)}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200/80 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1"
-                        title="Abrir Adega & Medições"
-                      >
-                        <Activity className="w-3.5 h-3.5" />
-                        <span>Adega</span>
-                      </button>
-                      <button
-                        onClick={() => setSelectedBatchForSheet(b)}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center justify-center gap-1 border border-slate-200 dark:border-transparent"
-                        title="Ficha Oficial MAPA"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">MAPA</span>
-                      </button>
-                      <button
-                        onClick={() => openBatchStatusModal(b)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
-                        title="Atualizar Status"
-                      >
-                        <Sliders className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Sub-abas de Produção: Tanques e Tarefas */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-2 flex-wrap">
@@ -2407,9 +2379,108 @@ export default function ProducaoPage() {
         </div>
       )}
 
-      {/* ABA 4: CATÁLOGO DE RECEITAS (BEERXML) */}
+      {/* ABA: CATÁLOGO DE RECEITAS & LOTES SEM TANQUE */}
       {activeTab === 'RECIPES' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Seção de Lotes Ativos sem Tanque Atribuído */}
+          {unassignedBatches.length > 0 && (
+            <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/40 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200">
+                      Lotes Ativos sem Tanque Atribuído ({unassignedBatches.length})
+                    </h4>
+                    <p className="text-xs text-amber-800/90 dark:text-amber-300/80">
+                      Estes lotes estão ativos na produção mas ainda não foram vinculados a um tanque fermentador físico:
+                    </p>
+                  </div>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 text-xs font-mono font-bold self-start sm:self-auto shrink-0">
+                  {unassignedBatches.length} {unassignedBatches.length === 1 ? 'lote sem tanque' : 'lotes sem tanque'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-amber-200 dark:border-amber-500/20">
+                {filteredUnassignedBatches.map((b) => (
+                  <div
+                    key={b.id}
+                    className="bg-white dark:bg-slate-900/90 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between shadow-2xs"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
+                          #{b.batchNumber}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          {b.status}
+                        </span>
+                      </div>
+                      <strong className="text-slate-900 dark:text-white block text-sm mt-1 truncate">
+                        {b.recipe?.name || 'Cerveja'}
+                      </strong>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate">
+                        {b.recipe?.style || 'Standard'} • {b.volumeProducedLiters || b.volumePlannedLiters || 0}L
+                      </span>
+                    </div>
+
+                    {/* Atribuir Tanque Rápido */}
+                    <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                        Atribuir a Tanque:
+                      </label>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleAssignTankToBatch(b.id, e.target.value);
+                          }
+                        }}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none"
+                      >
+                        <option value="">Selecionar Tanque Livre...</option>
+                        {tanks.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.capacityLiters}L) {t.status === 'LIVRE' ? '• Livre' : '• Ocupado'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        onClick={() => setSelectedBatchForManager(b)}
+                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200/80 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1"
+                        title="Abrir Adega & Medições"
+                      >
+                        <Activity className="w-3.5 h-3.5" />
+                        <span>Adega</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedBatchForSheet(b)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center justify-center gap-1 border border-slate-200 dark:border-transparent"
+                        title="Ficha Oficial MAPA"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">MAPA</span>
+                      </button>
+                      <button
+                        onClick={() => openBatchStatusModal(b)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+                        title="Atualizar Status / Tanque"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-white text-sm">Receitas BeerSmith Importadas</h3>
@@ -2690,6 +2761,22 @@ export default function ProducaoPage() {
                   <option value="PRONTO_ENVASE">✨ PRONTO PARA ENVASE</option>
                   <option value="ENVASADO">🛢️ ENVASADO (Liberar Tanque)</option>
                   <option value="FINALIZADO">✅ FINALIZADO</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Tanque Alocado:</label>
+                <select
+                  value={editingBatchTankId}
+                  onChange={(e) => setEditingBatchTankId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                >
+                  <option value="">Sem Tanque Atribuído</option>
+                  {tanks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.capacityLiters}L) {t.status === 'LIVRE' || t.currentBatchId === editingBatchStatus?.id ? '• Disponível' : `• Ocupado (${t.status})`}
+                    </option>
+                  ))}
                 </select>
               </div>
 
