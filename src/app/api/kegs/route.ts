@@ -205,3 +205,108 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Erro ao criar barril' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = getSessionFromRequest(req);
+    if (!session || !session.breweryId) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const breweryId = session.breweryId;
+
+    if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Apenas administradores podem excluir barris em lote' }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { confirmation, preserveInClient = true } = body;
+
+    const expectedConfirmation = 'EXCLUIR TODOS OS BARRIS';
+    if (!confirmation || confirmation.trim().toUpperCase() !== expectedConfirmation) {
+      return NextResponse.json(
+        { error: `Confirmação de segurança inválida. Digite exatamente '${expectedConfirmation}' para prosseguir.` },
+        { status: 400 }
+      );
+    }
+
+    const whereClause: any = {
+      breweryId,
+    };
+
+    if (preserveInClient) {
+      whereClause.status = { not: 'NO_CLIENTE' };
+      whereClause.currentClientId = null;
+    }
+
+    const kegsToDelete = await prisma.keg.findMany({
+      where: whereClause,
+      select: { id: true, code: true, capacity: true, status: true },
+    });
+
+    if (kegsToDelete.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'Nenhum barril elegível para exclusão foi encontrado.',
+        deletedCount: 0,
+        remainingCount: await prisma.keg.count({ where: { breweryId } }),
+      });
+    }
+
+    const kegIds = kegsToDelete.map((k) => k.id);
+
+    // Executar em transação segura
+    await prisma.$transaction(async (tx) => {
+      // 1. Remover movimentações associadas a esses barris
+      await tx.kegMovement.deleteMany({
+        where: { kegId: { in: kegIds } },
+      });
+
+      // 2. Desvincular barris dos itens de pedidos (preservando histórico financeiro e de venda)
+      await tx.orderItem.updateMany({
+        where: { kegId: { in: kegIds } },
+        data: { kegId: null },
+      });
+
+      // 3. Excluir os barris
+      await tx.keg.deleteMany({
+        where: { id: { in: kegIds } },
+      });
+
+      // 4. Registrar auditoria em ActionLog
+      await tx.actionLog.create({
+        data: {
+          breweryId,
+          userId: session.userId,
+          userName: session.name,
+          actionType: 'KEG_BATCH_DELETE',
+          description: `Exclusão em lote de ${kegsToDelete.length} barril(is) cadastrados (preservar em clientes: ${preserveInClient ? 'Sim' : 'Não'})`,
+          entityType: 'Keg',
+          entityId: kegIds[0] || 'BATCH_DELETE',
+          canUndo: false,
+          newData: JSON.stringify({
+            deletedCount: kegsToDelete.length,
+            preserveInClient,
+            sampleCodes: kegsToDelete.slice(0, 10).map((k) => k.code),
+          }),
+        },
+      });
+    });
+
+    const remainingCount = await prisma.keg.count({
+      where: { breweryId },
+    });
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: kegsToDelete.length,
+      remainingCount,
+      message: `${kegsToDelete.length} barris foram excluídos com sucesso.${
+        remainingCount > 0 ? ` ${remainingCount} barril(is) em clientes foram mantidos.` : ''
+      }`,
+    });
+  } catch (error: any) {
+    console.error('Error deleting kegs in batch:', error);
+    return NextResponse.json({ error: 'Erro ao excluir barris: ' + error.message }, { status: 500 });
+  }
+}

@@ -56,6 +56,14 @@ export default function BarrisPage() {
   const [deletingKeg, setDeletingKeg] = useState(false);
   const [deleteKegError, setDeleteKegError] = useState('');
 
+  // Bulk Delete All Kegs Modal state
+  const [deleteAllModalOpen, setDeleteAllModalOpen] = useState(false);
+  const [deleteAllConfirmation, setDeleteAllConfirmation] = useState('');
+  const [deleteAllPreserveInClient, setDeleteAllPreserveInClient] = useState(true);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [deleteAllError, setDeleteAllError] = useState('');
+  const [deleteAllSuccess, setDeleteAllSuccess] = useState('');
+
   // New single keg form (Litragem Livre)
   const [code, setCode] = useState('');
   const [capacity, setCapacity] = useState('50');
@@ -190,6 +198,46 @@ export default function BarrisPage() {
       setDeleteKegError('Erro de conexão ao excluir');
     } finally {
       setDeletingKeg(false);
+    }
+  };
+
+  const handleDeleteAllKegs = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (deleteAllConfirmation.trim().toUpperCase() !== 'EXCLUIR TODOS OS BARRIS') {
+      setDeleteAllError('Digite exatamente EXCLUIR TODOS OS BARRIS para confirmar.');
+      return;
+    }
+
+    setDeletingAll(true);
+    setDeleteAllError('');
+    setDeleteAllSuccess('');
+
+    try {
+      const res = await fetch('/api/kegs', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirmation: deleteAllConfirmation.trim().toUpperCase(),
+          preserveInClient: deleteAllPreserveInClient,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setDeleteAllSuccess(data.message || 'Barris excluídos com sucesso!');
+        setTimeout(() => {
+          setDeleteAllModalOpen(false);
+          setDeleteAllConfirmation('');
+          setDeleteAllSuccess('');
+          fetchKegs();
+        }, 1500);
+      } else {
+        setDeleteAllError(data.error || 'Erro ao excluir barris');
+      }
+    } catch (err: any) {
+      setDeleteAllError('Erro de conexão ao excluir barris');
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -373,6 +421,23 @@ export default function BarrisPage() {
             <Plus className="w-4 h-4" />
             <span>Novo Barril</span>
           </button>
+
+          {kegs.length > 0 && (
+            <button
+              onClick={() => {
+                setDeleteAllError('');
+                setDeleteAllSuccess('');
+                setDeleteAllConfirmation('');
+                setDeleteAllPreserveInClient(true);
+                setDeleteAllModalOpen(true);
+              }}
+              className="px-3 py-2 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-400 text-xs font-bold rounded-xl border border-rose-200 dark:border-rose-900/40 flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+              title="Excluir todos os barris cadastrados com confirmação de segurança"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+              <span>Excluir Todos</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1273,6 +1338,128 @@ export default function BarrisPage() {
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{deletingKeg ? 'Excluindo...' : 'Sim, Excluir'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmação de Exclusão de Todos os Barris */}
+      {deleteAllModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-rose-200 dark:border-rose-900/50 space-y-5">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
+                <div className="p-3 bg-rose-100 dark:bg-rose-950/60 rounded-2xl border border-rose-200 dark:border-rose-800 flex-shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 dark:text-white text-base">
+                    Excluir Todos os Barris
+                  </h3>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 font-bold">
+                    Ação crítica e irreversível
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteAllModalOpen(false)}
+                disabled={deletingAll}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Impact Summary */}
+            <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Cadastrado</span>
+                <span className="text-lg font-black text-slate-900 dark:text-white">{kegs.length}</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Na Fábrica / Pátio</span>
+                <span className="text-lg font-black text-amber-600 dark:text-amber-400">
+                  {kegs.filter((k) => k.status !== 'NO_CLIENTE').length}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Em Clientes</span>
+                <span className="text-lg font-black text-blue-600 dark:text-blue-400">
+                  {kegs.filter((k) => k.status === 'NO_CLIENTE').length}
+                </span>
+              </div>
+            </div>
+
+            {/* Safe option checkbox */}
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-3.5 space-y-1.5">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteAllPreserveInClient}
+                  onChange={(e) => setDeleteAllPreserveInClient(e.target.checked)}
+                  disabled={deletingAll}
+                  className="mt-0.5 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300"
+                />
+                <span className="text-xs text-slate-800 dark:text-slate-200 font-bold leading-tight">
+                  Preservar barris que estão atualmente em clientes ({kegs.filter((k) => k.status === 'NO_CLIENTE').length})
+                </span>
+              </label>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300/80 pl-6 leading-relaxed">
+                Recomendado: evita perder o rastreamento dos barris que estão entregues e aguardam recolha.
+              </p>
+            </div>
+
+            {/* Type to confirm box */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Para autorizar a exclusão, digite exatamente <span className="font-mono text-rose-600 dark:text-rose-400 font-black bg-rose-50 dark:bg-rose-950/50 px-1.5 py-0.5 rounded">EXCLUIR TODOS OS BARRIS</span>:
+              </label>
+              <input
+                type="text"
+                value={deleteAllConfirmation}
+                onChange={(e) => setDeleteAllConfirmation(e.target.value)}
+                placeholder="EXCLUIR TODOS OS BARRIS"
+                disabled={deletingAll}
+                className="w-full px-3.5 py-2.5 text-xs font-mono font-bold bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-rose-500 dark:focus:border-rose-500 outline-none text-slate-900 dark:text-white uppercase"
+              />
+            </div>
+
+            {/* Error / Success Feedback */}
+            {deleteAllError && (
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-xl font-bold flex items-start gap-1.5">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{deleteAllError}</span>
+              </div>
+            )}
+
+            {deleteAllSuccess && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs rounded-xl font-bold flex items-start gap-1.5">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{deleteAllSuccess}</span>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeleteAllModalOpen(false)}
+                disabled={deletingAll}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAllKegs}
+                disabled={deleteAllConfirmation.trim().toUpperCase() !== 'EXCLUIR TODOS OS BARRIS' || deletingAll}
+                className="px-4 py-2 text-xs font-black bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl shadow-md shadow-rose-600/20 flex items-center gap-1.5 transition-all active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{deletingAll ? 'Excluindo barris...' : 'Confirmar Exclusão de Todos'}</span>
               </button>
             </div>
           </div>
