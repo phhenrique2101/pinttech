@@ -28,6 +28,8 @@ import {
   RotateCcw,
   ShieldCheck,
   FileText,
+  Zap,
+  TrendingUp,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateShort, getLocalDateString } from '@/lib/utils';
 import {
@@ -98,6 +100,7 @@ export default function LiveBatchManagerModal({
   onSaved,
 }: LiveBatchManagerModalProps) {
   const [activeTab, setActiveTab] = useState<'TASKS' | 'INGREDIENTS' | 'FERMENTATION_LOG' | 'OVERVIEW'>('TASKS');
+  const [overviewSubTab, setOverviewSubTab] = useState<'OPERATIONS' | 'PHYSICO_CHEMICAL' | 'MAPA_COMPLIANCE' | 'COSTS_MARGIN'>('OPERATIONS');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
@@ -1882,478 +1885,738 @@ export default function LiveBatchManagerModal({
             </div>
           )}
 
-          {/* ABA 4: PARÂMETROS GERAIS E EDIÇÃO FÍSICO-QUÍMICA */}
+          {/* ABA 4: PARÂMETROS GERAIS E EDIÇÃO FÍSICO-QUÍMICA (SUB-DIVIDIDA EM ABAS ÁGEIS) */}
           {activeTab === 'OVERVIEW' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <Thermometer className="w-4 h-4 text-purple-600" />
-                  <span>Ajuste de Parâmetros, Físico-Química e Tanque</span>
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Edite qualquer parâmetro técnico do lote durante a produção ou maturação.
-                </p>
-              </div>
-
-              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                {/* IDENTIFICAÇÃO DO LOTE & REGISTRO MAPA */}
-                <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-2xl space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-black text-amber-950">
-                    <ShieldCheck className="w-4 h-4 text-amber-700" />
-                    <span>Identificação Oficial, Nº do Lote & Exigências MAPA</span>
+            <div className="space-y-4">
+              {/* SUB-ABAS / SEGMENTED PILLS NAVIGATION */}
+              <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold border border-purple-200 flex-shrink-0">
+                    <Thermometer className="w-4 h-4" />
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Nº do Lote</label>
-                      <input
-                        type="text"
-                        value={batchNumber}
-                        onChange={(e) => setBatchNumber(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Data de Brassagem</label>
-                      <input
-                        type="date"
-                        value={brewDate}
-                        onChange={(e) => setBrewDate(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Responsável Técnico / CRQ</label>
-                      <input
-                        type="text"
-                        value={technicalResponsible}
-                        onChange={(e) => setTechnicalResponsible(e.target.value)}
-                        placeholder="Ex: João da Silva - CRQ IV 04123456"
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* SELETOR INTELIGENTE DE MAPA */}
-                  <div className="pt-2 border-t border-amber-200/60">
-                    <MapaSelectorInput
-                      mapaRegistration={mapaRegistration}
-                      onChangeMapa={setMapaRegistration}
-                      commercialDenomination={commercialDenomination}
-                      onChangeDenomination={setCommercialDenomination}
-                      suggestedProductName={batch.recipe?.name || ''}
-                      suggestedStyle={batch.recipe?.style || ''}
-                    />
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-slate-900 leading-tight">
+                      Status, Físico-Química & Conformidade
+                    </h3>
+                    <p className="text-[11px] text-slate-500 hidden sm:block">
+                      Gerencie parâmetros operacionais, medições laboratoriais, registro MAPA e custos do lote.
+                    </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Status da Produção</label>
-                    <select
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-800 focus:outline-none"
-                    >
-                      <option value="PLANEJADO">PLANEJADO</option>
-                      <option value="BRASSAGEM">BRASSAGEM</option>
-                      <option value="FERMENTANDO">FERMENTANDO</option>
-                      <option value="MATURANDO">MATURANDO / COLD CRASH</option>
-                      <option value="PRONTO_ENVASE">PRONTO P/ ENVASE</option>
-                      <option value="ENVASADO">ENVASADO</option>
-                      <option value="FINALIZADO">FINALIZADO</option>
-                    </select>
+                {/* BOTÕES DE SUB-ABAS */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80 overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setOverviewSubTab('OPERATIONS')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      overviewSubTab === 'OPERATIONS'
+                        ? 'bg-white text-amber-900 font-black shadow-xs border border-amber-200/80'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Operação & Tanque</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOverviewSubTab('PHYSICO_CHEMICAL')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      overviewSubTab === 'PHYSICO_CHEMICAL'
+                        ? 'bg-white text-cyan-900 font-black shadow-xs border border-cyan-200/80'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <Beaker className="w-3.5 h-3.5 text-cyan-600" />
+                    <span>Físico-Química</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOverviewSubTab('MAPA_COMPLIANCE')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      overviewSubTab === 'MAPA_COMPLIANCE'
+                        ? 'bg-white text-emerald-900 font-black shadow-xs border border-emerald-200/80'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Rótulo & MAPA</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOverviewSubTab('COSTS_MARGIN')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      overviewSubTab === 'COSTS_MARGIN'
+                        ? 'bg-white text-purple-900 font-black shadow-xs border border-purple-200/80'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Custos & Margem</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* SUB-ABA 1: OPERAÇÃO & TANQUE */}
+              {overviewSubTab === 'OPERATIONS' && (
+                <div className="space-y-4">
+                  {/* ETAPAS / STATUS OPERACIONAL COM CLIQUE RÁPIDO */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <span className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                          <Zap className="w-4 h-4 text-amber-500" />
+                          <span>Status da Produção (Clique para Avançar de Etapa)</span>
+                        </span>
+                        <p className="text-[11px] text-slate-500">
+                          Selecione o estágio atual do lote para atualizar os registros de monitoramento e relatórios.
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-200 w-fit">
+                        Status Atual: {status}
+                      </span>
+                    </div>
+
+                    {/* BOTÕES DE ETAPAS RÁPIDAS (1-CLIQUE) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1">
+                      {[
+                        { value: 'PLANEJADO', label: 'Planejado', icon: Clock, activeClass: 'bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400/50' },
+                        { value: 'BRASSAGEM', label: 'Brassagem', icon: Flame, activeClass: 'bg-amber-500 text-slate-950 font-black border-amber-500 ring-2 ring-amber-400/50' },
+                        { value: 'FERMENTANDO', label: 'Fermentando', icon: Activity, activeClass: 'bg-cyan-600 text-white font-black border-cyan-600 ring-2 ring-cyan-400/50' },
+                        { value: 'MATURANDO', label: 'Maturando', icon: Thermometer, activeClass: 'bg-purple-600 text-white font-black border-purple-600 ring-2 ring-purple-400/50' },
+                        { value: 'PRONTO_ENVASE', label: 'Pronto Envase', icon: CheckCircle2, activeClass: 'bg-emerald-600 text-white font-black border-emerald-600 ring-2 ring-emerald-400/50' },
+                        { value: 'ENVASADO', label: 'Envasado', icon: Package, activeClass: 'bg-blue-600 text-white font-black border-blue-600 ring-2 ring-blue-400/50' },
+                        { value: 'FINALIZADO', label: 'Finalizado', icon: Check, activeClass: 'bg-slate-700 text-white font-black border-slate-700 ring-2 ring-slate-400/50' },
+                      ].map((step) => {
+                        const Icon = step.icon;
+                        const isSelected = status === step.value;
+                        return (
+                          <button
+                            key={step.value}
+                            type="button"
+                            onClick={() => setStatus(step.value)}
+                            className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between gap-1.5 ${
+                              isSelected
+                                ? step.activeClass + ' shadow-sm scale-[1.02]'
+                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <Icon className={`w-4 h-4 ${isSelected ? 'opacity-100' : 'text-slate-500'}`} />
+                              {isSelected && <Check className="w-3.5 h-3.5" />}
+                            </div>
+                            <span className="text-[11px] font-bold leading-tight line-clamp-1">{step.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Tanque Atribuído</label>
-                    <select
-                      value={tankId}
-                      onChange={(e) => setTankId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    >
-                      <option value="">Sem tanque</option>
-                      {tanks.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          🏺 {t.name} ({t.capacityLiters}L - {t.status})
-                        </option>
+                  {/* TANQUE & VOLUMES */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Tanque Atribuído</label>
+                        <select
+                          value={tankId}
+                          onChange={(e) => setTankId(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        >
+                          <option value="">Sem tanque atribuído</option>
+                          {tanks.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              🏺 {t.name} ({t.capacityLiters}L - {t.status})
+                            </option>
+                          ))}
+                        </select>
+                        {(() => {
+                          const selectedTank = tanks.find((t) => t.id === tankId);
+                          if (!selectedTank) return null;
+                          const occupationPercent = Math.round((volumeProduced / (selectedTank.capacityLiters || 1)) * 100);
+                          return (
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                              <span className="inline-block w-2 h-2 rounded-full bg-cyan-500" />
+                              <span>Capacidade: <strong>{selectedTank.capacityLiters}L</strong> ({occupationPercent}% ocupado)</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Volume Planejado (L)</label>
+                        <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-right">
+                          {volumePlanned} L
+                        </div>
+                        <span className="text-[10px] text-slate-500 block mt-1">Definido na ordem de brassagem</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Volume Real Produzido (L)</label>
+                        <input
+                          type="number"
+                          value={volumeProduced}
+                          onChange={(e) => handleVolumeProducedChange(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500 text-right"
+                        />
+                        {(() => {
+                          const diff = volumeProduced - volumePlanned;
+                          const diffPercent = volumePlanned > 0 ? ((diff / volumePlanned) * 100).toFixed(1) : '0';
+                          return (
+                            <span className={`text-[10px] font-bold block mt-1 text-right ${diff >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                              {diff >= 0 ? `+${diff}L (+${diffPercent}%) vs planejado` : `${diff}L (${diffPercent}%) vs planejado`}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ANÁLISE SENSORIAL & OBSERVAÇÕES OPERACIONAIS */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-black text-slate-800 flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-amber-600" />
+                          <span>Análise Sensorial, Degustação & Liberação do Lote</span>
+                        </label>
+                        <span className="text-[10px] font-bold text-slate-400">
+                          Redimensionável
+                        </span>
+                      </div>
+                      <textarea
+                        rows={5}
+                        value={sensoryNotes}
+                        onChange={(e) => setSensoryNotes(e.target.value)}
+                        placeholder="Perfil aromático, atenuação, formação de espuma, instruções da receita e brassagem, liberação técnica para envase..."
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-800 leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-y min-h-[120px] shadow-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                      <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Observações Gerais / Ocorrências de Produção</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Anotações gerais do cervejeiro, desvios operacionais, incidentes de manutenção..."
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-800 leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-y min-h-[70px] shadow-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-ABA 2: FÍSICO-QUÍMICA */}
+              {overviewSubTab === 'PHYSICO_CHEMICAL' && (
+                <div className="space-y-4">
+                  {/* CARD DE DENSIDADES E ÁLCOOL AO VIVO */}
+                  <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/60 via-white to-cyan-50/60 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between border-b border-amber-200/60 pb-2.5">
+                      <span className="text-xs font-black text-amber-950 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-amber-600" />
+                        <span>Densidades Medidas & Cálculo Automático de Álcool</span>
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-500">
+                        Conversão automática Brix / Plato & ABV Sean Terrill
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">OG Medida (Gravidade Inicial)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 1.054 ou 1054"
+                          value={measuredOg}
+                          onChange={(e) => setMeasuredOg(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                        {(() => {
+                          const pOg = parseBreweryGravity(measuredOg);
+                          return pOg ? (
+                            <span className="text-[10px] font-bold text-amber-700 block mt-1">
+                              ≈ {sgToBrix(pOg).toFixed(1)} °Bx / Plato
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">FG Medida (Gravidade Final)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 1.010 ou 1010"
+                          value={measuredFg}
+                          onChange={(e) => setMeasuredFg(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-cyan-700 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        />
+                        {(() => {
+                          const pFg = parseBreweryGravity(measuredFg);
+                          return pFg ? (
+                            <span className="text-[10px] font-bold text-cyan-700 block mt-1">
+                              ≈ {sgToBrix(pFg).toFixed(1)} °Bx / Plato
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Teor Alcoólico (% ABV) & Atenuação</label>
+                        <div className="w-full bg-white border-2 border-emerald-300 rounded-xl px-3 py-2 text-xs font-mono font-black text-emerald-950 flex items-center justify-between">
+                          {(() => {
+                            const pOg = parseBreweryGravity(measuredOg);
+                            const pFg = parseBreweryGravity(measuredFg);
+                            if (pOg && pFg && pOg > pFg && pOg > 1.0) {
+                              const abv = calculateAbv(pOg, pFg);
+                              const att = Math.round(((pOg - pFg) / (pOg - 1.0)) * 1000) / 10;
+                              return (
+                                <>
+                                  <span className="text-sm font-black text-emerald-700">{abv.toFixed(1)}% ABV</span>
+                                  <span className="text-[11px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                                    {att}% aten.
+                                  </span>
+                                </>
+                              );
+                            }
+                            return <span className="text-slate-400 font-normal">Preencha OG e FG válidas</span>;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MOSTURA: pH & TEMPERATURA COM SUPORTE A MÚLTIPLAS MOSTURAS (+) */}
+                  <div className="bg-amber-50/70 border border-amber-300/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-black text-amber-950 uppercase flex items-center gap-1.5">
+                          <Beaker className="w-4 h-4 text-amber-700" />
+                          <span>Mostura: pH & Temperatura (Múltiplas Mosturas)</span>
+                        </span>
+                        <p className="text-[11px] text-amber-800/80">
+                          Registre o pH e a temperatura de cada mostura individual para controle de brassagem.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAddMash}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Adicionar Mostura (+)</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                      {mashList.map((mash) => (
+                        <div
+                          key={mash.id}
+                          className="bg-white border border-amber-200 rounded-xl p-3 space-y-2 shadow-xs"
+                        >
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                            <span className="text-xs font-bold text-slate-800">{mash.name}</span>
+                            {mashList.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveMash(mash.id)}
+                                className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                                title="Excluir esta mostura"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">pH Mostura</label>
+                              <input
+                                type="text"
+                                placeholder="Ex: 5.35"
+                                value={mash.ph}
+                                onChange={(e) => handleUpdateMash(mash.id, 'ph', e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Temp. (°C)</label>
+                              <input
+                                type="text"
+                                placeholder="Ex: 66.0"
+                                value={mash.tempCelsius}
+                                onChange={(e) => handleUpdateMash(mash.id, 'tempCelsius', e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                              />
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </select>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Volume Real Produzido (L)</label>
-                    <input
-                      type="number"
-                      value={volumeProduced}
-                      onChange={(e) => handleVolumeProducedChange(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none text-right"
-                    />
-                  </div>
-                </div>
+                  {/* FERVURA: pH DA FERVURA COM SUPORTE A MÚLTIPLAS FERVURAS (+) */}
+                  <div className="bg-orange-50/70 border border-orange-300/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-black text-orange-950 uppercase flex items-center gap-1.5">
+                          <Flame className="w-4 h-4 text-orange-700" />
+                          <span>pH da Fervura (Múltiplas Fervuras)</span>
+                        </span>
+                        <p className="text-[11px] text-orange-800/80">
+                          Adicione cada fervura individual se houver fracionamento ou mais de uma fervura.
+                        </p>
+                      </div>
 
-                {/* PRECIFICAÇÃO DA RECEITA & CUSTOS DO LOTE */}
-                <div className="p-4 bg-gradient-to-br from-amber-50/40 via-white to-emerald-50/30 border border-amber-200/80 rounded-2xl space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                      <DollarSign className="w-4 h-4 text-amber-600" />
-                      Precificação, Custo do Tanque & Margem
+                      <button
+                        type="button"
+                        onClick={handleAddBoil}
+                        className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Adicionar Fervura (+)</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                      {boilList.map((boil) => (
+                        <div
+                          key={boil.id}
+                          className="bg-white border border-orange-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-xs"
+                        >
+                          <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
+                            {boil.name}:
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="Ex: 5.10"
+                              value={boil.ph}
+                              onChange={(e) => handleUpdateBoil(boil.id, e.target.value)}
+                              className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-black text-orange-800 text-center focus:outline-none focus:ring-1 focus:ring-orange-500 font-mono"
+                            />
+                            {boilList.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveBoil(boil.id)}
+                                className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                                title="Excluir esta fervura"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* PARÂMETROS DE FERMENTAÇÃO & MATURAÇÃO */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3">
+                    <span className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                      <Thermometer className="w-4 h-4 text-cyan-600" />
+                      <span>pHs de Processo & Temperaturas de Controle</span>
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-lg border border-emerald-200">
-                        Margem: <strong>{grossMarginPercent.toFixed(1)}%</strong>
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
-                        Lucro Projetado: <strong className="text-emerald-700">{formatCurrency(totalEstimatedProfit)}</strong>
-                      </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">pH Início da Fermentação</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 5.05"
+                          value={phFermentationStart}
+                          onChange={(e) => setPhFermentationStart(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">pH Final (Envase)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 4.30"
+                          value={phFinal}
+                          onChange={(e) => setPhFinal(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Fermentação (°C)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 19.0"
+                          value={tempFermentation}
+                          onChange={(e) => setTempFermentation(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Maturação (°C)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 0.5"
+                          value={tempMaturation}
+                          onChange={(e) => setTempMaturation(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-amber-900 mb-1">
-                        Custo Total Bruto Tanque ({effectiveBatchVolume}L)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-amber-700">R$</span>
+                  {/* CONTROLE DE LEVEDURA */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3">
+                    <span className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                      <Droplets className="w-4 h-4 text-amber-600" />
+                      <span>Rastreabilidade da Levedura & Inoculação</span>
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Cepa da Levedura</label>
                         <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={totalCostManual}
-                          onChange={(e) => handleTotalCostChange(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full bg-white border-2 border-amber-300 rounded-xl pl-9 pr-3 py-1.5 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          type="text"
+                          placeholder="Ex: Fermentis US-05 / W-34/70"
+                          value={yeastStrain}
+                          onChange={(e) => setYeastStrain(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                         />
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-emerald-900 mb-1">
-                        Custo / Litro (CPV)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-700">R$</span>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Nº Lote da Levedura</label>
                         <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={costPerLiterManual}
-                          onChange={(e) => handleCostPerLiterChange(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full bg-white border-2 border-emerald-300 rounded-xl pl-9 pr-3 py-1.5 text-xs font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          type="text"
+                          placeholder="Ex: 881-A"
+                          value={yeastLot}
+                          onChange={(e) => setYeastLot(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                         />
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Preço de Venda / Litro
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Geração da Levedura</label>
                         <input
                           type="number"
-                          step="0.01"
-                          min="0"
-                          value={salePricePerLiter}
-                          onChange={(e) => setSalePricePerLiter(e.target.value)}
-                          placeholder="18.00"
-                          className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-1.5 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          min="1"
+                          value={yeastGeneration}
+                          onChange={(e) => setYeastGeneration(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                         />
                       </div>
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* DENSIDADES */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">OG Medida (Inicial)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 1.054 ou 1054"
-                      value={measuredOg}
-                      onChange={(e) => setMeasuredOg(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none"
-                    />
-                    {(() => {
-                      const pOg = parseBreweryGravity(measuredOg);
-                      return pOg ? (
-                        <span className="text-[10px] font-bold text-amber-700 block mt-1">
-                          ≈ {sgToBrix(pOg).toFixed(1)} °Bx / Plato
+              {/* SUB-ABA 3: RÓTULO & MAPA */}
+              {overviewSubTab === 'MAPA_COMPLIANCE' && (
+                <div className="space-y-4">
+                  {/* IDENTIFICAÇÃO DO LOTE & REGISTRO MAPA */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div>
+                        <span className="text-xs font-black text-amber-950 uppercase flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-amber-600" />
+                          <span>Identificação Oficial, Lote & Responsabilidade Técnica</span>
                         </span>
-                      ) : null;
-                    })()}
-                  </div>
+                        <p className="text-[11px] text-slate-500">
+                          Dados legais para rastreabilidade de conformidade com o Ministério da Agricultura e Pecuária (MAPA).
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                        IN 65/2019 MAPA
+                      </span>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">FG Medida (Final)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 1.010 ou 1010"
-                      value={measuredFg}
-                      onChange={(e) => setMeasuredFg(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-cyan-700 focus:outline-none"
-                    />
-                    {(() => {
-                      const pFg = parseBreweryGravity(measuredFg);
-                      return pFg ? (
-                        <span className="text-[10px] font-bold text-cyan-700 block mt-1">
-                          ≈ {sgToBrix(pFg).toFixed(1)} °Bx / Plato
-                        </span>
-                      ) : null;
-                    })()}
-                  </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Nº do Lote</label>
+                        <input
+                          type="text"
+                          value={batchNumber}
+                          onChange={(e) => setBatchNumber(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-black text-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                        <span className="text-[10px] text-slate-400 block mt-1">Identificador exclusivo do lote</span>
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Teor Alcoólico (% ABV Estimado)</label>
-                    <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-slate-800">
-                      {(() => {
-                        const pOg = parseBreweryGravity(measuredOg);
-                        const pFg = parseBreweryGravity(measuredFg);
-                        if (pOg && pFg && pOg > pFg && pOg > 1.0) {
-                          const abv = calculateAbv(pOg, pFg);
-                          const att = Math.round(((pOg - pFg) / (pOg - 1.0)) * 1000) / 10;
-                          return `${abv.toFixed(1)}% v/v (${att}% aten.)`;
-                        }
-                        return 'Preencha OG e FG';
-                      })()}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Data de Brassagem</label>
+                        <input
+                          type="date"
+                          value={brewDate}
+                          onChange={(e) => setBrewDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                        <span className="text-[10px] text-slate-400 block mt-1">Data de início da produção</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Responsável Técnico / CRQ</label>
+                        <input
+                          type="text"
+                          value={technicalResponsible}
+                          onChange={(e) => setTechnicalResponsible(e.target.value)}
+                          placeholder="Ex: João da Silva - CRQ IV 04123456"
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                        <span className="text-[10px] text-slate-400 block mt-1">Químico ou Engenheiro responsável</span>
+                      </div>
+                    </div>
+
+                    {/* SELETOR INTELIGENTE DE MAPA */}
+                    <div className="pt-3 border-t border-slate-100">
+                      <MapaSelectorInput
+                        mapaRegistration={mapaRegistration}
+                        onChangeMapa={setMapaRegistration}
+                        commercialDenomination={commercialDenomination}
+                        onChangeDenomination={setCommercialDenomination}
+                        suggestedProductName={batch.recipe?.name || ''}
+                        suggestedStyle={batch.recipe?.style || ''}
+                      />
                     </div>
                   </div>
-                </div>
 
-                {/* MOSTURA: pH & TEMPERATURA COM SUPORTE A MÚLTIPLAS MOSTURAS (+) */}
-                <div className="bg-amber-50/70 border-2 border-amber-300/80 rounded-2xl p-4 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-black text-amber-950 uppercase flex items-center gap-1.5">
-                        <Beaker className="w-4 h-4 text-amber-700" />
-                        <span>Mostura: pH & Temperatura (Múltiplas Mosturas)</span>
-                      </span>
-                      <p className="text-[11px] text-amber-800/80">
-                        Adicione cada mostura individual para registrar o pH e a temperatura (°C) de cada brassagem deste lote.
+                  {/* GUIA DE CONFORMIDADE LEGAL */}
+                  <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-2xl flex items-start gap-3">
+                    <ShieldCheck className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1 text-xs text-amber-950">
+                      <span className="font-black block">Regras Obrigatórias de Rotulagem & Rastreabilidade</span>
+                      <p className="text-amber-900/90 leading-relaxed text-[11px]">
+                        Conforme a Instrução Normativa nº 65/2019 e Decreto nº 6.871/2009, todo lote destinado à comercialização deve conter no rótulo:
+                        o número do registro do produto no MAPA, a denominação padronizada (ex: <em>Cerveja Puro Malte Forte Escura</em>),
+                        o número do lote legível, prazo de validade, graduação alcoólica real e dados do fabricante.
                       </p>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={handleAddMash}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Adicionar Mostura (+)</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-                    {mashList.map((mash) => (
-                      <div
-                        key={mash.id}
-                        className="bg-white border border-amber-200 rounded-xl p-3 space-y-2 shadow-xs"
-                      >
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                          <span className="text-xs font-bold text-slate-800">{mash.name}</span>
-                          {mashList.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMash(mash.id)}
-                              className="p-1 text-slate-400 hover:text-red-600 rounded transition"
-                              title="Excluir esta mostura"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">pH Mostura</label>
-                            <input
-                              type="text"
-                              placeholder="Ex: 5.35"
-                              value={mash.ph}
-                              onChange={(e) => handleUpdateMash(mash.id, 'ph', e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Temp. (°C)</label>
-                            <input
-                              type="text"
-                              placeholder="Ex: 66.0"
-                              value={mash.tempCelsius}
-                              onChange={(e) => handleUpdateMash(mash.id, 'tempCelsius', e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </div>
+              )}
 
-                {/* FERVURA: pH DA FERVURA COM SUPORTE A MÚLTIPLAS FERVURAS (+) */}
-                <div className="bg-orange-50/70 border-2 border-orange-300/80 rounded-2xl p-4 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-black text-orange-950 uppercase flex items-center gap-1.5">
-                        <Flame className="w-4 h-4 text-orange-700" />
-                        <span>pH da Fervura (Múltiplas Fervuras)</span>
-                      </span>
-                      <p className="text-[11px] text-orange-800/80">
-                        Adicione cada fervura individual se a cervejaria fizer mais de uma fervura para este lote.
-                      </p>
+              {/* SUB-ABA 4: CUSTOS & MARGEM */}
+              {overviewSubTab === 'COSTS_MARGIN' && (
+                <div className="space-y-4">
+                  {/* PRECIFICAÇÃO DA RECEITA & CUSTOS DO LOTE */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 uppercase">
+                          <DollarSign className="w-4 h-4 text-amber-600" />
+                          <span>Precificação, Custo do Tanque & Margem Bruta</span>
+                        </span>
+                        <p className="text-[11px] text-slate-500">
+                          Acompanhe a viabilidade financeira do lote e simule margens de lucro por litro.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200">
+                          Margem: <strong>{grossMarginPercent.toFixed(1)}%</strong>
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                          Lucro Estimado: <strong className="text-emerald-700">{formatCurrency(totalEstimatedProfit)}</strong>
+                        </span>
+                      </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleAddBoil}
-                      className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Adicionar Fervura (+)</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                    {boilList.map((boil) => (
-                      <div
-                        key={boil.id}
-                        className="bg-white border border-orange-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-xs"
-                      >
-                        <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
-                          {boil.name}:
-                        </span>
-                        <div className="flex items-center gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="p-3.5 bg-amber-50/40 rounded-xl border border-amber-200">
+                        <label className="block text-[11px] font-bold text-amber-900 mb-1">
+                          Custo Total Bruto Tanque ({effectiveBatchVolume}L)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-amber-700">R$</span>
                           <input
-                            type="text"
-                            placeholder="Ex: 5.10"
-                            value={boil.ph}
-                            onChange={(e) => handleUpdateBoil(boil.id, e.target.value)}
-                            className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-black text-orange-800 text-center focus:outline-none focus:ring-1 focus:ring-orange-500 font-mono"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={totalCostManual}
+                            onChange={(e) => handleTotalCostChange(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-white border border-amber-300 rounded-xl pl-9 pr-3 py-2 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           />
-                          {boilList.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveBoil(boil.id)}
-                              className="p-1 text-slate-400 hover:text-red-600 rounded transition"
-                              title="Excluir esta fervura"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                        </div>
+                        <span className="text-[10px] text-amber-800 block mt-1">Custo global de produção do tanque</span>
+                      </div>
+
+                      <div className="p-3.5 bg-emerald-50/40 rounded-xl border border-emerald-200">
+                        <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                          Custo / Litro (CPV)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-700">R$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={costPerLiterManual}
+                            onChange={(e) => handleCostPerLiterChange(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-white border border-emerald-300 rounded-xl pl-9 pr-3 py-2 text-xs font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <span className="text-[10px] text-emerald-800 block mt-1">Custo unitário por litro produzido</span>
+                      </div>
+
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Preço de Venda Médio / Litro
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={salePricePerLiter}
+                            onChange={(e) => setSalePricePerLiter(e.target.value)}
+                            placeholder="18.00"
+                            className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block mt-1">Preço médio praticado para venda</span>
+                      </div>
+                    </div>
+
+                    {/* DEMONSTRATIVO DE RESULTADO PROJETADO */}
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                      <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                        <span>Demonstrativo Financeiro do Lote ({effectiveBatchVolume} Litros)</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                        <div className="bg-white p-3 rounded-xl border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block">Volume Efetivo</span>
+                          <span className="text-sm font-black text-slate-900">{effectiveBatchVolume} L</span>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block">Faturamento Bruto</span>
+                          <span className="text-sm font-black text-slate-900">{formatCurrency(totalEstimatedRevenue)}</span>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block">Custo de Produção</span>
+                          <span className="text-sm font-black text-amber-700">{formatCurrency(effectiveTotalCost)}</span>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-emerald-200 bg-emerald-50/20">
+                          <span className="text-[10px] font-bold text-emerald-800 uppercase block">Lucro Projetado</span>
+                          <span className="text-sm font-black text-emerald-700">{formatCurrency(totalEstimatedProfit)}</span>
                         </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </div>
-
-                {/* DEMAIS pHs & TEMPERATURAS DO PROCESSO */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">pH Início da Fermentação</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 5.05"
-                      value={phFermentationStart}
-                      onChange={(e) => setPhFermentationStart(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">pH Final (Envase / Cerveja Pronta)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 4.30"
-                      value={phFinal}
-                      onChange={(e) => setPhFinal(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Fermentação (°C)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 19.0"
-                      value={tempFermentation}
-                      onChange={(e) => setTempFermentation(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Temp. Maturação / Cold Crash (°C)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 0.5"
-                      value={tempMaturation}
-                      onChange={(e) => setTempMaturation(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* CONTROLE DE LEVEDURA */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Cepa da Levedura</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Fermentis US-05"
-                      value={yeastStrain}
-                      onChange={(e) => setYeastStrain(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Nº Lote da Levedura</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 881-A"
-                      value={yeastLot}
-                      onChange={(e) => setYeastLot(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Geração da Levedura</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={yeastGeneration}
-                      onChange={(e) => setYeastGeneration(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* ANÁLISE SENSORIAL */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-black text-slate-800 flex items-center gap-1.5">
-                      <FileText className="w-4 h-4 text-amber-600" />
-                      <span>Análise Sensorial, Degustação & Liberação do Lote</span>
-                    </label>
-                    <span className="text-[10px] font-bold text-slate-400">
-                      Redimensionável (arraste o canto inferior para expandir)
-                    </span>
-                  </div>
-                  <textarea
-                    rows={8}
-                    value={sensoryNotes}
-                    onChange={(e) => setSensoryNotes(e.target.value)}
-                    placeholder="Perfil aromático, atenuação, formação de espuma, instruções da receita e brassagem, liberação técnica para envase..."
-                    className="w-full bg-white border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-800 leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-y min-h-[180px] shadow-xs"
-                  />
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
