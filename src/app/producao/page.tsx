@@ -2702,23 +2702,23 @@ export default function ProducaoPage() {
       {activeTab === 'MAPA_REGISTRATIONS' && (
         <div className="space-y-6">
           {/* Top Info Banner & Actions */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs transition">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 dark:bg-amber-500/20 border border-amber-300 dark:border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0 shadow-2xs">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                     <span>Catálogo de Registros MAPA</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
                       {mapaProducts.length} {mapaProducts.length === 1 ? 'Rótulo' : 'Rótulos'}
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Banco centralizado de rótulos comerciais cadastrados no MAPA para vinculação rápida a receitas e lotes.
                     {brewery?.mapaEstablishment && (
-                      <span className="block text-amber-400/90 font-mono mt-1 text-[11px]">
+                      <span className="block text-amber-700 dark:text-amber-400 font-mono mt-1 text-[11px] font-semibold">
                         🏛️ Registro de Estabelecimento da Cervejaria: <strong>{brewery.mapaEstablishment}</strong>
                       </span>
                     )}
@@ -2729,9 +2729,9 @@ export default function ProducaoPage() {
               <div className="flex flex-wrap items-center gap-2.5">
                 <Link
                   href="/importacao?type=MAPA_PRODUCTS"
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition flex items-center gap-2 shadow-xs"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center gap-2 shadow-xs"
                 >
-                  <Upload className="w-4 h-4 text-amber-400" />
+                  <Upload className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                   <span>Importar Planilha (Excel)</span>
                 </Link>
 
@@ -2740,7 +2740,7 @@ export default function ProducaoPage() {
                     setEditingMapaProduct(null);
                     setMapaModalOpen(true);
                   }}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition flex items-center gap-2"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition flex items-center gap-2 active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Novo Registro MAPA</span>
@@ -2749,26 +2749,26 @@ export default function ProducaoPage() {
             </div>
 
             {/* Quick Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-800">
-              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total de Rótulos</span>
-                <span className="text-xl font-black text-white font-mono">{mapaProducts.length}</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Total de Rótulos</span>
+                <span className="text-xl font-black text-slate-900 dark:text-white font-mono">{mapaProducts.length}</span>
               </div>
-              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Ativos / Deferidos</span>
-                <span className="text-xl font-black text-emerald-400 font-mono">
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">Ativos / Deferidos</span>
+                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
                   {mapaProducts.filter((p) => p.status === 'ATIVO').length}
                 </span>
               </div>
-              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">Em Análise MAPA</span>
-                <span className="text-xl font-black text-amber-400 font-mono">
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 block">Em Análise MAPA</span>
+                <span className="text-xl font-black text-amber-600 dark:text-amber-400 font-mono">
                   {mapaProducts.filter((p) => p.status === 'EM_ANALISE').length}
                 </span>
               </div>
-              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 block">Receitas Vinculadas</span>
-                <span className="text-xl font-black text-blue-400 font-mono">
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 block">Receitas Vinculadas</span>
+                <span className="text-xl font-black text-blue-600 dark:text-blue-400 font-mono">
                   {mapaProducts.reduce((acc, p) => acc + (p._count?.recipes || 0), 0)}
                 </span>
               </div>
@@ -2789,13 +2789,13 @@ export default function ProducaoPage() {
                   onClick={() => setMapaStatusFilter(f.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                     mapaStatusFilter === f.id
-                      ? 'bg-amber-500 text-slate-950 shadow-xs'
-                      : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                      : 'bg-white hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
                   }`}
                 >
                   <span>{f.label}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                    mapaStatusFilter === f.id ? 'bg-slate-950/30 text-slate-950 font-black' : 'bg-slate-900 text-slate-400'
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    mapaStatusFilter === f.id ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400'
                   }`}>
                     {f.count}
                   </span>
@@ -2803,22 +2803,22 @@ export default function ProducaoPage() {
               ))}
             </div>
 
-            <span className="text-xs text-slate-400 self-end sm:self-center">
+            <span className="text-xs text-slate-500 dark:text-slate-400 self-end sm:self-center">
               Exibindo {filteredMapaProducts.length} de {mapaProducts.length} registros
             </span>
           </div>
 
           {/* List or Table */}
           {filteredMapaProducts.length === 0 ? (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+            <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-4 shadow-xs">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/20 dark:border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-2xs">
                 <ShieldCheck className="w-8 h-8" />
               </div>
               <div className="max-w-md mx-auto">
-                <h4 className="text-base font-bold text-white">
+                <h4 className="text-base font-bold text-slate-900 dark:text-white">
                   {search ? 'Nenhum registro MAPA encontrado na busca' : 'Nenhum registro MAPA cadastrado ainda'}
                 </h4>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {search
                     ? 'Tente buscar por outro termo, número de registro ou denominação legal.'
                     : 'Cadastre os números de registro MAPA dos rótulos da sua cervejaria ou importe sua planilha para usar em receitas e brassagens com 1 clique.'}
@@ -2831,16 +2831,16 @@ export default function ProducaoPage() {
                       setEditingMapaProduct(null);
                       setMapaModalOpen(true);
                     }}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition flex items-center gap-2"
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition flex items-center gap-2 active:scale-95"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Cadastrar Primeiro Registro</span>
                   </button>
                   <Link
                     href="/importacao?type=MAPA_PRODUCTS"
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition flex items-center gap-2"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center gap-2 shadow-xs"
                   >
-                    <Upload className="w-4 h-4 text-amber-400" />
+                    <Upload className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                     <span>Importar Planilha (Excel)</span>
                   </Link>
                 </div>
@@ -2851,16 +2851,16 @@ export default function ProducaoPage() {
               {filteredMapaProducts.map((product) => (
                 <div
                   key={product.id}
-                  className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between group space-y-3"
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500/40 rounded-2xl p-4 shadow-xs hover:shadow-md transition flex flex-col justify-between group space-y-3"
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h4 className="font-bold text-sm text-white group-hover:text-amber-300 transition">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-300 transition">
                           {product.name}
                         </h4>
                         {product.style && (
-                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
                             {product.style}
                           </span>
                         )}
@@ -2868,10 +2868,10 @@ export default function ProducaoPage() {
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${
                           product.status === 'ATIVO'
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
                             : product.status === 'EM_ANALISE'
-                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+                            : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                         }`}
                       >
                         {product.status === 'ATIVO'
@@ -2883,13 +2883,13 @@ export default function ProducaoPage() {
                     </div>
 
                     {/* Nº MAPA */}
-                    <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <div className="p-2.5 bg-amber-50/70 dark:bg-slate-950 rounded-xl border border-amber-200/70 dark:border-slate-800 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold block">
                           Nº Registro MAPA
                         </span>
-                        <span className="font-mono text-xs font-bold text-amber-300 truncate block">
+                        <span className="font-mono text-xs font-bold text-amber-800 dark:text-amber-300 truncate block">
                           {product.mapaRegistration}
                         </span>
                       </div>
@@ -2897,8 +2897,8 @@ export default function ProducaoPage() {
 
                     {/* Denominação Legal */}
                     {product.commercialDenomination && (
-                      <div className="text-[11px] text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/60 line-clamp-2">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">
+                      <div className="text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800/60 line-clamp-2">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold block">
                           Denominação Legal
                         </span>
                         {product.commercialDenomination}
@@ -2906,16 +2906,16 @@ export default function ProducaoPage() {
                     )}
 
                     {product.notes && (
-                      <p className="text-[10px] text-slate-400 italic line-clamp-2">
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 italic line-clamp-2">
                         {product.notes}
                       </p>
                     )}
                   </div>
 
-                  <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-[10px] text-slate-400">
+                  <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
                       {product._count?.recipes ? (
-                        <span className="text-amber-400/90 font-semibold">
+                        <span className="text-amber-700 dark:text-amber-400 font-semibold">
                           📌 {product._count.recipes} {product._count.recipes === 1 ? 'receita vinculada' : 'receitas vinculadas'}
                         </span>
                       ) : (
@@ -2929,7 +2929,7 @@ export default function ProducaoPage() {
                           setEditingMapaProduct(product);
                           setMapaModalOpen(true);
                         }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-amber-300 dark:hover:bg-slate-800 transition"
                         title="Editar Registro MAPA"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -2943,7 +2943,7 @@ export default function ProducaoPage() {
                             subtitle: `Registro MAPA: ${product.mapaRegistration}`,
                           });
                         }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-slate-800 transition"
                         title="Excluir Registro MAPA"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
