@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { parseBeerXml, ParsedBeerXmlRecipe } from '@/lib/brewing/beerXml';
 import { getLocalDateString } from '@/lib/utils';
+import MapaSelectorInput from '@/components/brew/MapaSelectorInput';
 
 interface IngredientRow {
   id: string;
@@ -482,14 +483,14 @@ export default function BeerXmlImporterModal({
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-slate-400 mb-1 font-semibold">Registro MAPA do Rótulo:</label>
-                    <input
-                      type="text"
-                      value={mapaRegistration}
-                      onChange={(e) => setMapaRegistration(e.target.value)}
-                      placeholder="Ex: SP 001234-5.000001"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  <div className="sm:col-span-2 p-3.5 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
+                    <MapaSelectorInput
+                      mapaRegistration={mapaRegistration}
+                      onChangeMapa={setMapaRegistration}
+                      commercialDenomination={commercialDenomination}
+                      onChangeDenomination={setCommercialDenomination}
+                      suggestedProductName={parsedRecipe?.name || ''}
+                      suggestedStyle={parsedRecipe?.style || ''}
                     />
                   </div>
 
@@ -500,17 +501,6 @@ export default function BeerXmlImporterModal({
                       value={technicalResponsible}
                       onChange={(e) => setTechnicalResponsible(e.target.value)}
                       placeholder="Nome e CRQ"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-slate-400 mb-1 font-semibold">Denominação Legal MAPA:</label>
-                    <input
-                      type="text"
-                      value={commercialDenomination}
-                      onChange={(e) => setCommercialDenomination(e.target.value)}
-                      placeholder="Ex: Cerveja Clara Puro Malte Tipo IPA"
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                   </div>
