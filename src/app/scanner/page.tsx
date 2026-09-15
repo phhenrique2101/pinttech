@@ -24,8 +24,18 @@ import {
   TrendingDown,
   Package,
   AlertTriangle,
+  Phone,
+  MessageCircle,
+  ExternalLink,
+  ChevronDown,
+  DollarSign,
+  Navigation,
+  CheckCircle,
+  XCircle,
+  Check,
+  X,
 } from 'lucide-react';
-import { KEG_STATUS_MAP, formatDate } from '@/lib/utils';
+import { KEG_STATUS_MAP, formatDate, formatCurrency } from '@/lib/utils';
 import KegTimelineModal from '@/components/kegs/KegTimelineModal';
 
 type ScannerMode = 'LOOKUP' | 'FILL' | 'TRANSFER' | 'EXPEDITION' | 'DELIVER' | 'RETURN' | 'SANITIZE' | 'LOSS';
@@ -85,6 +95,24 @@ export default function ScannerPage() {
   const [batchScannedCodes, setBatchScannedCodes] = useState<string[]>([]);
   const [timelineOpen, setTimelineOpen] = useState(false);
 
+  // Delivery Checklist State (Modo Entrega para Motorista)
+  const [ordersList, setOrdersList] = useState<any[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const [deliveryTargetType, setDeliveryTargetType] = useState<'ORDER' | 'CLIENT'>('ORDER');
+  const [orderSearch, setOrderSearch] = useState<string>('');
+  const [unexpectedKegModal, setUnexpectedKegModal] = useState<{
+    isOpen: boolean;
+    keg: any | null;
+    orderId: string;
+    code: string;
+    message?: string;
+  }>({
+    isOpen: false,
+    keg: null,
+    orderId: '',
+    code: '',
+  });
+
   const loadKegs = () => {
     fetch('/api/kegs')
       .then((res) => res.json())
@@ -96,8 +124,23 @@ export default function ScannerPage() {
       .catch(() => {});
   };
 
+  const loadOrders = () => {
+    fetch('/api/orders')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setOrdersList(data);
+          if (!selectedOrderId && data.length > 0) {
+            const active = data.find((o) => ['EM_ROTA', 'CONFIRMADO', 'PREPARANDO'].includes(o.status)) || data[0];
+            if (active) setSelectedOrderId(active.id);
+          }
+        }
+      })
+      .catch(() => {});
+  };
+
   useEffect(() => {
-    // Load active batches, clients and kegs
+    // Load active batches, clients, kegs and orders
     fetch('/api/batches')
       .then((res) => res.json())
       .then((data) => {
@@ -119,6 +162,7 @@ export default function ScannerPage() {
       .catch(() => {});
 
     loadKegs();
+    loadOrders();
   }, []);
 
   // Filtrar apenas lotes que estejam efetivamente em um tanque ativo (não finalizados, cancelados ou envasados)
@@ -201,6 +245,123 @@ export default function ScannerPage() {
 
     return Array.from(map.values()).sort((a, b) => b.totalVolume - a.totalVolume);
   }, [kegsList]);
+
+  // Delivery Mode: Pedido Selecionado e Checklist Inteligente
+  const selectedOrder = useMemo(() => {
+    return ordersList.find((o) => o.id === selectedOrderId) || null;
+  }, [ordersList, selectedOrderId]);
+
+  const deliveryChecklist = useMemo(() => {
+    if (!selectedOrder) {
+      return {
+        pendingItems: [],
+        scannedItems: [],
+        equipments: [],
+        totalItemsCount: 0,
+        deliveredItemsCount: 0,
+        percentage: 0,
+        isComplete: false,
+      };
+    }
+
+    const items = selectedOrder.items || [];
+    const equipments = selectedOrder.orderEquipments || [];
+
+    const scannedItems: any[] = [];
+    const pendingItems: any[] = [];
+
+    items.forEach((it: any) => {
+      if (it.kegId) {
+        scannedItems.push(it);
+      } else {
+        const qty = it.quantity || 1;
+        for (let i = 0; i < qty; i++) {
+          pendingItems.push({
+            ...it,
+            unitIndex: i + 1,
+            totalUnits: qty,
+            uniqueKey: `${it.id}-${i}`,
+          });
+        }
+      }
+    });
+
+    const totalItemsCount = scannedItems.length + pendingItems.length + equipments.length;
+    const deliveredItemsCount = scannedItems.length + equipments.length;
+    const percentage = totalItemsCount > 0 ? Math.round((deliveredItemsCount / totalItemsCount) * 100) : 100;
+    const isComplete = totalItemsCount > 0 && pendingItems.length === 0;
+
+    return {
+      pendingItems,
+      scannedItems,
+      equipments,
+      totalItemsCount,
+      deliveredItemsCount,
+      percentage,
+      isComplete,
+    };
+  }, [selectedOrder]);
+
+  const filteredOrders = useMemo(() => {
+    if (!orderSearch.trim()) return ordersList;
+    const q = orderSearch.toLowerCase();
+    return ordersList.filter((o) => {
+      const num = (o.orderNumber || '').toLowerCase();
+      const clientName = (o.client?.tradeName || o.client?.name || '').toLowerCase();
+      const address = (o.deliveryAddress || o.client?.address || '').toLowerCase();
+      const city = (o.client?.city || '').toLowerCase();
+      return num.includes(q) || clientName.includes(q) || address.includes(q) || city.includes(q);
+    });
+  }, [ordersList, orderSearch]);
+
+  const handleConfirmUnexpectedKeg = async () => {
+    if (!unexpectedKegModal.orderId || !unexpectedKegModal.code) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/orders/${unexpectedKegModal.orderId}/scan-delivery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: unexpectedKegModal.code,
+          forceInclude: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao incluir barril no pedido');
+
+      setFeedbackMessage({ text: data.message, type: 'success' });
+      setBatchScannedCodes((prev) => [unexpectedKegModal.code, ...prev.filter((c) => c !== unexpectedKegModal.code)]);
+      if (data.order) {
+        setOrdersList((prev) => prev.map((o) => (o.id === data.order.id ? data.order : o)));
+      }
+      setUnexpectedKegModal({ isOpen: false, keg: null, orderId: '', code: '' });
+      loadKegs();
+    } catch (err: any) {
+      setFeedbackMessage({ text: err.message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkOrderDelivered = async () => {
+    if (!selectedOrderId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/orders/${selectedOrderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ENTREGUE' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao atualizar pedido');
+      setFeedbackMessage({ text: `Pedido #${selectedOrder?.orderNumber} finalizado como Entregue!`, type: 'success' });
+      setOrdersList((prev) => prev.map((o) => (o.id === selectedOrderId ? { ...o, status: 'ENTREGUE' } : o)));
+    } catch (err: any) {
+      setFeedbackMessage({ text: err.message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleScan = async (code: string) => {
     if (!code) return;
@@ -339,7 +500,41 @@ export default function ScannerPage() {
         }
 
         if (mode === 'DELIVER') {
-          payload.clientId = selectedClientId;
+          if (deliveryTargetType === 'ORDER') {
+            if (!selectedOrderId) {
+              throw new Error('Selecione um pedido ativo para conferência e entrega');
+            }
+
+            const res = await fetch(`/api/orders/${selectedOrderId}/scan-delivery`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Erro ao processar bipe de entrega');
+
+            if (data.requiresConfirmation) {
+              setUnexpectedKegModal({
+                isOpen: true,
+                keg: data.keg,
+                orderId: selectedOrderId,
+                code,
+                message: data.message,
+              });
+              return;
+            }
+
+            setFeedbackMessage({ text: data.message, type: 'success' });
+            setBatchScannedCodes((prev) => [code, ...prev.filter((c) => c !== code)]);
+            if (data.order) {
+              setOrdersList((prev) => prev.map((o) => (o.id === data.order.id ? data.order : o)));
+            }
+            loadKegs();
+            return;
+          } else {
+            payload.clientId = selectedClientId;
+          }
         }
 
         if (mode === 'RETURN') {
@@ -529,7 +724,7 @@ export default function ScannerPage() {
         </button>
 
         <button
-          onClick={() => { setMode('DELIVER'); setFeedbackMessage(null); }}
+          onClick={() => { setMode('DELIVER'); setFeedbackMessage(null); loadOrders(); }}
           className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
             mode === 'DELIVER'
               ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
@@ -1237,24 +1432,386 @@ export default function ScannerPage() {
       )}
 
       {mode === 'DELIVER' && (
-        <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl space-y-2 animate-in fade-in shadow-xs">
-          <label className="text-xs font-black text-emerald-950 dark:text-emerald-200 block">
-            📍 Selecione o Cliente de Destino da Entrega:
-          </label>
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full p-2.5 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white shadow-2xs"
-          >
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.tradeName || c.name} - {c.city || 'Sem cidade'} ({c.retainedKegsCount} barris em posse)
-              </option>
-            ))}
-          </select>
-          <p className="text-[11px] text-emerald-800 dark:text-emerald-400 font-medium">
-            Ao bipar, o barril ou chopeira é transferido para a custódia do cliente.
-          </p>
+        <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 rounded-3xl space-y-4 animate-in fade-in shadow-xs">
+          {/* Header de Modo de Entrega */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-xl">
+                <Truck className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                  Central de Entrega & Checklist
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  Confira os barris e equipamentos item a item no cliente
+                </p>
+              </div>
+            </div>
+
+            {/* Alternador de Modo: Pedido vs Direto */}
+            <div className="flex bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-xl text-[10px] font-black">
+              <button
+                type="button"
+                onClick={() => setDeliveryTargetType('ORDER')}
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  deliveryTargetType === 'ORDER'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                    : 'text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                Por Pedido
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeliveryTargetType('CLIENT')}
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  deliveryTargetType === 'CLIENT'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                    : 'text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                Avulso
+              </button>
+            </div>
+          </div>
+
+          {deliveryTargetType === 'CLIENT' ? (
+            /* Modo Avulso Direto por Cliente */
+            <div className="space-y-2 pt-1">
+              <label className="text-xs font-black text-emerald-950 dark:text-emerald-200 block">
+                📍 Selecione o Cliente de Destino da Entrega Avulsa:
+              </label>
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                className="w-full p-2.5 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white shadow-2xs"
+              >
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.tradeName || c.name} - {c.city || 'Sem cidade'} ({c.retainedKegsCount} barris em posse)
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-emerald-800 dark:text-emerald-400 font-medium">
+                Ao bipar, o barril ou chopeira é transferido diretamente para a custódia deste cliente.
+              </p>
+            </div>
+          ) : (
+            /* Modo Pedido com Checklist Inteligente */
+            <div className="space-y-3 pt-1">
+              {/* Seletor do Pedido */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span>📦 Pedido em Rota:</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={loadOrders}
+                    className="text-[11px] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Atualizar Lista
+                  </button>
+                </div>
+
+                {/* Campo de Busca Rápida de Pedidos */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Filtrar por cliente, pedido ou endereço..."
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                    className="w-full pl-8.5 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/80 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  {orderSearch && (
+                    <button
+                      onClick={() => setOrderSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown de Pedidos */}
+                <select
+                  value={selectedOrderId}
+                  onChange={(e) => setSelectedOrderId(e.target.value)}
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white shadow-2xs"
+                >
+                  {filteredOrders.length === 0 ? (
+                    <option value="">Nenhum pedido encontrado</option>
+                  ) : (
+                    filteredOrders.map((o) => {
+                      const clientName = o.client?.tradeName || o.client?.name || 'Cliente';
+                      const statusLabel =
+                        o.status === 'EM_ROTA'
+                          ? '🚚 Em Rota'
+                          : o.status === 'CONFIRMADO'
+                          ? '✅ Confirmado'
+                          : o.status === 'ENTREGUE'
+                          ? '📦 Entregue'
+                          : o.status === 'ORCAMENTO'
+                          ? '📝 Orçamento'
+                          : o.status;
+                      return (
+                        <option key={o.id} value={o.id}>
+                          {o.orderNumber} • {clientName} ({formatCurrency(o.totalAmount)}) [{statusLabel}]
+                        </option>
+                      );
+                    })
+                  )}
+                </select>
+              </div>
+
+              {/* Informações e Apoio ao Motorista */}
+              {selectedOrder ? (
+                <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-3.5 space-y-3 shadow-2xs">
+                  {/* Cabeçalho do Cliente */}
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono font-black text-xs text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 rounded">
+                          {selectedOrder.orderNumber}
+                        </span>
+                        <span
+                          className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                            selectedOrder.status === 'ENTREGUE'
+                              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                          }`}
+                        >
+                          {selectedOrder.status === 'EM_ROTA'
+                            ? 'Em Rota'
+                            : selectedOrder.status === 'ENTREGUE'
+                            ? 'Entregue'
+                            : selectedOrder.status}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white">
+                        {selectedOrder.client?.tradeName || selectedOrder.client?.name}
+                      </h4>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>
+                          {selectedOrder.deliveryAddress ||
+                            selectedOrder.client?.address ||
+                            'Endereço não informado'}
+                          {selectedOrder.client?.neighborhood ? `, ${selectedOrder.client.neighborhood}` : ''}
+                          {selectedOrder.client?.city ? ` - ${selectedOrder.client.city}` : ''}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Atalhos Rápidos para o Motorista (1 Toque) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {/* Waze / Google Maps */}
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        `${selectedOrder.deliveryAddress || selectedOrder.client?.address || ''} ${
+                          selectedOrder.client?.city || ''
+                        }`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 py-2 px-2.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-black transition-colors"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>GPS / Maps</span>
+                    </a>
+
+                    {/* WhatsApp */}
+                    {selectedOrder.client?.phone || selectedOrder.client?.whatsapp ? (
+                      <a
+                        href={`https://wa.me/55${(
+                          selectedOrder.client.whatsapp || selectedOrder.client.phone
+                        ).replace(/\D/g, '')}?text=${encodeURIComponent(
+                          `Olá ${
+                            selectedOrder.client.tradeName || selectedOrder.client.name
+                          }! Sou o entregador da cervejaria e estou a caminho/no local com o pedido ${
+                            selectedOrder.orderNumber
+                          }.`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 py-2 px-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-black transition-colors"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </a>
+                    ) : null}
+
+                    {/* Telefone */}
+                    {selectedOrder.client?.phone ? (
+                      <a
+                        href={`tel:${selectedOrder.client.phone.replace(/\D/g, '')}`}
+                        className="flex items-center justify-center gap-1.5 py-2 px-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black transition-colors"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>Ligar</span>
+                      </a>
+                    ) : null}
+                  </div>
+
+                  {/* Card de Cobrança / Financeiro */}
+                  {selectedOrder.remainingAmount > 0 ? (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/60 rounded-xl space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-amber-900 dark:text-amber-200 flex items-center gap-1">
+                          <DollarSign className="w-3.5 h-3.5 text-amber-600" /> Cobrar na Entrega:
+                        </span>
+                        <span className="text-sm font-black text-amber-950 dark:text-amber-100">
+                          {formatCurrency(selectedOrder.remainingAmount)}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-amber-800 dark:text-amber-300 flex justify-between">
+                        <span>
+                          Total: {formatCurrency(selectedOrder.totalAmount)} (Pago: {formatCurrency(selectedOrder.paidAmount || 0)})
+                        </span>
+                        <span className="font-bold">{selectedOrder.paymentMethod || 'A combinar'}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/60 rounded-xl flex items-center justify-between text-xs">
+                      <span className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" /> Pedido 100% Pago
+                      </span>
+                      <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                        {formatCurrency(selectedOrder.totalAmount)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Barra de Progresso da Conferência */}
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-black text-slate-800 dark:text-slate-200">
+                        Progresso dos Itens
+                      </span>
+                      <span className="font-mono font-bold text-slate-600 dark:text-slate-400 text-[11px]">
+                        {deliveryChecklist.deliveredItemsCount} de {deliveryChecklist.totalItemsCount} itens ({deliveryChecklist.percentage}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          deliveryChecklist.isComplete ? 'bg-emerald-500' : 'bg-amber-500'
+                        }`}
+                        style={{ width: `${deliveryChecklist.percentage}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* CHECKLIST: Seção 1 - Faltam Bipar */}
+                  <div className="space-y-2 pt-1">
+                    <h5 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> Faltam Bipar ({deliveryChecklist.pendingItems.length})
+                    </h5>
+
+                    {deliveryChecklist.pendingItems.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {deliveryChecklist.pendingItems.map((it: any) => (
+                          <div
+                            key={it.uniqueKey}
+                            className="p-2.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-xl flex items-center justify-between text-xs"
+                          >
+                            <div className="space-y-0.5">
+                              <span className="font-black text-slate-900 dark:text-white block">
+                                {it.description || it.recipe?.name || 'Barril de Chopp'}
+                                {it.totalUnits > 1 ? ` (Unidade ${it.unitIndex}/${it.totalUnits})` : ''}
+                              </span>
+                              <span className="text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                                <QrCode className="w-3 h-3 text-amber-600" /> Aponte a câmera para bipar o barril
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 text-[10px] font-black rounded-md shrink-0">
+                              Aguardando
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300 font-bold">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Todos os barris previstos foram bipados!</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CHECKLIST: Seção 2 - Conferidos e Vinculados */}
+                  {(deliveryChecklist.scannedItems.length > 0 || deliveryChecklist.equipments.length > 0) && (
+                    <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <h5 className="text-[11px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Conferidos & Entregues ({deliveryChecklist.scannedItems.length + deliveryChecklist.equipments.length})
+                      </h5>
+
+                      <div className="space-y-1.5">
+                        {deliveryChecklist.scannedItems.map((it: any) => (
+                          <div
+                            key={it.id}
+                            className="p-2 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-1.5 py-0.5 bg-emerald-200 dark:bg-emerald-900/60 font-mono font-black text-[11px] text-emerald-900 dark:text-emerald-200 rounded">
+                                {it.keg?.code || 'BARRIL'}
+                              </span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">
+                                {it.keg?.currentBeerName || it.recipe?.name || it.description}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 shrink-0">
+                              <Check className="w-3 h-3" /> Conferido
+                            </span>
+                          </div>
+                        ))}
+
+                        {deliveryChecklist.equipments.map((eq: any) => (
+                          <div
+                            key={eq.id}
+                            className="p-2 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 rounded-xl flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-1.5 py-0.5 bg-blue-200 dark:bg-blue-900/60 font-mono font-black text-[11px] text-blue-900 dark:text-blue-200 rounded">
+                                {eq.equipment?.code || 'EQUIP'}
+                              </span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">
+                                {eq.equipment?.name || 'Equipamento'}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 shrink-0">
+                              <Check className="w-3 h-3" /> Comodato
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ações Rápidas de Fechamento */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      💡 Bipar adicionará ou conferirá automaticamente
+                    </span>
+                    {selectedOrder.status !== 'ENTREGUE' && (
+                      <button
+                        onClick={handleMarkOrderDelivered}
+                        className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-colors"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Concluir Entrega
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-slate-100 dark:bg-slate-800/60 rounded-2xl text-center text-xs text-slate-600 dark:text-slate-400">
+                  Selecione um pedido acima para carregar o checklist e conferir a carga.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1365,6 +1922,68 @@ export default function ScannerPage() {
                 {c}
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação: Barril Não Previsto no Pedido */}
+      {unexpectedKegModal.isOpen && unexpectedKegModal.keg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border-2 border-amber-500 rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3">
+              <div className="p-3 bg-amber-100 dark:bg-amber-950/60 rounded-2xl text-amber-600 shrink-0">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
+                  Barril Não Previsto no Pedido
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  O barril bipado não consta nos itens contratados para este cliente:
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-2xl space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-black text-slate-900 dark:text-white text-sm bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700">
+                  {unexpectedKegModal.keg.code}
+                </span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                  + {formatCurrency(unexpectedKegModal.keg.calculatedPrice || 0)}
+                </span>
+              </div>
+              <div className="space-y-0.5 text-slate-700 dark:text-slate-300">
+                <p>
+                  <strong>Chopp:</strong> {unexpectedKegModal.keg.beerName}
+                </p>
+                <p>
+                  <strong>Volume:</strong> {unexpectedKegModal.keg.volume || unexpectedKegModal.keg.capacity || 50} Litros
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-200 text-center">
+              O cliente solicitou a inclusão deste chopp de última hora?
+            </p>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setUnexpectedKegModal({ isOpen: false, keg: null, orderId: '', code: '' })}
+                className="py-3 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl text-xs font-black transition-colors flex items-center justify-center gap-1.5"
+              >
+                <X className="w-4 h-4" /> Cancelar Bipe
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnexpectedKeg}
+                disabled={loading}
+                className="py-3 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5"
+              >
+                <Check className="w-4 h-4" /> Incluir (+ {formatCurrency(unexpectedKegModal.keg.calculatedPrice || 0)})
+              </button>
+            </div>
           </div>
         </div>
       )}
