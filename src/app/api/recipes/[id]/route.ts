@@ -18,6 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           },
           orderBy: { createdAt: 'asc' },
         },
+        mapaProduct: true,
         batches: {
           orderBy: { brewDate: 'desc' },
         },
@@ -56,6 +57,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       targetPhFinal,
       mapaRegistration,
       commercialDenomination,
+      mapaProductId,
       description,
       costPerLiter,
       salePricePerLiter,
@@ -122,6 +124,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           targetPhFinal: targetPhFinal !== undefined ? (targetPhFinal ? parseFloat(targetPhFinal) : null) : existing.targetPhFinal,
           mapaRegistration: mapaRegistration !== undefined ? (mapaRegistration?.trim() || null) : existing.mapaRegistration,
           commercialDenomination: commercialDenomination !== undefined ? (commercialDenomination?.trim() || null) : existing.commercialDenomination,
+          mapaProductId: mapaProductId !== undefined ? (mapaProductId || null) : existing.mapaProductId,
           description: description !== undefined ? description : existing.description,
           costPerLiter: cost,
           salePricePerLiter: calculatedSalePrice,
@@ -140,6 +143,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           ingredients: {
             include: { inventoryItem: { include: { supplier: true } } },
           },
+          mapaProduct: true,
         },
       });
     });

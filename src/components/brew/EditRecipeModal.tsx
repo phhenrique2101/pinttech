@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { X, Save, Beer, ShieldCheck, FileText, Activity, DollarSign } from 'lucide-react';
+import MapaSelectorInput from '@/components/brew/MapaSelectorInput';
 
 interface EditRecipeModalProps {
   recipe: any;
@@ -14,6 +15,7 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
   const [style, setStyle] = useState(recipe.style || '');
   const [mapaRegistration, setMapaRegistration] = useState(recipe.mapaRegistration || '');
   const [commercialDenomination, setCommercialDenomination] = useState(recipe.commercialDenomination || '');
+  const [mapaProductId, setMapaProductId] = useState<string | null>(recipe.mapaProductId || null);
   const [og, setOg] = useState(recipe.og ? String(recipe.og) : '');
   const [fg, setFg] = useState(recipe.fg ? String(recipe.fg) : '');
   const [abv, setAbv] = useState(recipe.abv ? String(recipe.abv) : '');
@@ -51,6 +53,7 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
         style: style.trim() || 'Standard',
         mapaRegistration: mapaRegistration.trim() || null,
         commercialDenomination: commercialDenomination.trim() || null,
+        mapaProductId: mapaProductId || null,
         og: og ? parseFloat(og) : null,
         fg: fg ? parseFloat(fg) : null,
         abv: abv ? parseFloat(abv) : null,
@@ -138,36 +141,18 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
             </div>
           </div>
 
-          {/* DADOS MAPA DA RECEITA */}
-          <div className="p-3.5 bg-amber-500/5 border border-amber-500/20 rounded-2xl space-y-3">
-            <div className="flex items-center gap-2 text-xs font-black text-amber-400">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Identificação & Denominação Oficial MAPA</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">Registro MAPA do Rótulo</label>
-                <input
-                  type="text"
-                  value={mapaRegistration}
-                  onChange={(e) => setMapaRegistration(e.target.value)}
-                  placeholder="Ex: SP 001234-5.000001"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">Denominação Legal / Comercial</label>
-                <input
-                  type="text"
-                  value={commercialDenomination}
-                  onChange={(e) => setCommercialDenomination(e.target.value)}
-                  placeholder="Ex: Cerveja Clara Puro Malte"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
+          {/* DADOS MAPA DA RECEITA COM SELETOR INTELIGENTE */}
+          <div className="p-3.5 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
+            <MapaSelectorInput
+              mapaRegistration={mapaRegistration}
+              onChangeMapa={setMapaRegistration}
+              commercialDenomination={commercialDenomination}
+              onChangeDenomination={setCommercialDenomination}
+              mapaProductId={mapaProductId}
+              onChangeProductId={setMapaProductId}
+              suggestedProductName={name}
+              suggestedStyle={style}
+            />
           </div>
 
           {/* PRECIFICAÇÃO & CUSTOS DA RECEITA */}

@@ -23,11 +23,12 @@ import {
   Building2,
   Trash2,
   ShoppingBag,
+  ShieldCheck,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 
-type EntityType = 'CLIENTS' | 'KEGS' | 'EQUIPMENT' | 'ORDERS' | 'RECIPES' | 'TANKS';
+type EntityType = 'CLIENTS' | 'KEGS' | 'EQUIPMENT' | 'ORDERS' | 'RECIPES' | 'TANKS' | 'MAPA_PRODUCTS';
 
 interface EntityDefinition {
   type: EntityType;
@@ -281,6 +282,30 @@ const ENTITY_CONFIGS: Record<EntityType, EntityDefinition> = {
       { 'Nome / Tag do Tanque': 'BBT-01', 'Capacidade em Litros': 2000, 'Tipo do Tanque': 'BBT_BRITE_TANK', 'Observações': 'Brite Tank para clarificação' },
     ],
   },
+  MAPA_PRODUCTS: {
+    type: 'MAPA_PRODUCTS',
+    title: 'Registros MAPA & Produtos',
+    description: 'Catálogo de rótulos comerciais cadastrados no MAPA, número de registro e denominação legal.',
+    icon: ShieldCheck,
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-200',
+    redirectUrl: '/producao?tab=MAPA',
+    redirectLabel: 'Ver Registros MAPA',
+    fields: [
+      { key: 'name', label: 'Nome do Produto / Rótulo', required: true, synonyms: ['nome', 'rotulo', 'rótulo', 'produto', 'cerveja', 'marca', 'nome do produto', 'nome do rotulo', 'nome da cerveja'], example: 'Hop Storm IPA' },
+      { key: 'mapaRegistration', label: 'Nº de Registro MAPA', required: true, synonyms: ['mapa', 'registro mapa', 'registro', 'num mapa', 'n mapa', 'cod mapa', 'numero mapa', 'nº mapa', 'registro do produto', 'mapa registration'], example: 'SP 001234-5.000001' },
+      { key: 'commercialDenomination', label: 'Denominação Legal / Comercial', synonyms: ['denominacao', 'denominação', 'denominacao legal', 'denominação legal', 'denominacao comercial', 'denominação comercial', 'tipo legal', 'definicao legal'], example: 'Cerveja Puro Malte Extra Tipo IPA' },
+      { key: 'style', label: 'Estilo da Cerveja', synonyms: ['estilo', 'estilo da cerveja', 'beer style', 'style', 'categoria'], example: 'American IPA' },
+      { key: 'status', label: 'Status (ATIVO, EM_ANALISE, ARQUIVADO)', synonyms: ['status', 'situacao', 'situação', 'estado'], example: 'ATIVO' },
+      { key: 'notes', label: 'Observações / Notas', synonyms: ['observacoes', 'observações', 'obs', 'notas', 'deferimento', 'data concessao'], example: 'Concedido em 12/04/2024' },
+    ],
+    sampleData: [
+      { 'Nome do Produto / Rótulo': 'Pilsen Cristal Puro Malte', 'Nº de Registro MAPA': 'SP 001234-5.000001', 'Denominação Legal / Comercial': 'Cerveja Clara Puro Malte', 'Estilo da Cerveja': 'German Pilsner', 'Status (ATIVO, EM_ANALISE, ARQUIVADO)': 'ATIVO', 'Observações / Notas': 'Rótulo padrão para garrafas e barris' },
+      { 'Nome do Produto / Rótulo': 'Hop Storm American IPA', 'Nº de Registro MAPA': 'SP 001234-5.000002', 'Denominação Legal / Comercial': 'Cerveja Puro Malte Extra Clara do Tipo IPA', 'Estilo da Cerveja': 'American IPA', 'Status (ATIVO, EM_ANALISE, ARQUIVADO)': 'ATIVO', 'Observações / Notas': 'Registro deferido em 2024' },
+      { 'Nome do Produto / Rótulo': 'Imperial Stout Cacau', 'Nº de Registro MAPA': 'SP 001234-5.000003', 'Denominação Legal / Comercial': 'Cerveja Escura Forte com Adição de Cacau', 'Estilo da Cerveja': 'Russian Imperial Stout', 'Status (ATIVO, EM_ANALISE, ARQUIVADO)': 'EM_ANALISE', 'Observações / Notas': 'Aguardando publicação do deferimento no DOU' },
+    ],
+  },
 };
 
 export default function ImportacaoPage() {
@@ -313,6 +338,17 @@ export default function ImportacaoPage() {
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Support URL query parameter ?type=MAPA_PRODUCTS or ?entity=MAPA_PRODUCTS
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const paramType = (params.get('type') || params.get('entity'))?.toUpperCase();
+      if (paramType && (paramType as EntityType) in ENTITY_CONFIGS) {
+        setSelectedEntity(paramType as EntityType);
+      }
+    }
+  }, []);
+
   const config = ENTITY_CONFIGS[selectedEntity];
 
   // Load user role and breweries if super admin

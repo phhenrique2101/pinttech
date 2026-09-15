@@ -52,6 +52,7 @@ async function applyViews() {
     'vw_bi_fato_financeiro',
     'vw_bi_fato_movimentacao_estoque',
     'vw_bi_dim_tabelas_preco',
+    'vw_bi_dim_mapa_produtos',
   ];
 
   console.log('\n📊 Validando integridade das Views no banco Neon:');

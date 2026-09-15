@@ -53,6 +53,7 @@ import {
 } from '@/lib/brewing/defaultCatalog';
 import { exportToBeerXml } from '@/lib/brewing/beerXml';
 import { formatCurrency } from '@/lib/utils';
+import MapaSelectorInput from './MapaSelectorInput';
 
 interface RecipeDesignerModalProps {
   recipe?: any | null; // null se criando nova receita
@@ -81,6 +82,7 @@ export default function RecipeDesignerModal({
   const [description, setDescription] = useState(recipe?.description || '');
   const [mapaRegistration, setMapaRegistration] = useState(recipe?.mapaRegistration || '');
   const [commercialDenomination, setCommercialDenomination] = useState(recipe?.commercialDenomination || '');
+  const [mapaProductId, setMapaProductId] = useState<string | null>(recipe?.mapaProductId || null);
 
   // Precificação
   const [salePricePerLiter, setSalePricePerLiter] = useState<number>(recipe?.salePricePerLiter || 18.0);
@@ -127,6 +129,7 @@ export default function RecipeDesignerModal({
       setDescription(recipe.description || '');
       setMapaRegistration(recipe.mapaRegistration || '');
       setCommercialDenomination(recipe.commercialDenomination || '');
+      setMapaProductId(recipe.mapaProductId || null);
       setSalePricePerLiter(recipe.salePricePerLiter || 18.0);
       setProfitMarginPercent(recipe.profitMarginPercent || 50.0);
       if (recipe.bjcpStyleCode) setSelectedStyleCode(recipe.bjcpStyleCode);
@@ -470,6 +473,7 @@ export default function RecipeDesignerModal({
         description,
         mapaRegistration,
         commercialDenomination,
+        mapaProductId: mapaProductId || null,
         costPerLiter,
         salePricePerLiter,
         profitMarginPercent,
@@ -1627,36 +1631,18 @@ export default function RecipeDesignerModal({
                 </div>
               </div>
 
-              {/* Formulário MAPA */}
+              {/* Formulário MAPA com Seletor Inteligente */}
               <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-amber-600" />
-                  <span>Registro & Conformidade MAPA</span>
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Nº Registro MAPA do Rótulo</label>
-                    <input
-                      type="text"
-                      value={mapaRegistration}
-                      onChange={(e) => setMapaRegistration(e.target.value)}
-                      placeholder="ex: SP 000000-0.000001"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Denominação Comercial Legal</label>
-                    <input
-                      type="text"
-                      value={commercialDenomination}
-                      onChange={(e) => setCommercialDenomination(e.target.value)}
-                      placeholder="ex: Cerveja Forte Puro Malte Tipo IPA"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white"
-                    />
-                  </div>
-                </div>
+                <MapaSelectorInput
+                  mapaRegistration={mapaRegistration}
+                  onChangeMapa={setMapaRegistration}
+                  commercialDenomination={commercialDenomination}
+                  onChangeDenomination={setCommercialDenomination}
+                  mapaProductId={mapaProductId}
+                  onChangeProductId={setMapaProductId}
+                  suggestedProductName={name}
+                  suggestedStyle={styleName}
+                />
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Notas Sensoriais & Descrição</label>

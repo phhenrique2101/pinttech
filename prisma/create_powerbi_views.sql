@@ -48,6 +48,7 @@ JOIN "Brewery" b ON b."id" = c."breweryId"
 LEFT JOIN "PriceTable" pt ON pt."id" = c."priceTableId";
 
 -- 3. DIMENSÃO: RECEITAS & PRODUTOS (BEER RECIPES)
+DROP VIEW IF EXISTS vw_bi_dim_receitas CASCADE;
 CREATE OR REPLACE VIEW vw_bi_dim_receitas AS
 SELECT
   r."id" AS recipe_id,
@@ -69,7 +70,9 @@ SELECT
   r."profitMarginPercent" AS profit_margin_percent,
   r."pricingModel" AS pricing_model,
   r."mapaRegistration" AS mapa_registration,
-  r."createdAt" AS created_at
+  r."createdAt" AS created_at,
+  r."commercialDenomination" AS commercial_denomination,
+  r."mapaProductId" AS mapa_product_id
 FROM "BeerRecipe" r
 JOIN "Brewery" b ON b."id" = r."breweryId";
 
@@ -372,4 +375,22 @@ SELECT
   pt."updatedAt" AS updated_at
 FROM "PriceTable" pt
 JOIN "Brewery" b ON b."id" = pt."breweryId";
+
+-- 15. DIMENSÃO: REGISTROS MAPA & RÓTULOS (PRODUTOS REGULATÓRIOS)
+CREATE OR REPLACE VIEW vw_bi_dim_mapa_produtos AS
+SELECT
+  mp."id" AS mapa_product_id,
+  mp."breweryId" AS brewery_id,
+  b."name" AS brewery_name,
+  b."mapaEstablishment" AS brewery_mapa_establishment,
+  mp."name" AS product_name,
+  mp."mapaRegistration" AS mapa_registration,
+  mp."commercialDenomination" AS commercial_denomination,
+  mp."style" AS beer_style,
+  mp."status" AS registration_status,
+  mp."notes" AS notes,
+  mp."createdAt" AS created_at,
+  mp."updatedAt" AS updated_at
+FROM "MapaProduct" mp
+JOIN "Brewery" b ON b."id" = mp."breweryId";
 

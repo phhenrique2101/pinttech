@@ -730,6 +730,73 @@ export async function POST(req: NextRequest) {
           errors.push(`Linha ${i + 1} (${name}): ${err.message}`);
         }
       }
+    } else if (entityType === 'MAPA_PRODUCTS') {
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const name = cleanStr(row.name || row.productName || row.rotulo || row.produto);
+        const mapaRegistration = cleanStr(row.mapaRegistration || row.mapa || row.registroMapa || row.registro || row.numeroMapa);
+
+        if (!name) {
+          errors.push(`Linha ${i + 1}: Nome do produto / rótulo é obrigatório.`);
+          continue;
+        }
+
+        if (!mapaRegistration) {
+          errors.push(`Linha ${i + 1} (${name}): Número de Registro MAPA é obrigatório.`);
+          continue;
+        }
+
+        const commercialDenomination = cleanStr(row.commercialDenomination || row.denominacao || row.denominacaoLegal || row.denominacaoComercial);
+        const style = cleanStr(row.style || row.estilo);
+        let status = cleanStr(row.status)?.toUpperCase() || 'ATIVO';
+        if (status.includes('ANALIS') || status.includes('PEND')) {
+          status = 'EM_ANALISE';
+        } else if (status.includes('INATIV') || status.includes('ARQUIV') || status.includes('CANC')) {
+          status = 'ARQUIVADO';
+        } else {
+          status = 'ATIVO';
+        }
+        const notes = cleanStr(row.notes || row.observacoes || row.obs);
+
+        try {
+          const existing = await prisma.mapaProduct.findFirst({
+            where: {
+              breweryId,
+              mapaRegistration: { equals: mapaRegistration, mode: 'insensitive' },
+            },
+          });
+
+          if (existing) {
+            await prisma.mapaProduct.update({
+              where: { id: existing.id },
+              data: {
+                name: name || existing.name,
+                mapaRegistration,
+                commercialDenomination: commercialDenomination || existing.commercialDenomination,
+                style: style || existing.style,
+                status: status || existing.status,
+                notes: notes ? (existing.notes ? `${existing.notes} | ${notes}` : notes) : existing.notes,
+              },
+            });
+            updatedCount++;
+          } else {
+            await prisma.mapaProduct.create({
+              data: {
+                breweryId,
+                name,
+                mapaRegistration,
+                commercialDenomination,
+                style,
+                status,
+                notes,
+              },
+            });
+            createdCount++;
+          }
+        } catch (err: any) {
+          errors.push(`Linha ${i + 1} (${name}): ${err.message}`);
+        }
+      }
     } else {
       return NextResponse.json(
         { error: `Tipo de entidade "${entityType}" não suportado.` },

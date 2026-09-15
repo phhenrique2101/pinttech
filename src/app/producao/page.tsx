@@ -42,16 +42,23 @@ import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import MapaTraceabilitySheetModal from '@/components/brew/MapaTraceabilitySheetModal';
 import LiveBatchManagerModal from '@/components/brew/LiveBatchManagerModal';
 import EditRecipeModal from '@/components/brew/EditRecipeModal';
+import MapaProductModal, { MapaProduct } from '@/components/brew/MapaProductModal';
 import { formatDate, formatDateShort, formatCurrency, getLocalDateString } from '@/lib/utils';
 
 export default function ProducaoPage() {
   const [batches, setBatches] = useState<any[]>([]);
   const [tanks, setTanks] = useState<any[]>([]);
   const [recipes, setRecipes] = useState<any[]>([]);
+  const [mapaProducts, setMapaProducts] = useState<MapaProduct[]>([]);
   const [brewery, setBrewery] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'PRODUCTION_TANKS' | 'HISTORY_MAPA' | 'RECIPES'>('PRODUCTION_TANKS');
+  const [activeTab, setActiveTab] = useState<'PRODUCTION_TANKS' | 'HISTORY_MAPA' | 'RECIPES' | 'MAPA_REGISTRATIONS'>('PRODUCTION_TANKS');
+
+  // MAPA Products State
+  const [mapaModalOpen, setMapaModalOpen] = useState<boolean>(false);
+  const [editingMapaProduct, setEditingMapaProduct] = useState<MapaProduct | null>(null);
+  const [mapaStatusFilter, setMapaStatusFilter] = useState<string>('ALL');
 
   // Sub-aba ativa dentro de Produção & Tanques: TANKS ou TASKS
   const [productionSubTab, setProductionSubTab] = useState<'TANKS' | 'TASKS'>('TANKS');
@@ -99,7 +106,7 @@ export default function ProducaoPage() {
 
   // Modal de Exclusão Unificado
   const [itemToDelete, setItemToDelete] = useState<{
-    type: 'BATCH' | 'RECIPE' | 'TANK';
+    type: 'BATCH' | 'RECIPE' | 'TANK' | 'MAPA';
     id: string;
     title: string;
     subtitle?: string;
@@ -117,20 +124,22 @@ export default function ProducaoPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [batchesRes, tanksRes, recipesRes, authRes, breweryRes] = await Promise.all([
+      const [batchesRes, tanksRes, recipesRes, authRes, breweryRes, mapaRes] = await Promise.all([
         fetch('/api/batches'),
         fetch('/api/tanks'),
         fetch('/api/recipes'),
         fetch('/api/auth/me'),
         fetch('/api/brewery'),
+        fetch('/api/mapa-products'),
       ]);
 
-      const [batchesData, tanksData, recipesData, authData, breweryData] = await Promise.all([
+      const [batchesData, tanksData, recipesData, authData, breweryData, mapaData] = await Promise.all([
         batchesRes.json(),
         tanksRes.json(),
         recipesRes.json(),
         authRes.json(),
         breweryRes.ok ? breweryRes.json() : null,
+        mapaRes.ok ? mapaRes.json() : [],
       ]);
 
       if (authRes.status === 401 || !authRes.ok) {
@@ -141,6 +150,7 @@ export default function ProducaoPage() {
       if (Array.isArray(batchesData)) setBatches(batchesData);
       if (Array.isArray(tanksData)) setTanks(tanksData);
       if (Array.isArray(recipesData)) setRecipes(recipesData);
+      if (Array.isArray(mapaData)) setMapaProducts(mapaData);
 
       if (breweryData && !breweryData.error) {
         setBrewery(breweryData);
@@ -162,6 +172,7 @@ export default function ProducaoPage() {
       if (itemToDelete.type === 'BATCH') url = `/api/batches/${itemToDelete.id}`;
       else if (itemToDelete.type === 'RECIPE') url = `/api/recipes/${itemToDelete.id}`;
       else if (itemToDelete.type === 'TANK') url = `/api/tanks/${itemToDelete.id}`;
+      else if (itemToDelete.type === 'MAPA') url = `/api/mapa-products/${itemToDelete.id}`;
 
       const res = await fetch(url, { method: 'DELETE' });
       const data = await res.json();
@@ -177,6 +188,16 @@ export default function ProducaoPage() {
 
   useEffect(() => {
     fetchData();
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab')?.toUpperCase();
+      if (tabParam === 'MAPA' || tabParam === 'MAPA_REGISTRATIONS' || tabParam === 'ROTULOS') {
+        setActiveTab('MAPA_REGISTRATIONS');
+      } else if (tabParam === 'RECIPES' || tabParam === 'RECEITAS') {
+        setActiveTab('RECIPES');
+      }
+    } catch (_) {}
+
     try {
       const savedSubTab = localStorage.getItem('pinttech_production_subtab');
       if (savedSubTab === 'TANKS' || savedSubTab === 'TASKS') setProductionSubTab(savedSubTab);
@@ -277,6 +298,21 @@ export default function ProducaoPage() {
       r.name?.toLowerCase().includes(search.toLowerCase()) ||
       r.style?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const filteredMapaProducts = useMemo(() => {
+    return mapaProducts.filter((item) => {
+      if (mapaStatusFilter !== 'ALL' && item.status !== mapaStatusFilter) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.mapaRegistration.toLowerCase().includes(q) ||
+        (item.commercialDenomination && item.commercialDenomination.toLowerCase().includes(q)) ||
+        (item.style && item.style.toLowerCase().includes(q)) ||
+        (item.notes && item.notes.toLowerCase().includes(q))
+      );
+    });
+  }, [mapaProducts, mapaStatusFilter, search]);
 
   const filteredTanks = useMemo(() => {
     return tanks.filter((t) => {
@@ -1009,6 +1045,12 @@ export default function ProducaoPage() {
               label: 'Catálogo de Receitas',
               count: recipes.length,
               icon: Beer,
+            },
+            {
+              id: 'MAPA_REGISTRATIONS',
+              label: 'Registros MAPA',
+              count: mapaProducts.length,
+              icon: ShieldCheck,
             },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -2656,6 +2698,265 @@ export default function ProducaoPage() {
         </div>
       )}
 
+      {/* ABA: REGISTROS MAPA & RÓTULOS REGULATÓRIOS */}
+      {activeTab === 'MAPA_REGISTRATIONS' && (
+        <div className="space-y-6">
+          {/* Top Info Banner & Actions */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white flex items-center gap-2">
+                    <span>Catálogo de Registros MAPA</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {mapaProducts.length} {mapaProducts.length === 1 ? 'Rótulo' : 'Rótulos'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Banco centralizado de rótulos comerciais cadastrados no MAPA para vinculação rápida a receitas e lotes.
+                    {brewery?.mapaEstablishment && (
+                      <span className="block text-amber-400/90 font-mono mt-1 text-[11px]">
+                        🏛️ Registro de Estabelecimento da Cervejaria: <strong>{brewery.mapaEstablishment}</strong>
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Link
+                  href="/importacao?type=MAPA_PRODUCTS"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition flex items-center gap-2 shadow-xs"
+                >
+                  <Upload className="w-4 h-4 text-amber-400" />
+                  <span>Importar Planilha (Excel)</span>
+                </Link>
+
+                <button
+                  onClick={() => {
+                    setEditingMapaProduct(null);
+                    setMapaModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Novo Registro MAPA</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-800">
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total de Rótulos</span>
+                <span className="text-xl font-black text-white font-mono">{mapaProducts.length}</span>
+              </div>
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Ativos / Deferidos</span>
+                <span className="text-xl font-black text-emerald-400 font-mono">
+                  {mapaProducts.filter((p) => p.status === 'ATIVO').length}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">Em Análise MAPA</span>
+                <span className="text-xl font-black text-amber-400 font-mono">
+                  {mapaProducts.filter((p) => p.status === 'EM_ANALISE').length}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 block">Receitas Vinculadas</span>
+                <span className="text-xl font-black text-blue-400 font-mono">
+                  {mapaProducts.reduce((acc, p) => acc + (p._count?.recipes || 0), 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              {[
+                { id: 'ALL', label: 'Todos', count: mapaProducts.length },
+                { id: 'ATIVO', label: 'Ativos', count: mapaProducts.filter((p) => p.status === 'ATIVO').length },
+                { id: 'EM_ANALISE', label: 'Em Análise', count: mapaProducts.filter((p) => p.status === 'EM_ANALISE').length },
+                { id: 'ARQUIVADO', label: 'Arquivados', count: mapaProducts.filter((p) => p.status === 'ARQUIVADO').length },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setMapaStatusFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    mapaStatusFilter === f.id
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  <span>{f.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    mapaStatusFilter === f.id ? 'bg-slate-950/30 text-slate-950 font-black' : 'bg-slate-900 text-slate-400'
+                  }`}>
+                    {f.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <span className="text-xs text-slate-400 self-end sm:self-center">
+              Exibindo {filteredMapaProducts.length} de {mapaProducts.length} registros
+            </span>
+          </div>
+
+          {/* List or Table */}
+          {filteredMapaProducts.length === 0 ? (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-8 h-8" />
+              </div>
+              <div className="max-w-md mx-auto">
+                <h4 className="text-base font-bold text-white">
+                  {search ? 'Nenhum registro MAPA encontrado na busca' : 'Nenhum registro MAPA cadastrado ainda'}
+                </h4>
+                <p className="text-xs text-slate-400 mt-1">
+                  {search
+                    ? 'Tente buscar por outro termo, número de registro ou denominação legal.'
+                    : 'Cadastre os números de registro MAPA dos rótulos da sua cervejaria ou importe sua planilha para usar em receitas e brassagens com 1 clique.'}
+                </p>
+              </div>
+              {!search && (
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setEditingMapaProduct(null);
+                      setMapaModalOpen(true);
+                    }}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Cadastrar Primeiro Registro</span>
+                  </button>
+                  <Link
+                    href="/importacao?type=MAPA_PRODUCTS"
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4 text-amber-400" />
+                    <span>Importar Planilha (Excel)</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredMapaProducts.map((product) => (
+                <div
+                  key={product.id}
+                  className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between group space-y-3"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-sm text-white group-hover:text-amber-300 transition">
+                          {product.name}
+                        </h4>
+                        {product.style && (
+                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                            {product.style}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                          product.status === 'ATIVO'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : product.status === 'EM_ANALISE'
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        {product.status === 'ATIVO'
+                          ? '✅ Ativo'
+                          : product.status === 'EM_ANALISE'
+                          ? '⏳ Em Análise'
+                          : '📁 Arquivado'}
+                      </span>
+                    </div>
+
+                    {/* Nº MAPA */}
+                    <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                          Nº Registro MAPA
+                        </span>
+                        <span className="font-mono text-xs font-bold text-amber-300 truncate block">
+                          {product.mapaRegistration}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Denominação Legal */}
+                    {product.commercialDenomination && (
+                      <div className="text-[11px] text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/60 line-clamp-2">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">
+                          Denominação Legal
+                        </span>
+                        {product.commercialDenomination}
+                      </div>
+                    )}
+
+                    {product.notes && (
+                      <p className="text-[10px] text-slate-400 italic line-clamp-2">
+                        {product.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                    <span className="text-[10px] text-slate-400">
+                      {product._count?.recipes ? (
+                        <span className="text-amber-400/90 font-semibold">
+                          📌 {product._count.recipes} {product._count.recipes === 1 ? 'receita vinculada' : 'receitas vinculadas'}
+                        </span>
+                      ) : (
+                        <span>Nenhuma receita vinculada</span>
+                      )}
+                    </span>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingMapaProduct(product);
+                          setMapaModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition"
+                        title="Editar Registro MAPA"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setItemToDelete({
+                            type: 'MAPA',
+                            id: product.id,
+                            title: product.name,
+                            subtitle: `Registro MAPA: ${product.mapaRegistration}`,
+                          });
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
+                        title="Excluir Registro MAPA"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* MODAL DE IMPORTAÇÃO BEERXML & RASTREABILIDADE MAPA */}
       {importerModalOpen && (
         <BeerXmlImporterModal
@@ -3088,7 +3389,7 @@ export default function ProducaoPage() {
               <div className="text-slate-400">
                 Você está prestes a excluir o seguinte{' '}
                 <strong className="text-white font-bold">
-                  {itemToDelete.type === 'BATCH' ? 'Lote de Produção' : itemToDelete.type === 'RECIPE' ? 'Receita' : 'Tanque'}
+                  {itemToDelete.type === 'BATCH' ? 'Lote de Produção' : itemToDelete.type === 'RECIPE' ? 'Receita' : itemToDelete.type === 'TANK' ? 'Tanque' : 'Registro MAPA'}
                 </strong>:
               </div>
               <div className="text-sm font-bold text-amber-300 font-mono">{itemToDelete.title}</div>
@@ -3117,6 +3418,23 @@ export default function ProducaoPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL DE CADASTRO / EDIÇÃO DE REGISTRO MAPA */}
+      {mapaModalOpen && (
+        <MapaProductModal
+          isOpen={mapaModalOpen}
+          onClose={() => {
+            setMapaModalOpen(false);
+            setEditingMapaProduct(null);
+          }}
+          product={editingMapaProduct}
+          onSuccess={() => {
+            fetchData();
+            setMapaModalOpen(false);
+            setEditingMapaProduct(null);
+          }}
+        />
       )}
     </div>
   );

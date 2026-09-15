@@ -17,6 +17,7 @@ const DATASET_VIEW_MAP: Record<string, { view: string; label: string; tenantFiel
   equipamentos: { view: 'vw_bi_dim_equipamentos', label: 'Equipamentos & Chopeiras (Dimensão)', tenantField: 'brewery_id' },
   fornecedores: { view: 'vw_bi_dim_fornecedores', label: 'Fornecedores (Dimensão)', tenantField: 'brewery_id' },
   precos: { view: 'vw_bi_dim_tabelas_preco', label: 'Tabelas de Preço (Dimensão)', tenantField: 'brewery_id' },
+  mapa: { view: 'vw_bi_dim_mapa_produtos', label: 'Registros MAPA & Rótulos (Dimensão)', tenantField: 'brewery_id' },
   cervejarias: { view: 'vw_bi_dim_cervejarias', label: 'Cervejarias (Dimensão Tenant)', tenantField: 'brewery_id' },
 };
 

@@ -46,6 +46,7 @@ model Brewery {
   saasPayments          SaasSubscriptionPayment[]
   actionLogs            ActionLog[]
   priceTables           PriceTable[]
+  mapaProducts          MapaProduct[]
 }
 
 // ----------------------------------------------------
@@ -230,6 +231,8 @@ model BeerRecipe {
   targetPhFinal         Float?            // pH Alvo da Cerveja Pronta
   mapaRegistration      String?           // Registro MAPA do Produto / Rótulo
   commercialDenomination String?          // Denominação Legal / Comercial MAPA
+  mapaProductId         String?           // Vínculo opcional ao catálogo de produtos MAPA
+  mapaProduct           MapaProduct?      @relation(fields: [mapaProductId], references: [id], onDelete: SetNull)
   description           String?
   costPerLiter          Float?            @default(0)
   salePricePerLiter     Float?            @default(18.0)
@@ -253,6 +256,28 @@ model BeerRecipe {
   orderItems            OrderItem[]
   ingredients           RecipeIngredient[]
   priceTableItems       PriceTableItem[]
+}
+
+// ----------------------------------------------------
+// REGISTROS MAPA / PRODUTOS REGULATÓRIOS
+// ----------------------------------------------------
+model MapaProduct {
+  id                     String       @id @default(uuid())
+  breweryId              String
+  brewery                Brewery      @relation(fields: [breweryId], references: [id], onDelete: Cascade)
+  name                   String       // Nome Comercial do Rótulo / Produto
+  mapaRegistration      String       // Nº de Registro MAPA (ex: SP 001234-5.000001)
+  commercialDenomination String?      // Denominação Legal / Comercial MAPA
+  style                  String?      // Estilo de Cerveja associado
+  status                 String       @default("ATIVO") // ATIVO, EM_ANALISE, ARQUIVADO
+  notes                  String?      // Observações / Data de Concessão
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  recipes                BeerRecipe[]
+
+  @@unique([breweryId, mapaRegistration])
+  @@index([breweryId])
 }
 
 // ----------------------------------------------------
