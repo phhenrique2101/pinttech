@@ -528,7 +528,14 @@ export default function PedidosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [viewMode, setViewMode] = useState<'GRID' | 'TABLE' | 'CALENDAR'>('GRID');
+  const [viewMode, setViewMode] = useState<'GRID' | 'TABLE' | 'CALENDAR'>('TABLE');
+
+  const changeViewMode = (mode: 'GRID' | 'TABLE' | 'CALENDAR') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_orders_view_mode', mode);
+    } catch {}
+  };
 
   // Selected order modal for details / edit / payment
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -832,6 +839,12 @@ export default function PedidosPage() {
 
   useEffect(() => {
     loadData();
+    try {
+      const savedMode = localStorage.getItem('pinttech_orders_view_mode');
+      if (savedMode === 'GRID' || savedMode === 'TABLE' || savedMode === 'CALENDAR') {
+        setViewMode(savedMode as any);
+      }
+    } catch {}
   }, []);
 
   // Helper para resolver o preço unitário do barril com base na tabela de preço selecionada
@@ -1470,7 +1483,7 @@ export default function PedidosPage() {
           {/* Alternar Visualização Cards / Tabela / Agenda */}
           <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
             <button
-              onClick={() => setViewMode('GRID')}
+              onClick={() => changeViewMode('GRID')}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                 viewMode === 'GRID' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
               }`}
@@ -1480,17 +1493,17 @@ export default function PedidosPage() {
               <span className="hidden sm:inline">Cards</span>
             </button>
             <button
-              onClick={() => setViewMode('TABLE')}
+              onClick={() => changeViewMode('TABLE')}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                 viewMode === 'TABLE' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
               }`}
-              title="Visualização em Tabela"
+              title="Visualização em Tabela / Linhas"
             >
               <List className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tabela</span>
+              <span className="hidden sm:inline">Linhas</span>
             </button>
             <button
-              onClick={() => setViewMode('CALENDAR')}
+              onClick={() => changeViewMode('CALENDAR')}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                 viewMode === 'CALENDAR' ? 'bg-amber-500 text-slate-950 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
               }`}

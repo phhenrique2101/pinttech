@@ -63,8 +63,8 @@ export default function ProducaoPage() {
   // Sub-aba ativa dentro de Produção & Tanques: TANKS ou TASKS
   const [productionSubTab, setProductionSubTab] = useState<'TANKS' | 'TASKS'>('TANKS');
 
-  // View mode and sorting state for Unified Production & Tanks
-  const [tankViewMode, setTankViewMode] = useState<'CARDS' | 'ROWS'>('CARDS');
+  // View mode and sorting state for Unified Production & Tanks (padrão em linhas conforme solicitado)
+  const [tankViewMode, setTankViewMode] = useState<'CARDS' | 'ROWS'>('ROWS');
   const [tankSortBy, setTankSortBy] = useState<'name' | 'status' | 'batch' | 'capacity' | 'occupation' | 'type'>('name');
   const [tankSortOrder, setTankSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -73,6 +73,10 @@ export default function ProducaoPage() {
   const [taskSortBy, setTaskSortBy] = useState<'dueDate' | 'urgency' | 'tank' | 'batch' | 'title' | 'type'>('dueDate');
   const [taskSortOrder, setTaskSortOrder] = useState<'asc' | 'desc'>('asc');
   const [taskFilter, setTaskFilter] = useState<'ALL' | 'TODAY' | 'LATE' | 'PENDING' | 'COMPLETED'>('ALL');
+
+  // View mode para Registros MAPA e Catálogo de Receitas (padrão em linhas)
+  const [mapaViewMode, setMapaViewMode] = useState<'CARDS' | 'ROWS'>('ROWS');
+  const [recipeViewMode, setRecipeViewMode] = useState<'CARDS' | 'ROWS'>('ROWS');
 
   // Tank filter state
   const [tankStatusFilter, setTankStatusFilter] = useState<string>('ALL');
@@ -223,6 +227,12 @@ export default function ProducaoPage() {
 
       const savedTaskOrder = localStorage.getItem('pinttech_task_sort_order');
       if (savedTaskOrder === 'asc' || savedTaskOrder === 'desc') setTaskSortOrder(savedTaskOrder);
+
+      const savedMapaMode = localStorage.getItem('pinttech_mapa_view_mode');
+      if (savedMapaMode === 'CARDS' || savedMapaMode === 'ROWS') setMapaViewMode(savedMapaMode);
+
+      const savedRecipeMode = localStorage.getItem('pinttech_recipe_view_mode');
+      if (savedRecipeMode === 'CARDS' || savedRecipeMode === 'ROWS') setRecipeViewMode(savedRecipeMode);
     } catch {
       // ignore
     }
@@ -428,6 +438,20 @@ export default function ProducaoPage() {
     setTaskViewMode(mode);
     try {
       localStorage.setItem('pinttech_task_view_mode', mode);
+    } catch {}
+  };
+
+  const changeMapaViewMode = (mode: 'CARDS' | 'ROWS') => {
+    setMapaViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_mapa_view_mode', mode);
+    } catch {}
+  };
+
+  const changeRecipeViewMode = (mode: 'CARDS' | 'ROWS') => {
+    setRecipeViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_recipe_view_mode', mode);
     } catch {}
   };
 
@@ -2593,108 +2617,253 @@ export default function ProducaoPage() {
       {/* ABA: CATÁLOGO DE RECEITAS */}
       {activeTab === 'RECIPES' && (
         <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-sm">Catálogo de Receitas (BeerSmith / Brewfather)</h3>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                <h3 className="font-bold text-slate-900 dark:text-white text-sm">Catálogo de Receitas (BeerSmith / Brewfather)</h3>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
                   {filteredRecipes.length} {filteredRecipes.length === 1 ? 'receita' : 'receitas'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Portfólio de receitas prontas para serem brassadas futuramente. Inicie a brassagem de qualquer receita em 1 clique.
               </p>
             </div>
-            <button
-              onClick={() => setImporterModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow"
-            >
-              <Upload className="w-4 h-4" />
-              <span>Importar Novo BeerXML</span>
-            </button>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredRecipes.map((recipe) => (
-              <div
-                key={recipe.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 flex flex-col justify-between hover:border-slate-700 transition"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                        {recipe.style}
-                      </span>
-                      <h4 className="text-base font-black text-white">{recipe.name}</h4>
-                    </div>
+            <div className="flex items-center gap-2.5">
+              {/* Alternador de Modo de Visualização: Linhas vs Cards */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => changeRecipeViewMode('ROWS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    recipeViewMode === 'ROWS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                  title="Visualizar em Linhas / Tabela"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Linhas</span>
+                </button>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => setSelectedRecipeForEdit(recipe)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
-                        title="Editar Receita"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          setItemToDelete({
-                            type: 'RECIPE',
-                            id: recipe.id,
-                            title: recipe.name,
-                            subtitle: `Estilo: ${recipe.style}`,
-                          })
-                        }
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition"
-                        title="Excluir Receita"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                    {recipe.description || 'Sem observações informadas.'}
-                  </p>
-
-                  <div className="grid grid-cols-4 gap-1.5 bg-slate-950 p-2 rounded-xl text-center text-xs font-mono mt-3">
-                    <div>
-                      <span className="text-[9px] text-slate-500 font-sans block">OG</span>
-                      <span className="text-slate-200">{recipe.og?.toFixed(3) || '1.050'}</span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-slate-500 font-sans block">ABV</span>
-                      <span className="text-slate-200">{recipe.abv?.toFixed(1) || '5.0'}%</span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-slate-500 font-sans block">IBU</span>
-                      <span className="text-slate-200">{recipe.ibu || '25'}</span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-slate-500 font-sans block">EBC</span>
-                      <span className="text-slate-200">{recipe.ebc || '10'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-slate-400 truncate max-w-[140px]">
-                    {recipe.mapaRegistration || 'Sem MAPA'}
-                  </span>
-                  <button
-                    onClick={() => openStartBatchModal(recipe)}
-                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 transition shadow"
-                    title="Iniciar Brassagem da Receita"
-                  >
-                    <Flame className="w-3.5 h-3.5" />
-                    <span>Iniciar Brassagem</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => changeRecipeViewMode('CARDS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    recipeViewMode === 'CARDS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                  title="Visualizar como Grade / Cards"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Cards</span>
+                </button>
               </div>
-            ))}
+
+              <button
+                onClick={() => setImporterModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Importar Novo BeerXML</span>
+              </button>
+            </div>
           </div>
+
+          {filteredRecipes.length === 0 ? (
+            <div className="p-12 text-center bg-white dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl space-y-3 text-slate-500 dark:text-slate-400">
+              <Beer className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500" />
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Nenhuma receita encontrada</h4>
+              <p className="text-xs text-slate-500">Importe arquivos BeerXML gerados pelo BeerSmith ou Brewfather para começar.</p>
+            </div>
+          ) : recipeViewMode === 'ROWS' ? (
+            /* VISUALIZAÇÃO EM LINHAS (TABELA DE RECEITAS) */
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3.5">Receita & Estilo</th>
+                      <th className="p-3.5">Registro MAPA</th>
+                      <th className="p-3.5 text-center">OG</th>
+                      <th className="p-3.5 text-center">ABV</th>
+                      <th className="p-3.5 text-center">IBU</th>
+                      <th className="p-3.5 text-center">EBC</th>
+                      <th className="p-3.5 text-right w-44">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {filteredRecipes.map((recipe) => (
+                      <tr
+                        key={recipe.id}
+                        className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition group"
+                      >
+                        <td className="p-3.5">
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
+                            {recipe.style}
+                          </span>
+                          <div className="font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-300 transition">
+                            {recipe.name}
+                          </div>
+                          {recipe.description && (
+                            <div className="text-[10px] text-slate-400 truncate max-w-sm italic mt-0.5">
+                              {recipe.description}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="p-3.5 whitespace-nowrap">
+                          {recipe.mapaRegistration ? (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/70 dark:bg-slate-950 border border-amber-200/70 dark:border-slate-800 text-amber-800 dark:text-amber-300 font-mono text-xs font-bold">
+                              <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <span>{recipe.mapaRegistration}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">Sem MAPA</span>
+                          )}
+                        </td>
+
+                        <td className="p-3.5 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {recipe.og?.toFixed(3) || '1.050'}
+                        </td>
+
+                        <td className="p-3.5 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                          {recipe.abv?.toFixed(1) || '5.0'}%
+                        </td>
+
+                        <td className="p-3.5 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {recipe.ibu || '25'}
+                        </td>
+
+                        <td className="p-3.5 text-center font-mono text-slate-600 dark:text-slate-400">
+                          {recipe.ebc || '10'}
+                        </td>
+
+                        <td className="p-3.5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => openStartBatchModal(recipe)}
+                              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black flex items-center gap-1 shadow-xs transition active:scale-95"
+                              title="Iniciar Brassagem da Receita"
+                            >
+                              <Flame className="w-3 h-3" />
+                              <span>Brassagem</span>
+                            </button>
+                            <button
+                              onClick={() => setSelectedRecipeForEdit(recipe)}
+                              className="p-1 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition"
+                              title="Editar Receita"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                setItemToDelete({
+                                  type: 'RECIPE',
+                                  id: recipe.id,
+                                  title: recipe.name,
+                                  subtitle: `Estilo: ${recipe.style}`,
+                                })
+                              }
+                              className="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-slate-800 transition"
+                              title="Excluir Receita"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* VISUALIZAÇÃO EM GRADE (CARDS DE RECEITAS) */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredRecipes.map((recipe) => (
+                <div
+                  key={recipe.id}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-700 shadow-xs transition"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
+                          {recipe.style}
+                        </span>
+                        <h4 className="text-base font-black text-slate-900 dark:text-white">{recipe.name}</h4>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setSelectedRecipeForEdit(recipe)}
+                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white border border-slate-200 dark:border-slate-700 transition"
+                          title="Editar Receita"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setItemToDelete({
+                              type: 'RECIPE',
+                              id: recipe.id,
+                              title: recipe.name,
+                              subtitle: `Estilo: ${recipe.style}`,
+                            })
+                          }
+                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-500/20 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-500/30 transition"
+                          title="Excluir Receita"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                      {recipe.description || 'Sem observações informadas.'}
+                    </p>
+
+                    <div className="grid grid-cols-4 gap-1.5 bg-slate-50 dark:bg-slate-950 p-2 rounded-xl text-center text-xs font-mono mt-3 border border-slate-200/80 dark:border-slate-800/80">
+                      <div>
+                        <span className="text-[9px] text-slate-500 font-sans block">OG</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.og?.toFixed(3) || '1.050'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-500 font-sans block">ABV</span>
+                        <span className="text-amber-700 dark:text-slate-200 font-bold">{recipe.abv?.toFixed(1) || '5.0'}%</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-500 font-sans block">IBU</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.ibu || '25'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-500 font-sans block">EBC</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.ebc || '10'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
+                      {recipe.mapaRegistration || 'Sem MAPA'}
+                    </span>
+                    <button
+                      onClick={() => openStartBatchModal(recipe)}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 transition shadow"
+                      title="Iniciar Brassagem da Receita"
+                    >
+                      <Flame className="w-3.5 h-3.5" />
+                      <span>Iniciar Brassagem</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2803,9 +2972,42 @@ export default function ProducaoPage() {
               ))}
             </div>
 
-            <span className="text-xs text-slate-500 dark:text-slate-400 self-end sm:self-center">
-              Exibindo {filteredMapaProducts.length} de {mapaProducts.length} registros
-            </span>
+            <div className="flex items-center gap-3 self-end sm:self-center">
+              {/* Alternador de Modo de Visualização: Linhas vs Cards */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => changeMapaViewMode('ROWS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    mapaViewMode === 'ROWS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                  title="Visualizar em Linhas / Tabela"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Linhas</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeMapaViewMode('CARDS')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    mapaViewMode === 'CARDS'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                  title="Visualizar como Grade / Cards"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Cards</span>
+                </button>
+              </div>
+
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Exibindo {filteredMapaProducts.length} de {mapaProducts.length} registros
+              </span>
+            </div>
           </div>
 
           {/* List or Table */}
@@ -2845,6 +3047,122 @@ export default function ProducaoPage() {
                   </Link>
                 </div>
               )}
+            </div>
+          ) : mapaViewMode === 'ROWS' ? (
+            /* VISUALIZAÇÃO EM LINHAS (TABELA MAPA) */
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3.5 w-24 text-center">Status</th>
+                      <th className="p-3.5">Rótulo / Produto</th>
+                      <th className="p-3.5">Nº Registro MAPA</th>
+                      <th className="p-3.5">Denominação Comercial</th>
+                      <th className="p-3.5">Estilo</th>
+                      <th className="p-3.5 text-center">Receitas</th>
+                      <th className="p-3.5 text-right w-24">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {filteredMapaProducts.map((product) => (
+                      <tr
+                        key={product.id}
+                        className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition group"
+                      >
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-block ${
+                              product.status === 'ATIVO'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
+                                : product.status === 'EM_ANALISE'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+                                : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                            }`}
+                          >
+                            {product.status === 'ATIVO'
+                              ? '✅ Ativo'
+                              : product.status === 'EM_ANALISE'
+                              ? '⏳ Em Análise'
+                              : '📁 Arquivado'}
+                          </span>
+                        </td>
+
+                        <td className="p-3.5">
+                          <div className="font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-300 transition">
+                            {product.name}
+                          </div>
+                          {product.notes && (
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-xs italic mt-0.5">
+                              {product.notes}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="p-3.5 whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/70 dark:bg-slate-950 border border-amber-200/70 dark:border-slate-800 text-amber-800 dark:text-amber-300 font-mono text-xs font-bold shadow-2xs">
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span>{product.mapaRegistration}</span>
+                          </div>
+                        </td>
+
+                        <td className="p-3.5 max-w-xs truncate text-slate-700 dark:text-slate-300">
+                          {product.commercialDenomination ? (
+                            <span title={product.commercialDenomination}>
+                              {product.commercialDenomination}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">—</span>
+                          )}
+                        </td>
+
+                        <td className="p-3.5 whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium">
+                          {product.style || <span className="text-slate-400 italic text-[11px]">—</span>}
+                        </td>
+
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          {product._count?.recipes ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-500/30">
+                              📌 {product._count.recipes}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[11px] font-mono">0</span>
+                          )}
+                        </td>
+
+                        <td className="p-3.5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingMapaProduct(product);
+                                setMapaModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-amber-300 dark:hover:bg-slate-800 transition"
+                              title="Editar Registro MAPA"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setItemToDelete({
+                                  type: 'MAPA',
+                                  id: product.id,
+                                  title: product.name,
+                                  subtitle: `Registro MAPA: ${product.mapaRegistration}`,
+                                });
+                              }}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-slate-800 transition"
+                              title="Excluir Registro MAPA"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

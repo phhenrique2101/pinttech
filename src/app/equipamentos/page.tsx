@@ -17,6 +17,8 @@ import {
   RefreshCw,
   X,
   ShieldAlert,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { EQUIPMENT_TYPE_MAP } from '@/lib/utils';
 import BarcodeModal from '@/components/kegs/BarcodeModal';
@@ -26,6 +28,14 @@ export default function EquipamentosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [viewMode, setViewMode] = useState<'ROWS' | 'CARDS'>('ROWS');
+
+  const changeViewMode = (mode: 'ROWS' | 'CARDS') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_equipment_view_mode', mode);
+    } catch {}
+  };
 
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
@@ -65,6 +75,10 @@ export default function EquipamentosPage() {
 
   useEffect(() => {
     fetchEquipment();
+    try {
+      const savedMode = localStorage.getItem('pinttech_equipment_view_mode');
+      if (savedMode === 'ROWS' || savedMode === 'CARDS') setViewMode(savedMode);
+    } catch {}
   }, []);
 
   const handleStatusChange = async (itemId: string, newStatus: string) => {
@@ -230,6 +244,37 @@ export default function EquipamentosPage() {
             </select>
           </div>
 
+          {/* Alternador de Modo de Visualização: Linhas vs Cards */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => changeViewMode('ROWS')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                viewMode === 'ROWS'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Visualizar em Linhas / Tabela"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Linhas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => changeViewMode('CARDS')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                viewMode === 'CARDS'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Visualizar como Grade / Cards"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+          </div>
+
           <button
             onClick={fetchEquipment}
             className="p-2 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl"
@@ -240,18 +285,179 @@ export default function EquipamentosPage() {
         </div>
       </div>
 
-      {/* Equipment Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? (
-          <div className="col-span-full text-center py-12 text-slate-400">
-            Carregando equipamentos...
+      {/* Equipment Display: Loading, Empty, Table or Cards */}
+      {loading ? (
+        <div className="text-center py-12 text-slate-400">
+          Carregando equipamentos...
+        </div>
+      ) : filteredEquipment.length === 0 ? (
+        <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 p-8">
+          Nenhum equipamento encontrado com os filtros selecionados.
+        </div>
+      ) : viewMode === 'ROWS' ? (
+        /* VISUALIZAÇÃO EM LINHAS (TABELA DE EQUIPAMENTOS) */
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="p-3.5">Código / Tag</th>
+                  <th className="p-3.5">Equipamento & Tipo</th>
+                  <th className="p-3.5">Status</th>
+                  <th className="p-3.5">Cliente / Localização</th>
+                  <th className="p-3.5 text-right w-44">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredEquipment.map((item) => {
+                  const inUse = item.status === 'EM_USO_CLIENTE';
+                  const isInactive = item.status === 'INATIVO';
+                  const isMaintenance = item.status === 'MANUTENCAO';
+
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50/70 transition group">
+                      <td className="p-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            {item.code}
+                          </span>
+                          {item.voltage && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-0.5">
+                              <Zap className="w-2.5 h-2.5 text-amber-600" />
+                              {item.voltage}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="p-3.5">
+                        <div className="font-bold text-slate-900 group-hover:text-amber-600 transition">
+                          {item.name}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {EQUIPMENT_TYPE_MAP[item.type] || item.type}
+                          {item.serialNumber && ` • S/N: ${item.serialNumber}`}
+                        </div>
+                        {item.notes && (
+                          <div className="text-[10px] text-slate-400 italic truncate max-w-xs mt-0.5">
+                            {item.notes}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-3.5 whitespace-nowrap">
+                        <span
+                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1 ${
+                            isInactive
+                              ? 'bg-slate-100 text-slate-600 border-slate-200'
+                              : inUse
+                              ? 'bg-orange-50 text-orange-800 border-orange-200'
+                              : isMaintenance
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isInactive
+                                ? 'bg-slate-400'
+                                : inUse
+                                ? 'bg-orange-500'
+                                : isMaintenance
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500'
+                            }`}
+                          />
+                          {isInactive
+                            ? 'Inativo'
+                            : inUse
+                            ? 'Em Comodato'
+                            : isMaintenance
+                            ? 'Manutenção'
+                            : 'Disponível'}
+                        </span>
+                      </td>
+
+                      <td className="p-3.5 whitespace-nowrap">
+                        {isInactive ? (
+                          <span className="text-slate-400 text-xs italic">Desativado</span>
+                        ) : item.currentClient ? (
+                          <div className="inline-flex items-center gap-1 text-xs font-bold text-orange-900 bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-200">
+                            <MapPin className="w-3 h-3 text-orange-600 shrink-0" />
+                            <span>{item.currentClient.tradeName || item.currentClient.name}</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                            <span>Cervejaria (Disponível)</span>
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-3.5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() =>
+                              setSelectedForBarcode({
+                                id: item.id,
+                                code: item.code,
+                                capacity: 0,
+                                kegType: item.type,
+                              })
+                            }
+                            className="p-1.5 bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-700 rounded-lg border border-slate-200 transition-colors"
+                            title="Gerar QR Code / Etiqueta"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </button>
+
+                          {isInactive ? (
+                            <button
+                              onClick={() => handleStatusChange(item.id, 'DISPONIVEL')}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-200 flex items-center gap-1 transition-colors"
+                              title="Reativar Equipamento"
+                            >
+                              <Power className="w-3 h-3 text-emerald-600" />
+                              <span>Reativar</span>
+                            </button>
+                          ) : (
+                            !inUse && (
+                              <button
+                                onClick={() => handleStatusChange(item.id, 'INATIVO')}
+                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg border border-slate-200 flex items-center gap-1 transition-colors"
+                                title="Desativar temporariamente"
+                              >
+                                <Power className="w-3 h-3 text-slate-500" />
+                                <span>Inativar</span>
+                              </button>
+                            )
+                          )}
+
+                          {!inUse && (
+                            <button
+                              onClick={() => {
+                                setDeleteError('');
+                                setDeleteConfirmItem(item);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Excluir Equipamento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ) : filteredEquipment.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 p-8">
-            Nenhum equipamento encontrado com os filtros selecionados.
-          </div>
-        ) : (
-          filteredEquipment.map((item) => {
+        </div>
+      ) : (
+        /* VISUALIZAÇÃO EM GRADE (CARDS DE EQUIPAMENTOS) */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredEquipment.map((item) => {
             const inUse = item.status === 'EM_USO_CLIENTE';
             const isInactive = item.status === 'INATIVO';
             const isMaintenance = item.status === 'MANUTENCAO';
@@ -394,9 +600,9 @@ export default function EquipamentosPage() {
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* Modal: Confirmação de Exclusão */}
       {deleteConfirmItem && (

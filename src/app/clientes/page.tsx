@@ -22,6 +22,8 @@ import {
   History,
   ShoppingCart,
   DollarSign,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { exportJsonToExcel } from '@/lib/exportUtils';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -31,6 +33,14 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'ALL' | 'COM_BARRIS' | 'SEM_BARRIS' | 'COM_CHOPEIRAS'>('ALL');
+  const [viewMode, setViewMode] = useState<'ROWS' | 'CARDS'>('ROWS');
+
+  const changeViewMode = (mode: 'ROWS' | 'CARDS') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('pinttech_client_view_mode', mode);
+    } catch {}
+  };
 
   // Modals
   const [newClientModal, setNewClientModal] = useState(false);
@@ -83,6 +93,10 @@ export default function ClientesPage() {
 
   useEffect(() => {
     fetchClients();
+    try {
+      const savedMode = localStorage.getItem('pinttech_client_view_mode');
+      if (savedMode === 'ROWS' || savedMode === 'CARDS') setViewMode(savedMode);
+    } catch {}
   }, []);
 
   const openNewModal = () => {
@@ -408,21 +422,190 @@ export default function ClientesPage() {
           >
             Sem Retenção
           </button>
+
+          {/* Alternador de Modo de Visualização: Linhas vs Cards */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 ml-auto sm:ml-2">
+            <button
+              type="button"
+              onClick={() => changeViewMode('ROWS')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                viewMode === 'ROWS'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Visualizar em Linhas / Tabela"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Linhas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => changeViewMode('CARDS')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                viewMode === 'CARDS'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Visualizar como Grade / Cards"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Clients Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? (
-          <div className="col-span-full text-center py-12 text-slate-400">Carregando clientes...</div>
-        ) : filteredClients.length === 0 ? (
-          <div className="col-span-full text-center py-12 bg-white rounded-2xl border border-slate-200 p-8 space-y-2">
-            <Users className="w-10 h-10 text-slate-300 mx-auto" />
-            <p className="font-bold text-slate-700 text-sm">Nenhum cliente encontrado.</p>
-            <p className="text-xs text-slate-400">Tente ajustar a busca ou cadastre um novo cliente acima.</p>
+      {/* Clients Display: Loading, Empty, Table or Cards */}
+      {loading ? (
+        <div className="text-center py-12 text-slate-400">Carregando clientes...</div>
+      ) : filteredClients.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 p-8 space-y-2">
+          <Users className="w-10 h-10 text-slate-300 mx-auto" />
+          <p className="font-bold text-slate-700 text-sm">Nenhum cliente encontrado.</p>
+          <p className="text-xs text-slate-400">Tente ajustar a busca ou cadastre um novo cliente acima.</p>
+        </div>
+      ) : viewMode === 'ROWS' ? (
+        /* VISUALIZAÇÃO EM LINHAS (TABELA DE CLIENTES) */
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="p-3.5">Cliente / Ponto de Venda</th>
+                  <th className="p-3.5">CNPJ / CPF</th>
+                  <th className="p-3.5">Contato</th>
+                  <th className="p-3.5">Localização</th>
+                  <th className="p-3.5 text-center">Barris Retidos</th>
+                  <th className="p-3.5 text-center">Chopeiras</th>
+                  <th className="p-3.5 text-right w-44">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredClients.map((client) => {
+                  const hasRetained = (client.kegs && client.kegs.length > 0) || (client.equipment && client.equipment.length > 0);
+                  const kegsCount = client.kegs?.length || client.retainedKegsCount || 0;
+                  const equipCount = client.equipment?.length || 0;
+
+                  return (
+                    <tr key={client.id} className="hover:bg-slate-50/70 transition group">
+                      <td className="p-3.5">
+                        <div className="font-bold text-slate-900 group-hover:text-amber-600 transition">
+                          {client.tradeName || client.name}
+                        </div>
+                        {client.tradeName && client.tradeName !== client.name && (
+                          <div className="text-[11px] text-slate-500 truncate max-w-xs">
+                            {client.name}
+                          </div>
+                        )}
+                        {client.notes && (
+                          <div className="text-[10px] text-slate-400 italic truncate max-w-xs mt-0.5">
+                            {client.notes}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-3.5 whitespace-nowrap">
+                        <span className="font-mono text-slate-600">
+                          {client.document || <span className="text-slate-300 italic">—</span>}
+                        </span>
+                      </td>
+
+                      <td className="p-3.5 whitespace-nowrap">
+                        <div className="space-y-0.5">
+                          {client.phone && (
+                            <div className="flex items-center gap-1.5 text-slate-700">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              <span>{client.phone}</span>
+                            </div>
+                          )}
+                          {client.email && (
+                            <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                              <Mail className="w-3 h-3 text-slate-400" />
+                              <span className="truncate max-w-[160px]">{client.email}</span>
+                            </div>
+                          )}
+                          {!client.phone && !client.email && (
+                            <span className="text-slate-300 italic">—</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="p-3.5 whitespace-nowrap text-slate-600">
+                        {client.city ? (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>
+                              {client.city}{client.state ? `/${client.state}` : ''}
+                              {client.neighborhood ? ` (${client.neighborhood})` : ''}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 italic">—</span>
+                        )}
+                      </td>
+
+                      <td className="p-3.5 text-center whitespace-nowrap">
+                        {kegsCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-800 border border-orange-200">
+                            <Cylinder className="w-3 h-3 text-orange-600" />
+                            {kegsCount} un.
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 font-mono text-[11px]">0</span>
+                        )}
+                      </td>
+
+                      <td className="p-3.5 text-center whitespace-nowrap">
+                        {equipCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                            <Wrench className="w-3 h-3 text-blue-600" />
+                            {equipCount} un.
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 font-mono text-[11px]">0</span>
+                        )}
+                      </td>
+
+                      <td className="p-3.5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {hasRetained && (
+                            <button
+                              onClick={() => setSelectedClientHistory(client)}
+                              className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all"
+                              title="Histórico de Vasilhames Retidos"
+                            >
+                              <History className="w-3 h-3 text-amber-600" />
+                              <span>Vasilhames</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openEditModal(client)}
+                            className="p-1.5 bg-slate-100 hover:bg-amber-500 hover:text-white text-slate-700 rounded-lg transition-all border border-slate-200"
+                            title="Editar Cliente"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirmClient(client)}
+                            className="p-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg transition-colors border border-slate-200 hover:border-rose-200"
+                            title="Excluir Cliente"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          filteredClients.map((client) => {
+        </div>
+      ) : (
+        /* VISUALIZAÇÃO EM GRADE (CARDS DE CLIENTES) */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredClients.map((client) => {
             const hasRetained = (client.kegs && client.kegs.length > 0) || (client.equipment && client.equipment.length > 0);
             const kegsCount = client.kegs?.length || client.retainedKegsCount || 0;
             const equipCount = client.equipment?.length || 0;
@@ -552,9 +735,9 @@ export default function ClientesPage() {
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* Modal: Cadastrar Novo Cliente */}
       {newClientModal && (
