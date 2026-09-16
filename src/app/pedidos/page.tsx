@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShoppingCart,
   Plus,
@@ -35,6 +35,7 @@ import {
   Share2,
   PackageCheck,
   ChevronRight,
+  ChevronDown,
   ShieldAlert,
   AlertTriangle,
   Download,
@@ -72,7 +73,7 @@ function RecipeSearchSelect({
   kegs = [],
   orders = [],
   onSelectRecipe,
-  placeholder = '🔍 Digite para buscar cerveja / chopp...',
+  placeholder = '🔍 Selecione ou digite a cerveja...',
 }: {
   recipeId: string;
   recipes: any[];
@@ -81,161 +82,207 @@ function RecipeSearchSelect({
   onSelectRecipe: (recipe: any, recommendedCapacity?: number) => void;
   placeholder?: string;
 }) {
-  // 1. Identificar chopps ENVASADOS em estoque
-  const envasadosMap = new Map<string, {
-    key: string;
-    displayName: string;
-    matchedRecipe: any;
-    capacities: { capacity: number; available: number; total: number }[];
-    totalAvailable: number;
-    bestCapacity: number;
-  }>();
+  // 1. Processamento memoizado de Chopps ENVASADOS e em PRODUÇÃO
+  const { envasadosList, outrosList, allProducts } = useMemo(() => {
+    const envasadosMap = new Map<string, {
+      key: string;
+      displayName: string;
+      matchedRecipe: any;
+      capacities: { capacity: number; available: number; total: number }[];
+      totalAvailable: number;
+      bestCapacity: number;
+    }>();
 
-  kegs
-    .filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO')
-    .forEach((k) => {
-      const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
-      const clean = cleanProductName(rawName);
-      const key = clean.toLowerCase();
-
-      if (!envasadosMap.has(key)) {
-        let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
-        if (!matched) {
-          matched = recipes.find((r) => {
-            const rClean = cleanProductName(r.name).toLowerCase();
-            return (
-              rClean === key ||
-              (key.length >= 4 && rClean.includes(key)) ||
-              (rClean.length >= 4 && key.includes(rClean))
-            );
-          });
-        }
-        if (!matched) {
-          matched = {
-            id: `keg-beer-${key}`,
-            name: clean,
-            style: k.currentBatch?.recipe?.style || 'Chopp Artesanal',
-            salePricePerLiter: 20,
-          };
-        }
-
-        envasadosMap.set(key, {
-          key,
-          displayName: clean,
-          matchedRecipe: matched,
-          capacities: [],
-          totalAvailable: 0,
-          bestCapacity: 50,
-        });
-      }
-    });
-
-  // Calcular estoques por capacidade para cada cerveja envasada
-  const envasadosList: any[] = [];
-  envasadosMap.forEach((val, key) => {
-    const capsCounts: { [c: number]: number } = {};
     kegs
       .filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO')
       .forEach((k) => {
-        const kBeer = cleanProductName(k.currentBeerName || k.currentBatch?.recipe?.name || '').toLowerCase();
-        if (kBeer === key || (key.length >= 4 && kBeer.includes(key)) || (kBeer.length >= 4 && key.includes(kBeer))) {
-          const cap = k.capacity || 50;
-          capsCounts[cap] = (capsCounts[cap] || 0) + 1;
+        const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
+        const clean = cleanProductName(rawName);
+        const key = clean.toLowerCase();
+
+        if (!envasadosMap.has(key)) {
+          let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
+          if (!matched) {
+            matched = recipes.find((r) => {
+              const rClean = cleanProductName(r.name).toLowerCase();
+              return (
+                rClean === key ||
+                (key.length >= 4 && rClean.includes(key)) ||
+                (rClean.length >= 4 && key.includes(rClean))
+              );
+            });
+          }
+          if (!matched) {
+            matched = {
+              id: `keg-beer-${key}`,
+              name: clean,
+              style: k.currentBatch?.recipe?.style || 'Chopp Artesanal',
+              salePricePerLiter: 20,
+            };
+          }
+
+          envasadosMap.set(key, {
+            key,
+            displayName: clean,
+            matchedRecipe: matched,
+            capacities: [],
+            totalAvailable: 0,
+            bestCapacity: 50,
+          });
         }
       });
 
-    const capList: { capacity: number; available: number; total: number }[] = [];
-    let totAvail = 0;
-
-    [50, 30, 20, 15, 10, 5].forEach((cap) => {
-      if (capsCounts[cap]) {
-        let reserved = 0;
-        orders.forEach((o) => {
-          if (['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
-            (o.items || []).forEach((it: any) => {
-              const itClean = cleanProductName(it.recipe?.name || it.description || '').toLowerCase();
-              if ((itClean === key || (key.length >= 4 && itClean.includes(key))) && (it.kegCapacity || 50) === cap) {
-                reserved += (it.quantity || 1);
-              }
-            });
+    const envasados: any[] = [];
+    envasadosMap.forEach((val, key) => {
+      const capsCounts: { [c: number]: number } = {};
+      kegs
+        .filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO')
+        .forEach((k) => {
+          const kBeer = cleanProductName(k.currentBeerName || k.currentBatch?.recipe?.name || '').toLowerCase();
+          if (kBeer === key || (key.length >= 4 && kBeer.includes(key)) || (kBeer.length >= 4 && key.includes(kBeer))) {
+            const cap = k.capacity || 50;
+            capsCounts[cap] = (capsCounts[cap] || 0) + 1;
           }
         });
-        const avail = Math.max(0, capsCounts[cap] - reserved);
-        capList.push({ capacity: cap, available: avail, total: capsCounts[cap] });
-        totAvail += avail;
+
+      const capList: { capacity: number; available: number; total: number }[] = [];
+      let totAvail = 0;
+
+      [50, 30, 20, 15, 10, 5].forEach((cap) => {
+        if (capsCounts[cap]) {
+          let reserved = 0;
+          orders.forEach((o) => {
+            if (['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
+              (o.items || []).forEach((it: any) => {
+                const itClean = cleanProductName(it.recipe?.name || it.description || '').toLowerCase();
+                if ((itClean === key || (key.length >= 4 && itClean.includes(key))) && (it.kegCapacity || 50) === cap) {
+                  reserved += (it.quantity || 1);
+                }
+              });
+            }
+          });
+          const avail = Math.max(0, capsCounts[cap] - reserved);
+          capList.push({ capacity: cap, available: avail, total: capsCounts[cap] });
+          totAvail += avail;
+        }
+      });
+
+      capList.sort((a, b) => b.available - a.available);
+      const bestCap = capList.length > 0 ? capList[0].capacity : 50;
+
+      envasados.push({
+        ...val,
+        capacities: capList,
+        totalAvailable: totAvail,
+        bestCapacity: bestCap,
+        isEnvasado: true,
+      });
+    });
+
+    envasados.sort((a, b) => b.totalAvailable - a.totalAvailable);
+
+    // 2. Outras receitas (não envasadas ou em produção nos tanques)
+    const outrosMap = new Map<string, any>();
+    recipes.forEach((r) => {
+      const clean = cleanProductName(r.name);
+      const key = clean.toLowerCase();
+      if (!envasadosMap.has(key) && !outrosMap.has(key)) {
+        outrosMap.set(key, {
+          key,
+          displayName: clean,
+          matchedRecipe: r,
+          capacities: [],
+          totalAvailable: 0,
+          bestCapacity: 50,
+          isEnvasado: false,
+        });
       }
     });
 
-    capList.sort((a, b) => b.available - a.available);
-    const bestCap = capList.length > 0 ? capList[0].capacity : 50;
+    const outros = Array.from(outrosMap.values());
+    const all = [...envasados, ...outros];
 
-    envasadosList.push({
-      ...val,
-      capacities: capList,
-      totalAvailable: totAvail,
-      bestCapacity: bestCap,
-      isEnvasado: true,
-    });
-  });
+    return { envasadosList: envasados, outrosList: outros, allProducts: all };
+  }, [recipes, kegs, orders]);
 
-  envasadosList.sort((a, b) => b.totalAvailable - a.totalAvailable);
-
-  // 2. Outras receitas (não envasadas ou em tanque)
-  const outrosMap = new Map<string, any>();
-  recipes.forEach((r) => {
-    const clean = cleanProductName(r.name);
-    const key = clean.toLowerCase();
-    if (!envasadosMap.has(key) && !outrosMap.has(key)) {
-      outrosMap.set(key, {
-        key,
-        displayName: clean,
-        matchedRecipe: r,
-        capacities: [],
-        totalAvailable: 0,
-        bestCapacity: 50,
-        isEnvasado: false,
-      });
+  // 2. Nome do produto atualmente selecionado
+  const selectedDisplayName = useMemo(() => {
+    if (!recipeId) return '';
+    const prod = allProducts.find(
+      (p) => p.matchedRecipe?.id === recipeId || p.key === recipeId.toLowerCase()
+    );
+    if (prod) return prod.displayName;
+    const found = recipes.find((r) => r.id === recipeId);
+    if (found) return cleanProductName(found.name);
+    if (recipeId.startsWith('keg-beer-')) {
+      return recipeId.replace('keg-beer-', '');
     }
-  });
-
-  const outrosList = Array.from(outrosMap.values());
-
-  // Todos os produtos unificados para busca e exibição do selecionado
-  const allProducts = [...envasadosList, ...outrosList];
-
-  const selectedProduct = allProducts.find(
-    (p) => p.matchedRecipe?.id === recipeId || p.key === recipeId?.toLowerCase()
-  );
-  const selectedDisplayName = selectedProduct
-    ? selectedProduct.displayName
-    : recipes.find((r) => r.id === recipeId)
-    ? cleanProductName(recipes.find((r) => r.id === recipeId)!.name)
-    : '';
+    return '';
+  }, [allProducts, recipes, recipeId]);
 
   const [query, setQuery] = useState(selectedDisplayName);
   const [isOpen, setIsOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
 
+  // Sincroniza query apenas quando o item selecionado mudar externamente,
+  // e NUNCA enquanto o usuário estiver digitando no campo!
   useEffect(() => {
-    if (selectedProduct) {
-      setQuery(selectedProduct.displayName);
-    } else {
-      const found = recipes.find((r) => r.id === recipeId);
-      if (found) setQuery(cleanProductName(found.name));
-      else setQuery('');
+    if (!isTyping) {
+      setQuery(selectedDisplayName);
     }
-  }, [recipeId, selectedProduct, recipes]);
+  }, [selectedDisplayName, isTyping]);
 
-  const filteredEnvasados = envasadosList.filter((p) => {
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return p.displayName.toLowerCase().includes(q) || (p.matchedRecipe?.style || '').toLowerCase().includes(q);
-  });
+  // Se o usuário abriu o dropdown mas o texto atual é exatamente o produto selecionado,
+  // exibe todas as cervejas para permitir troca rápida em 1 clique!
+  const effectiveFilter = isTyping && query.trim() !== '' && query.trim().toLowerCase() !== selectedDisplayName.toLowerCase()
+    ? query.trim().toLowerCase()
+    : '';
 
-  const filteredOutros = outrosList.filter((p) => {
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return p.displayName.toLowerCase().includes(q) || (p.matchedRecipe?.style || '').toLowerCase().includes(q);
-  });
+  const filteredEnvasados = useMemo(() => {
+    if (!effectiveFilter) return envasadosList;
+    return envasadosList.filter((p) => {
+      return (
+        p.displayName.toLowerCase().includes(effectiveFilter) ||
+        (p.matchedRecipe?.style || '').toLowerCase().includes(effectiveFilter)
+      );
+    });
+  }, [envasadosList, effectiveFilter]);
+
+  const filteredOutros = useMemo(() => {
+    if (!effectiveFilter) return outrosList;
+    return outrosList.filter((p) => {
+      return (
+        p.displayName.toLowerCase().includes(effectiveFilter) ||
+        (p.matchedRecipe?.style || '').toLowerCase().includes(effectiveFilter)
+      );
+    });
+  }, [outrosList, effectiveFilter]);
+
+  const hasExactMatch = useMemo(() => {
+    if (!effectiveFilter) return true;
+    return allProducts.some(
+      (p) => p.displayName.toLowerCase() === effectiveFilter || p.key === effectiveFilter
+    );
+  }, [allProducts, effectiveFilter]);
+
+  const handleSelect = (matchedRecipe: any, bestCap?: number) => {
+    setIsTyping(false);
+    setIsOpen(false);
+    setQuery(cleanProductName(matchedRecipe.name));
+    onSelectRecipe(matchedRecipe, bestCap);
+  };
+
+  const handleClear = () => {
+    setIsTyping(true);
+    setQuery('');
+    setIsOpen(true);
+  };
+
+  const handleClose = () => {
+    setIsTyping(false);
+    setIsOpen(false);
+    setQuery(selectedDisplayName);
+  };
 
   return (
     <div className="relative w-full">
@@ -245,23 +292,30 @@ function RecipeSearchSelect({
           placeholder={placeholder}
           value={query}
           onChange={(e) => {
+            setIsTyping(true);
             setQuery(e.target.value);
             setIsOpen(true);
           }}
-          onFocus={() => setIsOpen(true)}
-          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none pr-7 shadow-2xs"
+          onFocus={(e) => {
+            setIsOpen(true);
+            e.target.select();
+          }}
+          onClick={() => {
+            setIsOpen(true);
+          }}
+          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none pr-7 shadow-2xs transition-colors"
         />
-        {query && (
+        {query ? (
           <button
             type="button"
-            onClick={() => {
-              setQuery('');
-              setIsOpen(true);
-            }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            onClick={handleClear}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+            title="Limpar seleção"
           >
             <X className="w-3.5 h-3.5" />
           </button>
+        ) : (
+          <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         )}
       </div>
 
@@ -269,15 +323,43 @@ function RecipeSearchSelect({
         <>
           <div
             className="fixed inset-0 z-40"
-            onClick={() => {
-              setIsOpen(false);
-              if (selectedDisplayName) setQuery(selectedDisplayName);
-            }}
+            onClick={handleClose}
           />
-          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
-            {filteredEnvasados.length === 0 && filteredOutros.length === 0 ? (
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+            {/* Opção para usar texto digitado como chopp avulso se não coincidir exatamente com receitas existentes */}
+            {effectiveFilter && !hasExactMatch && (
+              <button
+                type="button"
+                onClick={() => {
+                  const customName = query.trim();
+                  handleSelect(
+                    {
+                      id: `keg-beer-${customName.toLowerCase()}`,
+                      name: customName,
+                      style: 'Chopp Especial / Avulso',
+                      salePricePerLiter: 20,
+                    },
+                    50
+                  );
+                }}
+                className="w-full text-left p-3 bg-amber-50/80 hover:bg-amber-100/80 text-amber-950 transition-colors flex items-center justify-between cursor-pointer border-b border-amber-200"
+              >
+                <div className="flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <div>
+                    <span className="font-black text-xs block">Usar &quot;{query.trim()}&quot;</span>
+                    <span className="text-[10px] text-amber-800">Adicionar este produto/chopp digitado ao pedido</span>
+                  </div>
+                </div>
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 flex-shrink-0">
+                  Novo
+                </span>
+              </button>
+            )}
+
+            {filteredEnvasados.length === 0 && filteredOutros.length === 0 && (!effectiveFilter || hasExactMatch) ? (
               <div className="p-4 text-xs text-slate-400 text-center font-medium">
-                Nenhuma cerveja encontrada com esse nome
+                Nenhuma cerveja cadastrada ou encontrada
               </div>
             ) : (
               <>
@@ -300,11 +382,7 @@ function RecipeSearchSelect({
                         <button
                           key={item.key}
                           type="button"
-                          onClick={() => {
-                            setQuery(item.displayName);
-                            setIsOpen(false);
-                            onSelectRecipe(item.matchedRecipe, item.bestCapacity);
-                          }}
+                          onClick={() => handleSelect(item.matchedRecipe, item.bestCapacity)}
                           className={`w-full text-left px-3 py-2.5 hover:bg-amber-50/70 transition-colors flex items-center justify-between border-b border-slate-50 last:border-b-0 cursor-pointer ${
                             isSelected ? 'bg-amber-50 font-bold' : ''
                           }`}
@@ -344,11 +422,7 @@ function RecipeSearchSelect({
                         <button
                           key={item.key}
                           type="button"
-                          onClick={() => {
-                            setQuery(item.displayName);
-                            setIsOpen(false);
-                            onSelectRecipe(item.matchedRecipe, 50);
-                          }}
+                          onClick={() => handleSelect(item.matchedRecipe, 50)}
                           className={`w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer ${
                             isSelected ? 'bg-amber-50 font-bold' : ''
                           }`}
@@ -650,6 +724,17 @@ export default function PedidosPage() {
   };
 
   const getStockAvailability = (recipeId: string, capacity: number, editingOrderId?: string) => {
+    if (!recipeId) {
+      return {
+        available: 0,
+        total: 0,
+        matchingTotal: 0,
+        reserved: 0,
+        recipeName: 'Não selecionado',
+        reservedOrders: [],
+      };
+    }
+
     const recipe = recipes.find((r) => r.id === recipeId) || {
       id: recipeId,
       name: recipeId?.startsWith('keg-beer-') ? recipeId.replace('keg-beer-', '') : 'Chopp',
@@ -1081,55 +1166,10 @@ export default function PedidosPage() {
   };
 
   const handleAddItemRow = () => {
-    // 1. Priorizar chopps com estoque ENVASADO na câmara fria
-    const envasadosMap = new Map<string, { recipe: any; bestCap: number; availCount: number }>();
-
-    kegs.filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO').forEach((k) => {
-      const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
-      const clean = cleanProductName(rawName);
-      const key = clean.toLowerCase();
-
-      if (!envasadosMap.has(key)) {
-        let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
-        if (!matched) {
-          matched = recipes.find((r) => {
-            const rClean = cleanProductName(r.name).toLowerCase();
-            return rClean === key || (key.length >= 4 && rClean.includes(key)) || (rClean.length >= 4 && key.includes(rClean));
-          });
-        }
-        if (!matched) {
-          matched = {
-            id: `keg-beer-${key}`,
-            name: clean,
-            salePricePerLiter: 20,
-          };
-        }
-
-        let bestCap = 50;
-        let maxAvail = 0;
-        [50, 30, 20, 15, 10, 5].forEach((cap) => {
-          const avail = getStockAvailability(matched.id, cap).available;
-          if (avail > maxAvail) {
-            maxAvail = avail;
-            bestCap = cap;
-          }
-        });
-
-        envasadosMap.set(key, { recipe: matched, bestCap, availCount: maxAvail });
-      }
-    });
-
-    const envasadosList = Array.from(envasadosMap.values()).sort((a, b) => b.availCount - a.availCount);
-    const chosen = envasadosList[0];
-
-    if (chosen) {
-      const cap = chosen.bestCap || 50;
-      const defaultPrice = resolveBeerPrice(chosen.recipe, cap, newPriceTableId);
-      setOrderItems([...orderItems, { recipeId: chosen.recipe.id, quantity: 1, unitPrice: defaultPrice, kegCapacity: cap }]);
-    } else if (recipes.length > 0) {
-      const defaultPrice = resolveBeerPrice(recipes[0], 50, newPriceTableId);
-      setOrderItems([...orderItems, { recipeId: recipes[0].id, quantity: 1, unitPrice: defaultPrice, kegCapacity: 50 }]);
-    }
+    setOrderItems([
+      ...orderItems,
+      { recipeId: '', quantity: 1, unitPrice: 0, kegCapacity: 50 },
+    ]);
   };
 
   const handleRemoveItemRow = (index: number) => {
@@ -1137,74 +1177,17 @@ export default function PedidosPage() {
   };
 
   const handleAddEditItemRow = () => {
-    const envasadosMap = new Map<string, { recipe: any; bestCap: number; availCount: number }>();
-
-    kegs.filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO').forEach((k) => {
-      const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
-      const clean = cleanProductName(rawName);
-      const key = clean.toLowerCase();
-
-      if (!envasadosMap.has(key)) {
-        let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
-        if (!matched) {
-          matched = recipes.find((r) => {
-            const rClean = cleanProductName(r.name).toLowerCase();
-            return rClean === key || (key.length >= 4 && rClean.includes(key)) || (rClean.length >= 4 && key.includes(rClean));
-          });
-        }
-        if (!matched) {
-          matched = {
-            id: `keg-beer-${key}`,
-            name: clean,
-            salePricePerLiter: 20,
-          };
-        }
-
-        let bestCap = 50;
-        let maxAvail = 0;
-        [50, 30, 20, 15, 10, 5].forEach((cap) => {
-          const avail = getStockAvailability(matched.id, cap, selectedOrder?.id).available;
-          if (avail > maxAvail) {
-            maxAvail = avail;
-            bestCap = cap;
-          }
-        });
-
-        envasadosMap.set(key, { recipe: matched, bestCap, availCount: maxAvail });
-      }
-    });
-
-    const envasadosList = Array.from(envasadosMap.values()).sort((a, b) => b.availCount - a.availCount);
-    const chosen = envasadosList[0];
-
-    if (chosen) {
-      const cap = chosen.bestCap || 50;
-      const defaultPrice = resolveBeerPrice(chosen.recipe, cap, editPriceTableId);
-      setEditItems([
-        ...editItems,
-        {
-          recipeId: chosen.recipe.id,
-          description: `Barril ${cap}L - ${chosen.recipe.name}`,
-          quantity: 1,
-          unitPrice: defaultPrice,
-          totalPrice: defaultPrice,
-          kegCapacity: cap,
-        },
-      ]);
-    } else if (recipes.length > 0) {
-      const defaultPrice = resolveBeerPrice(recipes[0], 50, editPriceTableId);
-      setEditItems([
-        ...editItems,
-        {
-          recipeId: recipes[0].id,
-          description: `Barril 50L - ${recipes[0].name}`,
-          quantity: 1,
-          unitPrice: defaultPrice,
-          totalPrice: defaultPrice,
-          kegCapacity: 50,
-        },
-      ]);
-    }
+    setEditItems([
+      ...editItems,
+      {
+        recipeId: '',
+        description: '',
+        quantity: 1,
+        unitPrice: 0,
+        totalPrice: 0,
+        kegCapacity: 50,
+      },
+    ]);
   };
 
   const handleRemoveEditItemRow = (index: number) => {
@@ -1219,9 +1202,15 @@ export default function PedidosPage() {
       return;
     }
 
+    if (orderItems.some((it) => !it.recipeId)) {
+      alert('Por favor, selecione ou digite a cerveja/chopp para cada item adicionado no pedido.');
+      return;
+    }
+
     // Collect informational stock notes
     const stockNotes: string[] = [];
     for (const it of orderItems) {
+      if (!it.recipeId) continue;
       const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
       if (stock.available <= 0) {
         stockNotes.push(`• ${stock.recipeName} (${it.kegCapacity || 50}L): 0 barris livres na câmara fria (${stock.matchingTotal} total, ${stock.reserved} reservados)`);
@@ -1282,9 +1271,15 @@ export default function PedidosPage() {
     e.preventDefault();
     if (!selectedOrder) return;
 
+    if (editItems.some((it) => !it.recipeId)) {
+      alert('Por favor, selecione ou digite a cerveja/chopp para cada item do pedido.');
+      return;
+    }
+
     // Collect informational stock notes for edit
     const stockNotes: string[] = [];
     for (const it of editItems) {
+      if (!it.recipeId) continue;
       const cap = it.kegCapacity || 50;
       const stock = getStockAvailability(it.recipeId, cap, selectedOrder.id);
       if (stock.available <= 0) {
@@ -2697,8 +2692,8 @@ export default function PedidosPage() {
                     ) : (
                       editItems.map((item, idx) => {
                       const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50, selectedOrder?.id);
-                      const isOutOfStock = stock.available <= 0;
-                      const isInsufficient = !isOutOfStock && item.quantity > stock.available;
+                      const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
+                      const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
 
                       return (
                         <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
@@ -3396,8 +3391,8 @@ export default function PedidosPage() {
                   ) : (
                     orderItems.map((item, idx) => {
                       const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
-                      const isOutOfStock = stock.available <= 0;
-                      const isInsufficient = !isOutOfStock && item.quantity > stock.available;
+                      const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
+                      const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
 
                       return (
                         <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">

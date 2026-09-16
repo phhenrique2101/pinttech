@@ -39,6 +39,7 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
   const [breweries, setBreweries] = useState<{ id: string; name: string }[]>([]);
   const [breweryModalOpen, setBreweryModalOpen] = useState(false);
   const [breweryData, setBreweryData] = useState<any>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Mandatory password change state
   const [forcePasswordModal, setForcePasswordModal] = useState(false);
@@ -102,9 +103,15 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
   }, [user]);
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
-    router.refresh();
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      window.location.href = '/login';
+    }
   };
 
   const handleSwitchBrewery = (breweryId: string) => {
@@ -365,11 +372,13 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
                   )}
 
                   <button
+                    type="button"
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors border-t border-slate-100"
+                    disabled={isLoggingOut}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors border-t border-slate-100"
                   >
-                    <LogOut className="w-4 h-4" />
-                    Sair do Sistema
+                    <LogOut className={`w-4 h-4 ${isLoggingOut ? 'animate-spin' : ''}`} />
+                    <span>{isLoggingOut ? 'Saindo do Sistema...' : 'Sair do Sistema'}</span>
                   </button>
                 </div>
               )}

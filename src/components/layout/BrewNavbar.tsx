@@ -20,12 +20,18 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [breweryModalOpen, setBreweryModalOpen] = useState(false);
   const [breweryData, setBreweryData] = useState<any>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {}
-    window.location.href = '/login';
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      window.location.href = '/login';
+    }
   };
 
   // Determina URL do ERP principal para voltar se necessário
@@ -161,11 +167,13 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
                   </a>
 
                   <button
+                    type="button"
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition border-t border-slate-100 dark:border-slate-800 mt-1"
+                    disabled={isLoggingOut}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 disabled:opacity-50 transition border-t border-slate-100 dark:border-slate-800 mt-1"
                   >
-                    <LogOut className="w-4 h-4" />
-                    Sair da Conta
+                    <LogOut className={`w-4 h-4 ${isLoggingOut ? 'animate-spin' : ''}`} />
+                    <span>{isLoggingOut ? 'Saindo da Conta...' : 'Sair da Conta'}</span>
                   </button>
                 </div>
               )}

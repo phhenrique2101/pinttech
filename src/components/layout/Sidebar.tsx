@@ -24,6 +24,7 @@ import {
   BarChart3,
   ShieldCheck,
   Tag,
+  LogOut,
 } from 'lucide-react';
 import { CurrentUser } from './Navbar';
 
@@ -31,6 +32,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
   const pathname = usePathname();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const [breweries, setBreweries] = useState<{ id: string; name: string }[]>([]);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (isSuperAdmin) {
@@ -42,6 +44,18 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
         .catch(() => {});
     }
   }, [isSuperAdmin]);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      window.location.href = '/login';
+    }
+  };
 
   const handleSwitchBrewery = (breweryId: string) => {
     const targetUrl = breweryId ? '/' : '/master';
@@ -205,12 +219,24 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
       </div>
 
       {/* Footer */}
-      <div className="mt-auto p-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-950/40">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-          <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Plataforma SaaS Online</span>
+      <div className="mt-auto p-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-950/40 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">SaaS Online</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            title="Sair do Sistema"
+            className="flex items-center gap-1.5 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <LogOut className={`w-3.5 h-3.5 ${isLoggingOut ? 'animate-spin' : ''}`} />
+            <span>{isLoggingOut ? 'Saindo...' : 'Sair'}</span>
+          </button>
         </div>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">PintTech v1.0 • Master Multi-Tenant</p>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500">PintTech v1.0 • Master Multi-Tenant</p>
       </div>
     </aside>
   );

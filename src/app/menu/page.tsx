@@ -11,17 +11,23 @@ import {
   DollarSign,
   Wrench,
   UserCheck,
-  LogOut,
   Tag,
+  Crown,
 } from 'lucide-react';
 import { getSessionFromCookies } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import MobileLogoutButton from '@/components/common/MobileLogoutButton';
 
 export default function MobileMenuPage() {
   const session = getSessionFromCookies();
   if (!session) redirect('/login');
 
+  const isSuperAdmin = session.role === 'SUPER_ADMIN';
+
   const links = [
+    ...(isSuperAdmin
+      ? [{ label: 'Portal Master (Proprietário)', href: '/master', icon: Crown, color: 'text-amber-950 bg-amber-400 font-black' }]
+      : []),
     { label: 'Painel Principal', href: '/', icon: LayoutDashboard, color: 'text-amber-600 bg-amber-50' },
     { label: 'Controle de Barris', href: '/barris', icon: Cylinder, color: 'text-amber-600 bg-amber-50' },
     { label: 'Scanner de Campo (Câmera)', href: '/scanner', icon: QrCode, color: 'text-amber-600 bg-amber-500 text-white font-bold' },
@@ -88,6 +94,11 @@ export default function MobileMenuPage() {
             🍏 <strong>iPhone:</strong> Toque em Compartilhar (⎋) e em <em>&quot;Adicionar à Tela de Início&quot; (+)</em>.
           </p>
         </div>
+      </div>
+
+      {/* Botão de Sair do Sistema no Mobile */}
+      <div className="pt-2">
+        <MobileLogoutButton />
       </div>
     </div>
   );
