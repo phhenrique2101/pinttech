@@ -73,6 +73,7 @@ function RecipeSearchSelect({
   kegs = [],
   orders = [],
   onSelectRecipe,
+  resolvePrice,
   placeholder = '🔍 Selecione ou digite a cerveja...',
 }: {
   recipeId: string;
@@ -80,6 +81,7 @@ function RecipeSearchSelect({
   kegs?: any[];
   orders?: any[];
   onSelectRecipe: (recipe: any, recommendedCapacity?: number) => void;
+  resolvePrice?: (recipe: any, capacity: number) => number;
   placeholder?: string;
 }) {
   // 1. Processamento memoizado de Chopps ENVASADOS e em PRODUÇÃO
@@ -303,19 +305,19 @@ function RecipeSearchSelect({
           onClick={() => {
             setIsOpen(true);
           }}
-          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none pr-7 shadow-2xs transition-colors"
+          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none pr-8 shadow-2xs transition-all"
         />
         {query ? (
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
             title="Limpar seleção"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         ) : (
-          <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         )}
       </div>
 
@@ -325,7 +327,18 @@ function RecipeSearchSelect({
             className="fixed inset-0 z-40"
             onClick={handleClose}
           />
-          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+          <div className="absolute left-0 top-full mt-1.5 w-[520px] sm:w-[620px] max-w-[calc(100vw-2.5rem)] bg-white border border-slate-200/90 rounded-2xl shadow-2xl z-50 max-h-[420px] overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/5">
+            {/* Cabeçalho informativo do Dropdown */}
+            <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 sticky top-0 z-20 backdrop-blur-xs">
+              <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
+                <span>🍺</span>
+                <span>Catálogo de Chopps ({filteredEnvasados.length + filteredOutros.length})</span>
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                💡 Dica: clique no barril para selecionar tamanho direto
+              </span>
+            </div>
+
             {/* Opção para usar texto digitado como chopp avulso se não coincidir exatamente com receitas existentes */}
             {effectiveFilter && !hasExactMatch && (
               <button
@@ -342,23 +355,29 @@ function RecipeSearchSelect({
                     50
                   );
                 }}
-                className="w-full text-left p-3 bg-amber-50/80 hover:bg-amber-100/80 text-amber-950 transition-colors flex items-center justify-between cursor-pointer border-b border-amber-200"
+                className="w-full text-left p-3.5 bg-amber-50 hover:bg-amber-100/90 text-amber-950 transition-colors flex items-center justify-between cursor-pointer border-b border-amber-200"
               >
-                <div className="flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-200 flex items-center justify-center flex-shrink-0 text-amber-800">
+                    <Plus className="w-4 h-4" />
+                  </div>
                   <div>
-                    <span className="font-black text-xs block">Usar &quot;{query.trim()}&quot;</span>
-                    <span className="text-[10px] text-amber-800">Adicionar este produto/chopp digitado ao pedido</span>
+                    <span className="font-black text-xs sm:text-sm block text-amber-950">
+                      Usar &quot;{query.trim()}&quot;
+                    </span>
+                    <span className="text-xs text-amber-800 font-medium">
+                      Adicionar este produto/chopp digitado como item avulso
+                    </span>
                   </div>
                 </div>
-                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 flex-shrink-0">
-                  Novo
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 flex-shrink-0 shadow-2xs">
+                  Novo Chopp
                 </span>
               </button>
             )}
 
             {filteredEnvasados.length === 0 && filteredOutros.length === 0 && (!effectiveFilter || hasExactMatch) ? (
-              <div className="p-4 text-xs text-slate-400 text-center font-medium">
+              <div className="p-6 text-xs sm:text-sm text-slate-400 text-center font-medium">
                 Nenhuma cerveja cadastrada ou encontrada
               </div>
             ) : (
@@ -366,79 +385,173 @@ function RecipeSearchSelect({
                 {/* Seção 1: Chopps Envasados em Estoque */}
                 {filteredEnvasados.length > 0 && (
                   <div>
-                    <div className="px-3 py-1.5 bg-emerald-50 text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center justify-between sticky top-0 z-10 border-b border-emerald-100">
-                      <span className="flex items-center gap-1">
-                        🍺 Chopps Envasados na Câmara Fria ({filteredEnvasados.length})
+                    <div className="px-3.5 py-2 bg-gradient-to-r from-emerald-50 to-emerald-100/60 text-[11px] font-black uppercase tracking-wider text-emerald-900 flex items-center justify-between sticky top-[37px] z-10 border-b border-emerald-200/80 backdrop-blur-xs">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Chopps Envasados na Câmara Fria ({filteredEnvasados.length})</span>
                       </span>
-                      <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-bold">
+                      <span className="text-[10px] bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full font-black shadow-2xs">
                         Pronto p/ Entrega
                       </span>
                     </div>
-                    {filteredEnvasados.map((item) => {
-                      const isSelected = recipeId === item.matchedRecipe.id;
-                      const capText = item.capacities.map((c: any) => `${c.total}x ${c.capacity}L`).join(' • ');
 
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => handleSelect(item.matchedRecipe, item.bestCapacity)}
-                          className={`w-full text-left px-3 py-2.5 hover:bg-amber-50/70 transition-colors flex items-center justify-between border-b border-slate-50 last:border-b-0 cursor-pointer ${
-                            isSelected ? 'bg-amber-50 font-bold' : ''
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1 pr-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-black text-slate-900 text-xs truncate">
-                                {item.displayName}
-                              </span>
-                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex-shrink-0">
-                                {item.totalAvailable} {item.totalAvailable === 1 ? 'barril livre' : 'barris livres'}
-                              </span>
+                    <div className="divide-y divide-slate-100">
+                      {filteredEnvasados.map((item) => {
+                        const isSelected = recipeId === item.matchedRecipe.id;
+
+                        return (
+                          <div
+                            key={item.key}
+                            onClick={() => handleSelect(item.matchedRecipe, item.bestCapacity)}
+                            className={`p-3.5 hover:bg-amber-50/60 transition-all cursor-pointer group ${
+                              isSelected ? 'bg-amber-50/80' : ''
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-black text-slate-900 text-xs sm:text-sm group-hover:text-amber-800 transition-colors">
+                                    {item.displayName}
+                                  </span>
+                                  {item.matchedRecipe.style && (
+                                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                      {item.matchedRecipe.style}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-2">
+                                  <span>Preço base: <strong className="text-slate-800">{formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L</strong></span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-200 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  <span>{item.totalAvailable} {item.totalAvailable === 1 ? 'barril livre' : 'barris livres'}</span>
+                                </span>
+                                {isSelected && (
+                                  <span className="p-1 rounded-full bg-amber-500 text-white shadow-xs">
+                                    <Check className="w-3.5 h-3.5" />
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-[10px] text-slate-500 font-medium flex items-center gap-2 mt-0.5">
-                              {capText && <span>Barris: <strong>{capText}</strong></span>}
-                              <span>• {formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L</span>
-                            </div>
+
+                            {/* Barris / Capacidades disponíveis com seleção rápida em 1 clique */}
+                            {item.capacities && item.capacities.length > 0 && (
+                              <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider mr-0.5">
+                                  Tamanhos:
+                                </span>
+                                {item.capacities.map((c: any) => {
+                                  const kegPrice = resolvePrice
+                                    ? resolvePrice(item.matchedRecipe, c.capacity)
+                                    : (item.matchedRecipe.salePricePerLiter || 20) * c.capacity;
+
+                                  return (
+                                    <button
+                                      key={c.capacity}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSelect(item.matchedRecipe, c.capacity);
+                                      }}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border shadow-2xs cursor-pointer ${
+                                        c.available > 0
+                                          ? 'bg-emerald-50/90 hover:bg-emerald-600 text-emerald-950 hover:text-white border-emerald-200 hover:border-emerald-600 active:scale-95'
+                                          : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                                      }`}
+                                      title={c.available > 0 ? `Selecionar barril de ${c.capacity}L` : 'Sem estoque deste tamanho'}
+                                      disabled={c.available <= 0}
+                                    >
+                                      <span className="font-extrabold">{c.capacity}L</span>
+                                      <span className="opacity-40">•</span>
+                                      <span className="text-[11px] font-semibold">{c.available} {c.available === 1 ? 'livre' : 'livres'}</span>
+                                      <span className="opacity-40">•</span>
+                                      <span className="font-black">{formatCurrency(kegPrice)}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          {isSelected && <Check className="w-4 h-4 text-amber-600 flex-shrink-0" />}
-                        </button>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
                 {/* Seção 2: Outros Estilos / Em Produção nos Tanques */}
                 {filteredOutros.length > 0 && (
                   <div>
-                    <div className="px-3 py-1.5 bg-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-between sticky top-0 z-10 border-b border-slate-200">
-                      <span>⏳ Em Produção nos Tanques / Sob Encomenda ({filteredOutros.length})</span>
-                      <span className="text-[9px] text-slate-400 font-bold">Sem estoque pronto</span>
+                    <div className="px-3.5 py-2 bg-slate-100 text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center justify-between sticky top-[37px] z-10 border-b border-slate-200">
+                      <span className="flex items-center gap-1.5">
+                        <span>⏳</span>
+                        <span>Em Produção nos Tanques / Sob Encomenda ({filteredOutros.length})</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold">Sem barris envasados</span>
                     </div>
-                    {filteredOutros.map((item) => {
-                      const isSelected = recipeId === item.matchedRecipe.id;
 
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => handleSelect(item.matchedRecipe, 50)}
-                          className={`w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer ${
-                            isSelected ? 'bg-amber-50 font-bold' : ''
-                          }`}
-                        >
-                          <div>
-                            <span className="font-bold text-slate-700 text-xs block">
-                              {item.displayName}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              {item.matchedRecipe.style ? `${item.matchedRecipe.style} • ` : ''}0 barris envasados • {formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L
-                            </span>
+                    <div className="divide-y divide-slate-100">
+                      {filteredOutros.map((item) => {
+                        const isSelected = recipeId === item.matchedRecipe.id;
+
+                        return (
+                          <div
+                            key={item.key}
+                            onClick={() => handleSelect(item.matchedRecipe, 50)}
+                            className={`p-3.5 hover:bg-slate-50 transition-colors cursor-pointer group ${
+                              isSelected ? 'bg-amber-50/80' : ''
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-amber-800 transition-colors">
+                                    {item.displayName}
+                                  </span>
+                                  {item.matchedRecipe.style && (
+                                    <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                                      {item.matchedRecipe.style}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-400 font-medium mt-0.5">
+                                  0 barris envasados • Preço base: {formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {[50, 30].map((cap) => {
+                                  const kegPrice = resolvePrice
+                                    ? resolvePrice(item.matchedRecipe, cap)
+                                    : (item.matchedRecipe.salePricePerLiter || 20) * cap;
+
+                                  return (
+                                    <button
+                                      key={cap}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSelect(item.matchedRecipe, cap);
+                                      }}
+                                      className="px-2.5 py-1 bg-slate-100 hover:bg-amber-500 hover:text-white text-slate-700 rounded-lg text-xs font-bold transition-all border border-slate-200 cursor-pointer"
+                                    >
+                                      {cap}L ({formatCurrency(kegPrice)})
+                                    </button>
+                                  );
+                                })}
+                                {isSelected && (
+                                  <span className="p-1 rounded-full bg-amber-500 text-white shadow-xs ml-1">
+                                    <Check className="w-3.5 h-3.5" />
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          {isSelected && <Check className="w-4 h-4 text-amber-600 flex-shrink-0" />}
-                        </button>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </>
@@ -2006,7 +2119,7 @@ export default function PedidosPage() {
       {/* Modal: Detalhes Completos, Edição e Recebimentos do Pedido */}
       {selectedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4">
             {/* Header with Title and Quick Status */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -2694,18 +2807,43 @@ export default function PedidosPage() {
                       const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50, selectedOrder?.id);
                       const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
                       const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
+                      const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
 
                       return (
-                        <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
-                          <div className="grid grid-cols-12 gap-2 items-center">
+                        <div key={idx} className="bg-white p-3.5 sm:p-4 rounded-2xl border border-purple-200 shadow-xs space-y-3">
+                          {/* Top Header of Item Row */}
+                          <div className="flex items-center justify-between pb-2 border-b border-purple-100">
+                            <span className="text-xs font-black text-purple-900 bg-purple-100/70 px-2.5 py-0.5 rounded-lg">
+                              Item #{idx + 1}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Subtotal Item</span>
+                                <span className="text-sm font-black text-purple-950 font-mono">
+                                  {formatCurrency(itemTotal)}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveEditItemRow(idx)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                                title="Excluir este item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-12 gap-3 items-end">
                             {/* Busca Digitada de Cerveja */}
-                            <div className="col-span-5">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
+                            <div className="col-span-12 sm:col-span-5">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Cerveja / Produto Selecionado</label>
                               <RecipeSearchSelect
                                 recipeId={item.recipeId}
                                 recipes={recipes}
                                 kegs={kegs}
                                 orders={orders}
+                                resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, editPriceTableId)}
                                 onSelectRecipe={(r, recommendedCap) => {
                                   const updated = [...editItems];
                                   const cap = recommendedCap || updated[idx].kegCapacity || 50;
@@ -2720,8 +2858,8 @@ export default function PedidosPage() {
                             </div>
 
                             {/* Capacidade */}
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Tamanho</label>
+                            <div className="col-span-4 sm:col-span-2">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Tamanho</label>
                               <select
                                 value={item.kegCapacity || 50}
                                 onChange={(e) => {
@@ -2736,7 +2874,7 @@ export default function PedidosPage() {
                                   }
                                   setEditItems(updated);
                                 }}
-                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs sm:text-sm"
                               >
                                 {[50, 30, 20, 15, 10, 5].map((cap) => {
                                   const avail = item.recipeId ? getStockAvailability(item.recipeId, cap, selectedOrder?.id).available : 0;
@@ -2750,8 +2888,8 @@ export default function PedidosPage() {
                             </div>
 
                             {/* Quantidade */}
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-center">Qtd</label>
+                            <div className="col-span-3 sm:col-span-2">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-center">Qtd</label>
                               <input
                                 type="number"
                                 min="1"
@@ -2763,14 +2901,14 @@ export default function PedidosPage() {
                                   updated[idx].totalPrice = qty * updated[idx].unitPrice;
                                   setEditItems(updated);
                                 }}
-                                className="w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
+                                className="w-full px-2.5 py-2 rounded-xl font-bold text-center text-xs sm:text-sm bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
                                 placeholder="Qtd"
                               />
                             </div>
 
                             {/* Preço Unitário */}
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-right">Unitário (R$)</label>
+                            <div className="col-span-5 sm:col-span-3">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-right">Unitário (R$)</label>
                               <input
                                 type="number"
                                 step="10"
@@ -2782,60 +2920,48 @@ export default function PedidosPage() {
                                   updated[idx].totalPrice = updated[idx].quantity * price;
                                   setEditItems(updated);
                                 }}
-                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs sm:text-sm focus:bg-white focus:border-amber-500 focus:outline-none"
                                 placeholder="Preço Unit."
                               />
-                            </div>
-
-                            {/* Botão de Excluir */}
-                            <div className="col-span-1 flex items-center justify-end gap-1 pt-3">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveEditItemRow(idx)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                title="Excluir este item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
                             </div>
                           </div>
 
                           {/* Quantidade em Estoque / Disponibilidade */}
                           {item.recipeId ? (
                             stock.available > 0 ? (
-                              <div className="text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
-                                <span className="flex items-center gap-1.5">
+                              <div className="text-xs font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
+                                <span className="flex items-center gap-2">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                   <span>
                                     Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
                                     {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
                                   </span>
                                 </span>
-                                <span className="text-[10px] text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded font-black">
+                                <span className="text-[11px] text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md font-black">
                                   {stock.matchingTotal} barris cheios
                                 </span>
                               </div>
                             ) : (
-                              <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
-                                <span className="flex items-center gap-1.5">
+                              <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
+                                <span className="flex items-center gap-2">
                                   <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                                   <span>
                                     Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será salvo normalmente para programação de envase)
                                   </span>
                                 </span>
-                                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded font-black">
+                                <span className="text-[11px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-md font-black">
                                   {stock.matchingTotal} cheios • {stock.reserved} reservados
                                 </span>
                               </div>
                             )
                           ) : null}
 
-                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
+                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 border-t border-purple-100">
                             <span className="text-slate-500">
-                              Subtotal: <strong className="text-slate-900">{item.quantity} un</strong>
+                              Volume total: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
                             </span>
-                            <span className="font-black text-purple-900 text-xs">
-                              {formatCurrency(item.quantity * item.unitPrice)}
+                            <span className="font-black text-purple-900 text-xs sm:text-sm">
+                              Total Item: {formatCurrency(item.quantity * item.unitPrice)}
                             </span>
                           </div>
                         </div>
@@ -3234,7 +3360,7 @@ export default function PedidosPage() {
       {/* Modal: Novo Pedido */}
       {newModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200">
             <h3 className="font-black text-lg text-slate-900 mb-1">Novo Pedido de Chopp</h3>
             <p className="text-xs text-slate-500 mb-4">Cadastre a venda, comodato de chopeiras e agendamento de entrega e recolha</p>
 
@@ -3393,18 +3519,43 @@ export default function PedidosPage() {
                       const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
                       const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
                       const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
+                      const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
 
                       return (
-                        <div key={idx} className="bg-white p-2.5 rounded-xl border border-purple-200 shadow-2xs">
-                          <div className="grid grid-cols-12 gap-2 items-center">
+                        <div key={idx} className="bg-white p-3.5 sm:p-4 rounded-2xl border border-purple-200 shadow-xs space-y-3">
+                          {/* Top Header of Item Row */}
+                          <div className="flex items-center justify-between pb-2 border-b border-purple-100">
+                            <span className="text-xs font-black text-purple-900 bg-purple-100/70 px-2.5 py-0.5 rounded-lg">
+                              Item #{idx + 1}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Subtotal Item</span>
+                                <span className="text-sm font-black text-purple-950 font-mono">
+                                  {formatCurrency(itemTotal)}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItemRow(idx)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                                title="Excluir este item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-12 gap-3 items-end">
                             {/* Busca Digitada de Cerveja */}
-                            <div className="col-span-5">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Cerveja / Produto</label>
+                            <div className="col-span-12 sm:col-span-5">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Cerveja / Produto Selecionado</label>
                               <RecipeSearchSelect
                                 recipeId={item.recipeId}
                                 recipes={recipes}
                                 kegs={kegs}
                                 orders={orders}
+                                resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, newPriceTableId)}
                                 onSelectRecipe={(r, recommendedCap) => {
                                   const newItems = [...orderItems];
                                   const cap = recommendedCap || item.kegCapacity || 50;
@@ -3417,8 +3568,8 @@ export default function PedidosPage() {
                             </div>
 
                             {/* Capacidade */}
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Tamanho</label>
+                            <div className="col-span-4 sm:col-span-2">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Tamanho</label>
                               <select
                                 value={item.kegCapacity || 50}
                                 onChange={(e) => {
@@ -3431,7 +3582,7 @@ export default function PedidosPage() {
                                   }
                                   setOrderItems(newItems);
                                 }}
-                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs sm:text-sm"
                               >
                                 {[50, 30, 20, 15, 10, 5].map((cap) => {
                                   const avail = item.recipeId ? getStockAvailability(item.recipeId, cap).available : 0;
@@ -3445,8 +3596,8 @@ export default function PedidosPage() {
                             </div>
 
                             {/* Quantidade */}
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-center">Qtd</label>
+                            <div className="col-span-3 sm:col-span-2">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-center">Qtd</label>
                               <input
                                 type="number"
                                 min="1"
@@ -3456,13 +3607,13 @@ export default function PedidosPage() {
                                   newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
                                   setOrderItems(newItems);
                                 }}
-                                className="w-full px-2 py-1.5 rounded-lg font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
+                                className="w-full px-2.5 py-2 rounded-xl font-bold text-center text-xs sm:text-sm bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
                               />
                             </div>
 
                             {/* Preço Unitário */}
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-0.5 text-right">Unitário (R$)</label>
+                            <div className="col-span-5 sm:col-span-3">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-right">Unitário (R$)</label>
                               <input
                                 type="number"
                                 step="5"
@@ -3472,41 +3623,29 @@ export default function PedidosPage() {
                                   newItems[idx].unitPrice = parseFloat(e.target.value) || 0;
                                   setOrderItems(newItems);
                                 }}
-                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs sm:text-sm focus:bg-white focus:border-amber-500 focus:outline-none"
                               />
-                            </div>
-
-                            {/* Botão de Excluir */}
-                            <div className="col-span-1 flex items-center justify-end gap-1 pt-3">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItemRow(idx)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                title="Excluir este item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
                             </div>
                           </div>
 
                           {/* Quantidade em Estoque / Disponibilidade */}
                           {item.recipeId ? (
                             stock.available > 0 ? (
-                              <div className="text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
-                                <span className="flex items-center gap-1.5">
+                              <div className="text-xs font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
+                                <span className="flex items-center gap-2">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                   <span>
                                     Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
                                     {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
                                   </span>
                                 </span>
-                                <span className="text-[10px] text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded font-black">
+                                <span className="text-[11px] text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md font-black">
                                   {stock.matchingTotal} barris cheios
                                 </span>
                               </div>
                             ) : (
-                              <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between mt-2">
-                                <span className="flex items-center gap-1.5">
+                              <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
+                                <span className="flex items-center gap-2">
                                   <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                                   <span>
                                     Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será gerado normalmente para programação de envase)
@@ -3519,12 +3658,12 @@ export default function PedidosPage() {
                             )
                           ) : null}
 
-                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 mt-1 border-t border-purple-50">
+                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 border-t border-purple-100">
                             <span className="text-slate-500">
-                              Subtotal: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
+                              Volume total: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
                             </span>
-                            <span className="font-black text-purple-900 text-xs">
-                              {formatCurrency(item.unitPrice * item.quantity)}
+                            <span className="font-black text-purple-900 text-xs sm:text-sm">
+                              Total Item: {formatCurrency(item.unitPrice * item.quantity)}
                             </span>
                           </div>
                         </div>
