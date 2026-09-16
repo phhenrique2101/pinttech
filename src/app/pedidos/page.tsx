@@ -69,209 +69,217 @@ function cleanProductName(name: string): string {
 // Prioriza e destaca Chopps ENVASADOS na câmara fria vs cervejas em produção/tanque
 function RecipeSearchSelect({
   recipeId,
+  kegCapacity = 50,
   recipes,
   kegs = [],
   orders = [],
   onSelectRecipe,
-  resolvePrice,
-  placeholder = '🔍 Selecione ou digite a cerveja...',
+  resolvePricePerLiter,
+  placeholder = '🔍 Selecione ou digite o chopp...',
 }: {
   recipeId: string;
+  kegCapacity?: number;
   recipes: any[];
   kegs?: any[];
   orders?: any[];
-  onSelectRecipe: (recipe: any, recommendedCapacity?: number) => void;
-  resolvePrice?: (recipe: any, capacity: number) => number;
+  onSelectRecipe: (recipe: any, capacity: number, pricePerLiter: number) => void;
+  resolvePricePerLiter?: (recipe: any) => number;
   placeholder?: string;
 }) {
-  // 1. Processamento memoizado de Chopps ENVASADOS e em PRODUÇÃO
-  const { envasadosList, outrosList, allProducts } = useMemo(() => {
+  // 1. Processamento memoizado de Chopps ENVASADOS e em PRODUÇÃO (separados diretamente por cerveja e tamanho)
+  const { envasadosProducts, outrosProducts, allProducts } = useMemo(() => {
+    const stockedKegs = kegs.filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO');
+
     const envasadosMap = new Map<string, {
       key: string;
+      recipeId: string;
       displayName: string;
+      beerName: string;
+      style: string;
+      capacity: number;
       matchedRecipe: any;
-      capacities: { capacity: number; available: number; total: number }[];
-      totalAvailable: number;
-      bestCapacity: number;
+      available: number;
+      total: number;
+      isEnvasado: true;
     }>();
 
-    kegs
-      .filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO')
-      .forEach((k) => {
-        const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
-        const clean = cleanProductName(rawName);
-        const key = clean.toLowerCase();
+    stockedKegs.forEach((k) => {
+      const rawName = k.currentBeerName || k.currentBatch?.recipe?.name || 'Chopp';
+      const clean = cleanProductName(rawName);
+      const cap = k.capacity || 50;
+      const key = `${clean.toLowerCase()}-${cap}`;
 
-        if (!envasadosMap.has(key)) {
-          let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
-          if (!matched) {
-            matched = recipes.find((r) => {
-              const rClean = cleanProductName(r.name).toLowerCase();
-              return (
-                rClean === key ||
-                (key.length >= 4 && rClean.includes(key)) ||
-                (rClean.length >= 4 && key.includes(rClean))
-              );
-            });
-          }
-          if (!matched) {
-            matched = {
-              id: `keg-beer-${key}`,
-              name: clean,
-              style: k.currentBatch?.recipe?.style || 'Chopp Artesanal',
-              salePricePerLiter: 20,
-            };
-          }
-
-          envasadosMap.set(key, {
-            key,
-            displayName: clean,
-            matchedRecipe: matched,
-            capacities: [],
-            totalAvailable: 0,
-            bestCapacity: 50,
+      if (!envasadosMap.has(key)) {
+        let matched = recipes.find((r) => r.id === k.currentBatch?.recipeId);
+        if (!matched) {
+          matched = recipes.find((r) => {
+            const rClean = cleanProductName(r.name).toLowerCase();
+            return rClean === clean.toLowerCase() || (clean.length >= 4 && rClean.includes(clean.toLowerCase()));
           });
         }
-      });
-
-    const envasados: any[] = [];
-    envasadosMap.forEach((val, key) => {
-      const capsCounts: { [c: number]: number } = {};
-      kegs
-        .filter((k) => k.status === 'EM_ESTOQUE' || k.status === 'ENVASADO')
-        .forEach((k) => {
-          const kBeer = cleanProductName(k.currentBeerName || k.currentBatch?.recipe?.name || '').toLowerCase();
-          if (kBeer === key || (key.length >= 4 && kBeer.includes(key)) || (kBeer.length >= 4 && key.includes(kBeer))) {
-            const cap = k.capacity || 50;
-            capsCounts[cap] = (capsCounts[cap] || 0) + 1;
-          }
-        });
-
-      const capList: { capacity: number; available: number; total: number }[] = [];
-      let totAvail = 0;
-
-      [50, 30, 20, 15, 10, 5].forEach((cap) => {
-        if (capsCounts[cap]) {
-          let reserved = 0;
-          orders.forEach((o) => {
-            if (['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
-              (o.items || []).forEach((it: any) => {
-                const itClean = cleanProductName(it.recipe?.name || it.description || '').toLowerCase();
-                if ((itClean === key || (key.length >= 4 && itClean.includes(key))) && (it.kegCapacity || 50) === cap) {
-                  reserved += (it.quantity || 1);
-                }
-              });
-            }
-          });
-          const avail = Math.max(0, capsCounts[cap] - reserved);
-          capList.push({ capacity: cap, available: avail, total: capsCounts[cap] });
-          totAvail += avail;
+        if (!matched) {
+          matched = {
+            id: `keg-beer-${clean.toLowerCase()}`,
+            name: clean,
+            style: k.currentBatch?.recipe?.style || 'Chopp Artesanal',
+            salePricePerLiter: 20,
+          };
         }
-      });
 
-      capList.sort((a, b) => b.available - a.available);
-      const bestCap = capList.length > 0 ? capList[0].capacity : 50;
-
-      envasados.push({
-        ...val,
-        capacities: capList,
-        totalAvailable: totAvail,
-        bestCapacity: bestCap,
-        isEnvasado: true,
-      });
-    });
-
-    envasados.sort((a, b) => b.totalAvailable - a.totalAvailable);
-
-    // 2. Outras receitas (não envasadas ou em produção nos tanques)
-    const outrosMap = new Map<string, any>();
-    recipes.forEach((r) => {
-      const clean = cleanProductName(r.name);
-      const key = clean.toLowerCase();
-      if (!envasadosMap.has(key) && !outrosMap.has(key)) {
-        outrosMap.set(key, {
+        envasadosMap.set(key, {
           key,
-          displayName: clean,
-          matchedRecipe: r,
-          capacities: [],
-          totalAvailable: 0,
-          bestCapacity: 50,
-          isEnvasado: false,
+          recipeId: matched.id,
+          displayName: `${clean} ${cap}L`,
+          beerName: clean,
+          style: matched.style || 'Chopp Artesanal',
+          capacity: cap,
+          matchedRecipe: matched,
+          available: 0,
+          total: 0,
+          isEnvasado: true,
         });
       }
     });
 
-    const outros = Array.from(outrosMap.values());
-    const all = [...envasados, ...outros];
+    const envasados: any[] = [];
+    envasadosMap.forEach((item) => {
+      const totalKegs = stockedKegs.filter((k) => {
+        const kBeer = cleanProductName(k.currentBeerName || k.currentBatch?.recipe?.name || '').toLowerCase();
+        return (
+          (kBeer === item.beerName.toLowerCase() || (item.beerName.length >= 4 && kBeer.includes(item.beerName.toLowerCase()))) &&
+          (k.capacity || 50) === item.capacity
+        );
+      }).length;
 
-    return { envasadosList: envasados, outrosList: outros, allProducts: all };
+      let reserved = 0;
+      orders.forEach((o) => {
+        if (['ORCAMENTO', 'CONFIRMADO', 'EM_SEPARACAO'].includes(o.status)) {
+          (o.items || []).forEach((it: any) => {
+            const itClean = cleanProductName(it.recipe?.name || it.description || '').toLowerCase();
+            if (
+              (itClean === item.beerName.toLowerCase() || (item.beerName.length >= 4 && itClean.includes(item.beerName.toLowerCase()))) &&
+              (it.kegCapacity || 50) === item.capacity
+            ) {
+              reserved += (it.quantity || 1);
+            }
+          });
+        }
+      });
+
+      const avail = Math.max(0, totalKegs - reserved);
+      envasados.push({
+        ...item,
+        available: avail,
+        total: totalKegs,
+      });
+    });
+
+    envasados.sort((a, b) => b.available - a.available || a.beerName.localeCompare(b.beerName));
+
+    // 2. Outras receitas (em produção nos tanques ou sob encomenda)
+    const outros: any[] = [];
+    recipes.forEach((r) => {
+      const clean = cleanProductName(r.name);
+      [50, 30].forEach((cap) => {
+        const key = `${clean.toLowerCase()}-${cap}`;
+        if (!envasadosMap.has(key)) {
+          outros.push({
+            key,
+            recipeId: r.id,
+            displayName: `${clean} ${cap}L`,
+            beerName: clean,
+            style: r.style || 'Chopp Artesanal',
+            capacity: cap,
+            matchedRecipe: r,
+            available: 0,
+            total: 0,
+            isEnvasado: false,
+          });
+        }
+      });
+    });
+
+    outros.sort((a, b) => a.beerName.localeCompare(b.beerName) || b.capacity - a.capacity);
+
+    return {
+      envasadosProducts: envasados,
+      outrosProducts: outros,
+      allProducts: [...envasados, ...outros],
+    };
   }, [recipes, kegs, orders]);
 
   // 2. Nome do produto atualmente selecionado
   const selectedDisplayName = useMemo(() => {
     if (!recipeId) return '';
-    const prod = allProducts.find(
-      (p) => p.matchedRecipe?.id === recipeId || p.key === recipeId.toLowerCase()
+    const exact = allProducts.find(
+      (p) => (p.recipeId === recipeId || p.matchedRecipe?.id === recipeId) && p.capacity === kegCapacity
     );
-    if (prod) return prod.displayName;
-    const found = recipes.find((r) => r.id === recipeId);
-    if (found) return cleanProductName(found.name);
+    if (exact) return exact.displayName;
+
+    const anyCap = allProducts.find(
+      (p) => p.recipeId === recipeId || p.matchedRecipe?.id === recipeId
+    );
+    if (anyCap) return `${anyCap.beerName} ${kegCapacity || 50}L`;
+
+    const r = recipes.find((rec) => rec.id === recipeId);
+    if (r) return `${cleanProductName(r.name)} ${kegCapacity || 50}L`;
+
     if (recipeId.startsWith('keg-beer-')) {
-      return recipeId.replace('keg-beer-', '');
+      return `${recipeId.replace('keg-beer-', '')} ${kegCapacity || 50}L`;
     }
     return '';
-  }, [allProducts, recipes, recipeId]);
+  }, [allProducts, recipes, recipeId, kegCapacity]);
 
   const [query, setQuery] = useState(selectedDisplayName);
   const [isOpen, setIsOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Sincroniza query apenas quando o item selecionado mudar externamente,
-  // e NUNCA enquanto o usuário estiver digitando no campo!
   useEffect(() => {
     if (!isTyping) {
       setQuery(selectedDisplayName);
     }
   }, [selectedDisplayName, isTyping]);
 
-  // Se o usuário abriu o dropdown mas o texto atual é exatamente o produto selecionado,
-  // exibe todas as cervejas para permitir troca rápida em 1 clique!
   const effectiveFilter = isTyping && query.trim() !== '' && query.trim().toLowerCase() !== selectedDisplayName.toLowerCase()
     ? query.trim().toLowerCase()
     : '';
 
   const filteredEnvasados = useMemo(() => {
-    if (!effectiveFilter) return envasadosList;
-    return envasadosList.filter((p) => {
+    if (!effectiveFilter) return envasadosProducts;
+    return envasadosProducts.filter((p) => {
       return (
         p.displayName.toLowerCase().includes(effectiveFilter) ||
-        (p.matchedRecipe?.style || '').toLowerCase().includes(effectiveFilter)
+        p.beerName.toLowerCase().includes(effectiveFilter) ||
+        p.style.toLowerCase().includes(effectiveFilter) ||
+        `${p.capacity}`.includes(effectiveFilter)
       );
     });
-  }, [envasadosList, effectiveFilter]);
+  }, [envasadosProducts, effectiveFilter]);
 
   const filteredOutros = useMemo(() => {
-    if (!effectiveFilter) return outrosList;
-    return outrosList.filter((p) => {
+    if (!effectiveFilter) return outrosProducts;
+    return outrosProducts.filter((p) => {
       return (
         p.displayName.toLowerCase().includes(effectiveFilter) ||
-        (p.matchedRecipe?.style || '').toLowerCase().includes(effectiveFilter)
+        p.beerName.toLowerCase().includes(effectiveFilter) ||
+        p.style.toLowerCase().includes(effectiveFilter) ||
+        `${p.capacity}`.includes(effectiveFilter)
       );
     });
-  }, [outrosList, effectiveFilter]);
+  }, [outrosProducts, effectiveFilter]);
 
   const hasExactMatch = useMemo(() => {
     if (!effectiveFilter) return true;
     return allProducts.some(
-      (p) => p.displayName.toLowerCase() === effectiveFilter || p.key === effectiveFilter
+      (p) => p.displayName.toLowerCase() === effectiveFilter || p.beerName.toLowerCase() === effectiveFilter
     );
   }, [allProducts, effectiveFilter]);
 
-  const handleSelect = (matchedRecipe: any, bestCap?: number) => {
+  const handleSelect = (matchedRecipe: any, cap: number, pPerLiter: number) => {
     setIsTyping(false);
     setIsOpen(false);
-    setQuery(cleanProductName(matchedRecipe.name));
-    onSelectRecipe(matchedRecipe, bestCap);
+    setQuery(`${cleanProductName(matchedRecipe.name)} ${cap}L`);
+    onSelectRecipe(matchedRecipe, cap, pPerLiter);
   };
 
   const handleClear = () => {
@@ -335,11 +343,11 @@ function RecipeSearchSelect({
                 <span>Catálogo de Chopps ({filteredEnvasados.length + filteredOutros.length})</span>
               </span>
               <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                💡 Dica: clique no barril para selecionar tamanho direto
+                💡 Clique para selecionar o chopp e tamanho
               </span>
             </div>
 
-            {/* Opção para usar texto digitado como chopp avulso se não coincidir exatamente com receitas existentes */}
+            {/* Opção para usar texto digitado como chopp avulso */}
             {effectiveFilter && !hasExactMatch && (
               <button
                 type="button"
@@ -352,7 +360,8 @@ function RecipeSearchSelect({
                       style: 'Chopp Especial / Avulso',
                       salePricePerLiter: 20,
                     },
-                    50
+                    50,
+                    20
                   );
                 }}
                 className="w-full text-left p-3.5 bg-amber-50 hover:bg-amber-100/90 text-amber-950 transition-colors flex items-center justify-between cursor-pointer border-b border-amber-200"
@@ -363,7 +372,7 @@ function RecipeSearchSelect({
                   </div>
                   <div>
                     <span className="font-black text-xs sm:text-sm block text-amber-950">
-                      Usar &quot;{query.trim()}&quot;
+                      Usar &quot;{query.trim()}&quot; (50L)
                     </span>
                     <span className="text-xs text-amber-800 font-medium">
                       Adicionar este produto/chopp digitado como item avulso
@@ -382,7 +391,7 @@ function RecipeSearchSelect({
               </div>
             ) : (
               <>
-                {/* Seção 1: Chopps Envasados em Estoque */}
+                {/* Seção 1: Chopps Envasados na Câmara Fria */}
                 {filteredEnvasados.length > 0 && (
                   <div>
                     <div className="px-3.5 py-2 bg-gradient-to-r from-emerald-50 to-emerald-100/60 text-[11px] font-black uppercase tracking-wider text-emerald-900 flex items-center justify-between sticky top-[37px] z-10 border-b border-emerald-200/80 backdrop-blur-xs">
@@ -397,83 +406,61 @@ function RecipeSearchSelect({
 
                     <div className="divide-y divide-slate-100">
                       {filteredEnvasados.map((item) => {
-                        const isSelected = recipeId === item.matchedRecipe.id;
+                        const isSelected =
+                          recipeId === item.matchedRecipe.id && (kegCapacity || 50) === item.capacity;
+                        const pPerLiter = resolvePricePerLiter
+                          ? resolvePricePerLiter(item.matchedRecipe)
+                          : item.matchedRecipe.salePricePerLiter || 20;
+                        const kegPrice = Math.round(pPerLiter * item.capacity * 100) / 100;
 
                         return (
                           <div
                             key={item.key}
-                            onClick={() => handleSelect(item.matchedRecipe, item.bestCapacity)}
-                            className={`p-3.5 hover:bg-amber-50/60 transition-all cursor-pointer group ${
-                              isSelected ? 'bg-amber-50/80' : ''
+                            onClick={() => handleSelect(item.matchedRecipe, item.capacity, pPerLiter)}
+                            className={`p-3.5 hover:bg-amber-50/70 transition-all cursor-pointer flex items-center justify-between gap-3 group ${
+                              isSelected ? 'bg-amber-50/90 ring-1 ring-amber-400/80' : ''
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <span className="text-lg flex-shrink-0">🍺</span>
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-black text-slate-900 text-xs sm:text-sm group-hover:text-amber-800 transition-colors">
                                     {item.displayName}
                                   </span>
-                                  {item.matchedRecipe.style && (
-                                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                                      {item.matchedRecipe.style}
+                                  {item.style && (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                      {item.style}
                                     </span>
                                   )}
                                 </div>
                                 <div className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-2">
-                                  <span>Preço base: <strong className="text-slate-800">{formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L</strong></span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-200 shadow-2xs">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                  <span>{item.totalAvailable} {item.totalAvailable === 1 ? 'barril livre' : 'barris livres'}</span>
-                                </span>
-                                {isSelected && (
-                                  <span className="p-1 rounded-full bg-amber-500 text-white shadow-xs">
-                                    <Check className="w-3.5 h-3.5" />
+                                  <span className="text-emerald-700 font-bold inline-flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    <span>{item.available} {item.available === 1 ? 'barril livre' : 'barris livres'}</span>
+                                    {item.total > item.available && (
+                                      <span className="text-slate-400 font-normal">({item.total} total)</span>
+                                    )}
                                   </span>
-                                )}
+                                </div>
                               </div>
                             </div>
 
-                            {/* Barris / Capacidades disponíveis com seleção rápida em 1 clique */}
-                            {item.capacities && item.capacities.length > 0 && (
-                              <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider mr-0.5">
-                                  Tamanhos:
-                                </span>
-                                {item.capacities.map((c: any) => {
-                                  const kegPrice = resolvePrice
-                                    ? resolvePrice(item.matchedRecipe, c.capacity)
-                                    : (item.matchedRecipe.salePricePerLiter || 20) * c.capacity;
-
-                                  return (
-                                    <button
-                                      key={c.capacity}
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSelect(item.matchedRecipe, c.capacity);
-                                      }}
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border shadow-2xs cursor-pointer ${
-                                        c.available > 0
-                                          ? 'bg-emerald-50/90 hover:bg-emerald-600 text-emerald-950 hover:text-white border-emerald-200 hover:border-emerald-600 active:scale-95'
-                                          : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                                      }`}
-                                      title={c.available > 0 ? `Selecionar barril de ${c.capacity}L` : 'Sem estoque deste tamanho'}
-                                      disabled={c.available <= 0}
-                                    >
-                                      <span className="font-extrabold">{c.capacity}L</span>
-                                      <span className="opacity-40">•</span>
-                                      <span className="text-[11px] font-semibold">{c.available} {c.available === 1 ? 'livre' : 'livres'}</span>
-                                      <span className="opacity-40">•</span>
-                                      <span className="font-black">{formatCurrency(kegPrice)}</span>
-                                    </button>
-                                  );
-                                })}
+                            <div className="text-right flex-shrink-0 flex items-center gap-3">
+                              <div>
+                                <div className="font-black text-slate-900 text-xs sm:text-sm font-mono">
+                                  {formatCurrency(kegPrice)}
+                                </div>
+                                <div className="text-[11px] text-slate-500 font-bold">
+                                  {formatCurrency(pPerLiter)}/L
+                                </div>
                               </div>
-                            )}
+                              {isSelected && (
+                                <span className="p-1 rounded-full bg-amber-500 text-white shadow-xs">
+                                  <Check className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -481,7 +468,7 @@ function RecipeSearchSelect({
                   </div>
                 )}
 
-                {/* Seção 2: Outros Estilos / Em Produção nos Tanques */}
+                {/* Seção 2: Em Produção / Tanque / Sob Encomenda */}
                 {filteredOutros.length > 0 && (
                   <div>
                     <div className="px-3.5 py-2 bg-slate-100 text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center justify-between sticky top-[37px] z-10 border-b border-slate-200">
@@ -494,59 +481,54 @@ function RecipeSearchSelect({
 
                     <div className="divide-y divide-slate-100">
                       {filteredOutros.map((item) => {
-                        const isSelected = recipeId === item.matchedRecipe.id;
+                        const isSelected =
+                          recipeId === item.matchedRecipe.id && (kegCapacity || 50) === item.capacity;
+                        const pPerLiter = resolvePricePerLiter
+                          ? resolvePricePerLiter(item.matchedRecipe)
+                          : item.matchedRecipe.salePricePerLiter || 20;
+                        const kegPrice = Math.round(pPerLiter * item.capacity * 100) / 100;
 
                         return (
                           <div
                             key={item.key}
-                            onClick={() => handleSelect(item.matchedRecipe, 50)}
-                            className={`p-3.5 hover:bg-slate-50 transition-colors cursor-pointer group ${
-                              isSelected ? 'bg-amber-50/80' : ''
+                            onClick={() => handleSelect(item.matchedRecipe, item.capacity, pPerLiter)}
+                            className={`p-3.5 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-between gap-3 group ${
+                              isSelected ? 'bg-amber-50/90 ring-1 ring-amber-400/80' : ''
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <span className="text-lg flex-shrink-0 text-slate-400">⏳</span>
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-amber-800 transition-colors">
                                     {item.displayName}
                                   </span>
-                                  {item.matchedRecipe.style && (
-                                    <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                                      {item.matchedRecipe.style}
+                                  {item.style && (
+                                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                                      {item.style}
                                     </span>
                                   )}
                                 </div>
                                 <div className="text-xs text-slate-400 font-medium mt-0.5">
-                                  0 barris envasados • Preço base: {formatCurrency(item.matchedRecipe.salePricePerLiter || 20)}/L
+                                  0 barris envasados • Produção/Envase programado
                                 </div>
                               </div>
+                            </div>
 
-                              <div className="flex items-center gap-1.5">
-                                {[50, 30].map((cap) => {
-                                  const kegPrice = resolvePrice
-                                    ? resolvePrice(item.matchedRecipe, cap)
-                                    : (item.matchedRecipe.salePricePerLiter || 20) * cap;
-
-                                  return (
-                                    <button
-                                      key={cap}
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSelect(item.matchedRecipe, cap);
-                                      }}
-                                      className="px-2.5 py-1 bg-slate-100 hover:bg-amber-500 hover:text-white text-slate-700 rounded-lg text-xs font-bold transition-all border border-slate-200 cursor-pointer"
-                                    >
-                                      {cap}L ({formatCurrency(kegPrice)})
-                                    </button>
-                                  );
-                                })}
-                                {isSelected && (
-                                  <span className="p-1 rounded-full bg-amber-500 text-white shadow-xs ml-1">
-                                    <Check className="w-3.5 h-3.5" />
-                                  </span>
-                                )}
+                            <div className="text-right flex-shrink-0 flex items-center gap-3">
+                              <div>
+                                <div className="font-black text-slate-800 text-xs sm:text-sm font-mono">
+                                  {formatCurrency(kegPrice)}
+                                </div>
+                                <div className="text-[11px] text-slate-400 font-medium">
+                                  {formatCurrency(pPerLiter)}/L
+                                </div>
                               </div>
+                              {isSelected && (
+                                <span className="p-1 rounded-full bg-amber-500 text-white shadow-xs">
+                                  <Check className="w-3.5 h-3.5" />
+                                </span>
+                              )}
                             </div>
                           </div>
                         );
@@ -745,7 +727,7 @@ export default function PedidosPage() {
   const [editActualReturnDate, setEditActualReturnDate] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const [editItems, setEditItems] = useState<{ id?: string; recipeId: string; description?: string; quantity: number; unitPrice: number; totalPrice: number; kegCapacity?: number }[]>([]);
+  const [editItems, setEditItems] = useState<{ id?: string; recipeId: string; description?: string; quantity: number; unitPrice: number; totalPrice: number; kegCapacity?: number; pricePerLiter?: number }[]>([]);
   const [editEquipments, setEditEquipments] = useState<string[]>([]);
   const [editDiscount, setEditDiscount] = useState('0');
   const [editDeliveryFee, setEditDeliveryFee] = useState('0');
@@ -764,7 +746,15 @@ export default function PedidosPage() {
   const [clientId, setClientId] = useState('');
   const [newPriceTableId, setNewPriceTableId] = useState('');
   const [driverName, setDriverName] = useState('');
-  const [orderItems, setOrderItems] = useState<{ recipeId: string; quantity: number; unitPrice: number; kegCapacity?: number }[]>([]);
+  const [orderItems, setOrderItems] = useState<{
+    recipeId: string;
+    quantity: number;
+    unitPrice: number;
+    kegCapacity?: number;
+    pricePerLiter?: number;
+    totalPrice?: number;
+    description?: string;
+  }[]>([]);
   const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [estimatedReturnDate, setEstimatedReturnDate] = useState(() => {
@@ -1047,9 +1037,9 @@ export default function PedidosPage() {
     } catch {}
   }, []);
 
-  // Helper para resolver o preço unitário do barril com base na tabela de preço selecionada
-  const resolveBeerPrice = (recipe: any, capacity: number = 50, tableId?: string) => {
-    if (!recipe) return 20 * capacity;
+  // Helper para resolver o preço por litro da cerveja com base na tabela de preço selecionada
+  const resolveBeerPricePerLiter = (recipe: any, tableId?: string): number => {
+    if (!recipe) return 20;
     const baseLiter = Number(recipe.salePricePerLiter || recipe.suggestedPricePerLiter || 20);
     const costLiter = Number(recipe.costPerLiter || 0);
 
@@ -1057,7 +1047,7 @@ export default function PedidosPage() {
     const table = priceTables.find((t) => t.id === targetTableId);
 
     if (!table) {
-      return Math.round(baseLiter * capacity * 100) / 100;
+      return baseLiter;
     }
 
     let pricePerLiter = baseLiter;
@@ -1100,7 +1090,13 @@ export default function PedidosPage() {
       }
     }
 
-    return Math.round(pricePerLiter * capacity * 100) / 100;
+    return Math.round(pricePerLiter * 100) / 100;
+  };
+
+  // Helper para resolver o preço unitário do barril com base na tabela de preço selecionada
+  const resolveBeerPrice = (recipe: any, capacity: number = 50, tableId?: string) => {
+    const pPerLiter = resolveBeerPricePerLiter(recipe, tableId);
+    return Math.round(pPerLiter * capacity * 100) / 100;
   };
 
   const handleNewPriceTableChange = (tableId: string) => {
@@ -1110,9 +1106,13 @@ export default function PedidosPage() {
         const r = recipes.find((rec) => rec.id === it.recipeId);
         if (!r) return it;
         const cap = it.kegCapacity || 50;
+        const pPerLiter = resolveBeerPricePerLiter(r, tableId);
+        const uPrice = Math.round(pPerLiter * cap * 100) / 100;
         return {
           ...it,
-          unitPrice: resolveBeerPrice(r, cap, tableId),
+          pricePerLiter: pPerLiter,
+          unitPrice: uPrice,
+          totalPrice: (it.quantity || 1) * uPrice,
         };
       })
     );
@@ -1125,9 +1125,11 @@ export default function PedidosPage() {
         const r = recipes.find((rec) => rec.id === it.recipeId);
         if (!r) return it;
         const cap = it.kegCapacity || 50;
-        const uPrice = resolveBeerPrice(r, cap, tableId);
+        const pPerLiter = resolveBeerPricePerLiter(r, tableId);
+        const uPrice = Math.round(pPerLiter * cap * 100) / 100;
         return {
           ...it,
+          pricePerLiter: pPerLiter,
           unitPrice: uPrice,
           totalPrice: (it.quantity || 1) * uPrice,
         };
@@ -1159,9 +1161,13 @@ export default function PedidosPage() {
             const r = recipes.find((rec) => rec.id === it.recipeId);
             if (!r) return it;
             const cap = it.kegCapacity || 50;
+            const pPerLiter = resolveBeerPricePerLiter(r, assignedTableId);
+            const uPrice = Math.round(pPerLiter * cap * 100) / 100;
             return {
               ...it,
-              unitPrice: resolveBeerPrice(r, cap, assignedTableId),
+              pricePerLiter: pPerLiter,
+              unitPrice: uPrice,
+              totalPrice: (it.quantity || 1) * uPrice,
             };
           })
         );
@@ -1229,14 +1235,17 @@ export default function PedidosPage() {
             if (m) cap = parseInt(m[1], 10);
           }
           if (!cap) cap = 50;
+          const uPrice = it.unitPrice || 0;
+          const pPerLiter = cap > 0 ? Math.round((uPrice / cap) * 100) / 100 : 20;
 
           return {
             id: it.id,
             recipeId: it.recipeId || (recipes[0]?.id || ''),
             description: it.description,
             quantity: it.quantity || 1,
-            unitPrice: it.unitPrice || 0,
-            totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
+            pricePerLiter: pPerLiter,
+            unitPrice: uPrice,
+            totalPrice: it.totalPrice || (it.quantity * uPrice),
             kegCapacity: cap,
           };
         })
@@ -1268,23 +1277,36 @@ export default function PedidosPage() {
         if (selectedOrder && selectedOrder.id === orderId) {
           setSelectedOrder(updated);
         }
-        setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
+        await loadData();
       }
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const copyAddressToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopyAddress = (address: string) => {
+    if (!address) return;
+    navigator.clipboard.writeText(address);
     setCopiedAddress(true);
     setTimeout(() => setCopiedAddress(false), 2500);
   };
 
-  const handleAddItemRow = () => {
+  const handleAddItemRow = (initialRecipe?: any, initialCap: number = 50) => {
+    const r = initialRecipe || recipes[0];
+    const cap = initialCap || 50;
+    const pPerLiter = r ? resolveBeerPricePerLiter(r, newPriceTableId) : 20;
+    const uPrice = Math.round(pPerLiter * cap * 100) / 100;
     setOrderItems([
       ...orderItems,
-      { recipeId: '', quantity: 1, unitPrice: 0, kegCapacity: 50 },
+      {
+        recipeId: r?.id || '',
+        description: r ? `Barril ${cap}L - ${r.name}` : '',
+        quantity: 1,
+        pricePerLiter: pPerLiter,
+        unitPrice: uPrice,
+        totalPrice: uPrice,
+        kegCapacity: cap,
+      },
     ]);
   };
 
@@ -1292,16 +1314,21 @@ export default function PedidosPage() {
     setOrderItems(orderItems.filter((_, i) => i !== index));
   };
 
-  const handleAddEditItemRow = () => {
+  const handleAddEditItemRow = (initialRecipe?: any, initialCap: number = 50) => {
+    const r = initialRecipe || recipes[0];
+    const cap = initialCap || 50;
+    const pPerLiter = r ? resolveBeerPricePerLiter(r, editPriceTableId) : 20;
+    const uPrice = Math.round(pPerLiter * cap * 100) / 100;
     setEditItems([
       ...editItems,
       {
-        recipeId: '',
-        description: '',
+        recipeId: r?.id || '',
+        description: r ? `Barril ${cap}L - ${r.name}` : '',
         quantity: 1,
-        unitPrice: 0,
-        totalPrice: 0,
-        kegCapacity: 50,
+        pricePerLiter: pPerLiter,
+        unitPrice: uPrice,
+        totalPrice: uPrice,
+        kegCapacity: cap,
       },
     ]);
   };
@@ -2288,7 +2315,7 @@ export default function PedidosPage() {
                             type="button"
                             onClick={() => {
                               const addr = selectedOrder.deliveryAddress || `${selectedOrder.client?.address || ''}, ${selectedOrder.client?.number || ''}, ${selectedOrder.client?.city || ''}`;
-                              copyAddressToClipboard(addr);
+                              handleCopyAddress(addr);
                             }}
                             className="p-1 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded transition-colors"
                             title="Copiar Endereço"
@@ -2818,26 +2845,27 @@ export default function PedidosPage() {
 
                         {/* Grid / Tabela */}
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse min-w-[700px]">
+                          <table className="w-full text-left border-collapse min-w-[760px]">
                             <thead>
                               <tr className="bg-slate-100/80 text-[11px] font-extrabold uppercase text-slate-500 tracking-wider border-b border-slate-200">
-                                <th className="py-2.5 px-3 text-center w-12">#</th>
-                                <th className="py-2.5 px-3">Cerveja / Chopp</th>
-                                <th className="py-2.5 px-3 w-32">Barril</th>
-                                <th className="py-2.5 px-3 text-center w-24">Qtd</th>
+                                <th className="py-2.5 px-3 text-center w-10">#</th>
+                                <th className="py-2.5 px-3 min-w-[200px]">Cerveja / Chopp</th>
+                                <th className="py-2.5 px-3 w-28 text-center">Barril</th>
+                                <th className="py-2.5 px-3 text-center w-20">Qtd</th>
+                                <th className="py-2.5 px-3 text-right w-28">Valor/L (R$)</th>
                                 <th className="py-2.5 px-3 text-right w-32">Unitário (R$)</th>
-                                <th className="py-2.5 px-3 text-right w-36">Subtotal</th>
-                                <th className="py-2.5 px-3 text-center w-12"></th>
+                                <th className="py-2.5 px-3 text-right w-32">Subtotal</th>
+                                <th className="py-2.5 px-3 text-center w-10"></th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                               {editItems.length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                                  <td colSpan={8} className="py-10 text-center text-slate-400">
                                     <p className="text-xs font-semibold mb-2">Nenhum produto vinculado a este pedido.</p>
                                     <button
                                       type="button"
-                                      onClick={handleAddEditItemRow}
+                                      onClick={() => handleAddEditItemRow()}
                                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-xs shadow-xs hover:bg-amber-600 transition-all cursor-pointer active:scale-95"
                                     >
                                       <Plus className="w-3.5 h-3.5" />
@@ -2851,6 +2879,12 @@ export default function PedidosPage() {
                                   const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
                                   const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
                                   const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+                                  const pPerLiterVal =
+                                    item.pricePerLiter !== undefined && item.pricePerLiter > 0
+                                      ? item.pricePerLiter
+                                      : item.kegCapacity
+                                      ? Math.round(((item.unitPrice || 0) / item.kegCapacity) * 100) / 100
+                                      : 20;
 
                                   return (
                                     <tr key={idx} className="hover:bg-slate-50/70 transition-colors group">
@@ -2863,18 +2897,22 @@ export default function PedidosPage() {
                                       <td className="py-3 px-3 align-top">
                                         <RecipeSearchSelect
                                           recipeId={item.recipeId}
+                                          kegCapacity={item.kegCapacity || 50}
                                           recipes={recipes}
                                           kegs={kegs}
                                           orders={orders}
-                                          resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, editPriceTableId)}
-                                          onSelectRecipe={(r, recommendedCap) => {
+                                          resolvePricePerLiter={(rec) => resolveBeerPricePerLiter(rec, editPriceTableId)}
+                                          onSelectRecipe={(r, cap, pPerLiter) => {
                                             const updated = [...editItems];
-                                            const cap = recommendedCap || updated[idx].kegCapacity || 50;
+                                            const finalCap = cap || updated[idx].kegCapacity || 50;
+                                            const finalLiterPrice = pPerLiter || resolveBeerPricePerLiter(r, editPriceTableId);
+                                            const uPrice = Math.round(finalLiterPrice * finalCap * 100) / 100;
                                             updated[idx].recipeId = r.id;
-                                            updated[idx].kegCapacity = cap;
-                                            updated[idx].description = `Barril ${cap}L - ${r.name}`;
-                                            updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
-                                            updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                            updated[idx].kegCapacity = finalCap;
+                                            updated[idx].pricePerLiter = finalLiterPrice;
+                                            updated[idx].unitPrice = uPrice;
+                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * uPrice;
+                                            updated[idx].description = `Barril ${finalCap}L - ${r.name}`;
                                             setEditItems(updated);
                                           }}
                                         />
@@ -2889,7 +2927,7 @@ export default function PedidosPage() {
                                             ) : (
                                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                                <span>Sem estoque envasado livre ({stock.matchingTotal} cheios • {stock.reserved} reservados)</span>
+                                                <span>Sem estoque livre ({stock.matchingTotal} cheios • {stock.reserved} reservados)</span>
                                               </span>
                                             )}
                                             {isInsufficient && (
@@ -2908,15 +2946,25 @@ export default function PedidosPage() {
                                             const cap = parseInt(e.target.value, 10) || 50;
                                             const updated = [...editItems];
                                             updated[idx].kegCapacity = cap;
+                                            const literPrice =
+                                              updated[idx].pricePerLiter ||
+                                              (updated[idx].recipeId
+                                                ? resolveBeerPricePerLiter(
+                                                    recipes.find((rec) => rec.id === updated[idx].recipeId),
+                                                    editPriceTableId
+                                                  )
+                                                : 20);
+                                            updated[idx].pricePerLiter = literPrice;
+                                            const uPrice = Math.round(literPrice * cap * 100) / 100;
+                                            updated[idx].unitPrice = uPrice;
+                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * uPrice;
                                             const r = recipes.find((rec) => rec.id === updated[idx].recipeId);
                                             if (r) {
                                               updated[idx].description = `Barril ${cap}L - ${r.name}`;
-                                              updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
-                                              updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
                                             }
                                             setEditItems(updated);
                                           }}
-                                          className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                          className="w-full px-2 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs text-center focus:bg-white focus:border-amber-500 focus:outline-none"
                                         >
                                           {[50, 30, 20, 15, 10, 5].map((cap) => {
                                             const avail = item.recipeId ? getStockAvailability(item.recipeId, cap, selectedOrder?.id).available : 0;
@@ -2938,26 +2986,53 @@ export default function PedidosPage() {
                                             const updated = [...editItems];
                                             const qty = parseInt(e.target.value, 10) || 1;
                                             updated[idx].quantity = qty;
-                                            updated[idx].totalPrice = qty * updated[idx].unitPrice;
+                                            updated[idx].totalPrice = qty * (updated[idx].unitPrice || 0);
                                             setEditItems(updated);
                                           }}
                                           className="w-full px-2 py-2 rounded-xl font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
                                         />
                                       </td>
 
+                                      {/* NOVO CAMPO: VALOR DO LITRO (EDITÁVEL) */}
+                                      <td className="py-3 px-3 align-top">
+                                        <input
+                                          type="number"
+                                          step="0.50"
+                                          min="0"
+                                          value={pPerLiterVal}
+                                          onChange={(e) => {
+                                            const updated = [...editItems];
+                                            const pPerLiter = parseFloat(e.target.value) || 0;
+                                            updated[idx].pricePerLiter = pPerLiter;
+                                            const cap = updated[idx].kegCapacity || 50;
+                                            const uPrice = Math.round(pPerLiter * cap * 100) / 100;
+                                            updated[idx].unitPrice = uPrice;
+                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * uPrice;
+                                            setEditItems(updated);
+                                          }}
+                                          className="w-full px-2 py-2 bg-amber-50/60 border border-amber-300 rounded-xl font-bold text-right text-amber-950 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                          placeholder="R$/L"
+                                        />
+                                      </td>
+
+                                      {/* PREÇO UNITÁRIO (EDITÁVEL COM ATUALIZAÇÃO DO LITRO) */}
                                       <td className="py-3 px-3 align-top">
                                         <input
                                           type="number"
                                           step="5"
+                                          min="0"
                                           value={item.unitPrice}
                                           onChange={(e) => {
                                             const updated = [...editItems];
                                             const price = parseFloat(e.target.value) || 0;
                                             updated[idx].unitPrice = price;
-                                            updated[idx].totalPrice = updated[idx].quantity * price;
+                                            const cap = updated[idx].kegCapacity || 50;
+                                            updated[idx].pricePerLiter = cap > 0 ? Math.round((price / cap) * 100) / 100 : 0;
+                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * price;
                                             setEditItems(updated);
                                           }}
                                           className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                          placeholder="Unitário"
                                         />
                                       </td>
 
@@ -3711,26 +3786,27 @@ export default function PedidosPage() {
 
                           {/* Grid / Tabela de Itens */}
                           <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse min-w-[700px]">
+                            <table className="w-full text-left border-collapse min-w-[760px]">
                               <thead>
                                 <tr className="bg-slate-100/80 text-[11px] font-extrabold uppercase text-slate-500 tracking-wider border-b border-slate-200">
                                   <th className="py-2.5 px-3 text-center w-12">#</th>
                                   <th className="py-2.5 px-3">Cerveja / Chopp</th>
-                                  <th className="py-2.5 px-3 w-32">Barril</th>
-                                  <th className="py-2.5 px-3 text-center w-24">Qtd</th>
+                                  <th className="py-2.5 px-3 w-28">Barril</th>
+                                  <th className="py-2.5 px-3 text-center w-20">Qtd</th>
+                                  <th className="py-2.5 px-3 text-right w-28 text-amber-700">Valor/L (R$)</th>
                                   <th className="py-2.5 px-3 text-right w-32">Unitário (R$)</th>
-                                  <th className="py-2.5 px-3 text-right w-36">Subtotal</th>
+                                  <th className="py-2.5 px-3 text-right w-32">Subtotal</th>
                                   <th className="py-2.5 px-3 text-center w-12"></th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {orderItems.length === 0 ? (
                                   <tr>
-                                    <td colSpan={7} className="py-10 text-center text-slate-400">
+                                    <td colSpan={8} className="py-10 text-center text-slate-400">
                                       <p className="text-xs font-semibold mb-2">Nenhum produto adicionado ao pedido ainda</p>
                                       <button
                                         type="button"
-                                        onClick={handleAddItemRow}
+                                        onClick={() => handleAddItemRow()}
                                         className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-xs shadow-xs hover:bg-amber-600 transition-all cursor-pointer active:scale-95"
                                       >
                                         <Plus className="w-3.5 h-3.5" />
@@ -3740,7 +3816,11 @@ export default function PedidosPage() {
                                   </tr>
                                 ) : (
                                   orderItems.map((item, idx) => {
-                                    const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
+                                    const cap = item.kegCapacity || 50;
+                                    const pPerLiterVal = item.pricePerLiter !== undefined
+                                      ? item.pricePerLiter
+                                      : (item.unitPrice ? Math.round((item.unitPrice / cap) * 100) / 100 : 0);
+                                    const stock = getStockAvailability(item.recipeId, cap);
                                     const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
                                     const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
                                     const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
@@ -3756,16 +3836,22 @@ export default function PedidosPage() {
                                         <td className="py-3 px-3 align-top">
                                           <RecipeSearchSelect
                                             recipeId={item.recipeId}
+                                            kegCapacity={cap}
                                             recipes={recipes}
                                             kegs={kegs}
                                             orders={orders}
-                                            resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, newPriceTableId)}
-                                            onSelectRecipe={(r, recommendedCap) => {
+                                            resolvePricePerLiter={(rec) => resolveBeerPricePerLiter(rec, newPriceTableId)}
+                                            onSelectRecipe={(r, chosenCap, pPerLiter) => {
                                               const newItems = [...orderItems];
-                                              const cap = recommendedCap || item.kegCapacity || 50;
+                                              const itemCap = chosenCap || item.kegCapacity || 50;
+                                              const resolvedPerLiter = pPerLiter !== undefined ? pPerLiter : resolveBeerPricePerLiter(r, newPriceTableId);
+                                              const uPrice = Math.round(resolvedPerLiter * itemCap * 100) / 100;
                                               newItems[idx].recipeId = r.id;
-                                              newItems[idx].kegCapacity = cap;
-                                              newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
+                                              newItems[idx].kegCapacity = itemCap;
+                                              newItems[idx].pricePerLiter = resolvedPerLiter;
+                                              newItems[idx].unitPrice = uPrice;
+                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * uPrice;
+                                              newItems[idx].description = `Barril ${itemCap}L - ${r.name}`;
                                               setOrderItems(newItems);
                                             }}
                                           />
@@ -3796,22 +3882,27 @@ export default function PedidosPage() {
                                           <select
                                             value={item.kegCapacity || 50}
                                             onChange={(e) => {
-                                              const cap = parseInt(e.target.value, 10) || 50;
+                                              const newCap = parseInt(e.target.value, 10) || 50;
                                               const newItems = [...orderItems];
-                                              newItems[idx].kegCapacity = cap;
+                                              newItems[idx].kegCapacity = newCap;
                                               const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
+                                              const pPerLiter = newItems[idx].pricePerLiter || (r ? resolveBeerPricePerLiter(r, newPriceTableId) : 20);
+                                              newItems[idx].pricePerLiter = pPerLiter;
+                                              const uPrice = Math.round(pPerLiter * newCap * 100) / 100;
+                                              newItems[idx].unitPrice = uPrice;
+                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * uPrice;
                                               if (r) {
-                                                newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
+                                                newItems[idx].description = `Barril ${newCap}L - ${r.name}`;
                                               }
                                               setOrderItems(newItems);
                                             }}
-                                            className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                            className="w-full px-2 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
                                           >
-                                            {[50, 30, 20, 15, 10, 5].map((cap) => {
-                                              const avail = item.recipeId ? getStockAvailability(item.recipeId, cap).available : 0;
+                                            {[50, 30, 20, 15, 10, 5].map((c) => {
+                                              const avail = item.recipeId ? getStockAvailability(item.recipeId, c).available : 0;
                                               return (
-                                                <option key={cap} value={cap}>
-                                                  {cap}L {avail > 0 ? `(${avail})` : ''}
+                                                <option key={c} value={c}>
+                                                  {c}L {avail > 0 ? `(${avail})` : ''}
                                                 </option>
                                               );
                                             })}
@@ -3825,24 +3916,55 @@ export default function PedidosPage() {
                                             value={item.quantity}
                                             onChange={(e) => {
                                               const newItems = [...orderItems];
-                                              newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
+                                              const qty = parseInt(e.target.value, 10) || 1;
+                                              newItems[idx].quantity = qty;
+                                              newItems[idx].totalPrice = qty * (newItems[idx].unitPrice || 0);
                                               setOrderItems(newItems);
                                             }}
                                             className="w-full px-2 py-2 rounded-xl font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
                                           />
                                         </td>
 
+                                        {/* NOVO CAMPO: VALOR DO LITRO (EDITÁVEL) */}
+                                        <td className="py-3 px-3 align-top">
+                                          <input
+                                            type="number"
+                                            step="0.50"
+                                            min="0"
+                                            value={pPerLiterVal}
+                                            onChange={(e) => {
+                                              const newItems = [...orderItems];
+                                              const pPerLiter = parseFloat(e.target.value) || 0;
+                                              newItems[idx].pricePerLiter = pPerLiter;
+                                              const c = newItems[idx].kegCapacity || 50;
+                                              const uPrice = Math.round(pPerLiter * c * 100) / 100;
+                                              newItems[idx].unitPrice = uPrice;
+                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * uPrice;
+                                              setOrderItems(newItems);
+                                            }}
+                                            className="w-full px-2 py-2 bg-amber-50/60 border border-amber-300 rounded-xl font-bold text-right text-amber-950 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                            placeholder="R$/L"
+                                          />
+                                        </td>
+
+                                        {/* PREÇO UNITÁRIO (EDITÁVEL COM ATUALIZAÇÃO DO LITRO) */}
                                         <td className="py-3 px-3 align-top">
                                           <input
                                             type="number"
                                             step="5"
+                                            min="0"
                                             value={item.unitPrice}
                                             onChange={(e) => {
                                               const newItems = [...orderItems];
-                                              newItems[idx].unitPrice = parseFloat(e.target.value) || 0;
+                                              const price = parseFloat(e.target.value) || 0;
+                                              newItems[idx].unitPrice = price;
+                                              const c = newItems[idx].kegCapacity || 50;
+                                              newItems[idx].pricePerLiter = c > 0 ? Math.round((price / c) * 100) / 100 : 0;
+                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * price;
                                               setOrderItems(newItems);
                                             }}
                                             className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                            placeholder="Unitário"
                                           />
                                         </td>
 

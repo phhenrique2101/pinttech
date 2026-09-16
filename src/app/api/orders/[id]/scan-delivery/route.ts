@@ -91,23 +91,61 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const calculatedPrice = pricePerLiter * volume;
 
       // 2. Existe um item no pedido sem barril vinculado que corresponda a esta cerveja?
-      const pendingItem = order.items.find(
+      // PRIORIDADE 1: Item pendente da mesma cerveja E com a mesma capacidade do barril bipado
+      let pendingItem = order.items.find(
         (it) =>
           !it.kegId &&
           ((it.recipeId && keg.currentBatch?.recipeId && it.recipeId === keg.currentBatch.recipeId) ||
             (it.recipe?.name && it.recipe.name.toLowerCase().trim() === beerName.toLowerCase().trim()) ||
-            (!it.recipeId && it.description?.toLowerCase().includes(beerName.toLowerCase())))
+            (!it.recipeId && it.description?.toLowerCase().includes(beerName.toLowerCase()))) &&
+          (it.description?.toLowerCase().includes(`${keg.capacity}l`) || (it as any).kegCapacity === keg.capacity)
       );
 
+      // PRIORIDADE 2: Se não houver da mesma capacidade, pega qualquer item pendente dessa cerveja
+      if (!pendingItem) {
+        pendingItem = order.items.find(
+          (it) =>
+            !it.kegId &&
+            ((it.recipeId && keg.currentBatch?.recipeId && it.recipeId === keg.currentBatch.recipeId) ||
+              (it.recipe?.name && it.recipe.name.toLowerCase().trim() === beerName.toLowerCase().trim()) ||
+              (!it.recipeId && it.description?.toLowerCase().includes(beerName.toLowerCase())))
+        );
+      }
+
+      let volumeAdjusted = false;
+      let originalItemPrice = 0;
+
       if (pendingItem) {
+        // Extrai a capacidade esperada no pedido
+        let expectedCap = keg.capacity || 50;
+        const capMatch = pendingItem.description?.match(/(\d+)\s*L/i);
+        if (capMatch) expectedCap = parseInt(capMatch[1], 10);
+
+        // Preço por litro contratado no item do pedido (ou da tabela de preço)
+        const itemPricePerLiter =
+          pendingItem.unitPrice > 0 && expectedCap > 0
+            ? pendingItem.unitPrice / expectedCap
+            : pricePerLiter;
+
+        originalItemPrice = pendingItem.unitPrice;
+
+        // Se a capacidade bipada for diferente da esperada, ou se o volume envasado for menor, ajusta o preço proporcionalmente aos litros reais
+        const isDifferentVolume = expectedCap !== keg.capacity || volume !== expectedCap;
+        const effectiveUnitPrice = isDifferentVolume
+          ? Math.round(itemPricePerLiter * volume * 100) / 100
+          : (pendingItem.unitPrice > 0 ? pendingItem.unitPrice : calculatedPrice);
+
+        if (isDifferentVolume && pendingItem.unitPrice > 0) {
+          volumeAdjusted = true;
+        }
+
         // Se o item tinha quantidade > 1 (ex: 2x 50L), desmembra o item bipado para 1 unidade e mantém o restante pendente
         if (pendingItem.quantity > 1) {
-          const unitPrice = pendingItem.unitPrice > 0 ? pendingItem.unitPrice : calculatedPrice;
           await prisma.orderItem.update({
             where: { id: pendingItem.id },
             data: {
               quantity: pendingItem.quantity - 1,
-              totalPrice: (pendingItem.quantity - 1) * unitPrice,
+              totalPrice: (pendingItem.quantity - 1) * pendingItem.unitPrice,
             },
           });
 
@@ -119,8 +157,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               kegId: keg.id,
               description: `Barril ${keg.capacity}L - ${beerName} (${volume}L envasados)`,
               quantity: 1,
-              unitPrice: unitPrice,
-              totalPrice: unitPrice,
+              unitPrice: effectiveUnitPrice,
+              totalPrice: effectiveUnitPrice,
             },
           });
         } else {
@@ -131,8 +169,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               kegId: keg.id,
               batchId: keg.currentBatchId || pendingItem.batchId,
               description: `Barril ${keg.capacity}L - ${beerName} (${volume}L envasados)`,
-              unitPrice: pendingItem.unitPrice > 0 ? pendingItem.unitPrice : calculatedPrice,
-              totalPrice: pendingItem.totalPrice > 0 ? pendingItem.totalPrice : calculatedPrice,
+              unitPrice: effectiveUnitPrice,
+              totalPrice: effectiveUnitPrice,
             },
           });
         }
@@ -261,9 +299,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({
         success: true,
         isNewItem,
+        volumeAdjusted,
         message: isNewItem
-          ? `Barril ${keg.code} (${beerDesc}) incluído no pedido! Total recalculado para ${formatCurrency(newTotalAmount)}.`
-          : `Barril ${keg.code} (${beerDesc}) conferido e vinculado com sucesso!`,
+          ? `Barril ${keg.code} (${beerDesc} ${volume}L) incluído no pedido! Total recalculado para ${formatCurrency(newTotalAmount)}.`
+          : volumeAdjusted
+          ? `Barril ${keg.code} (${volume}L) conferido! O valor do item foi ajustado proporcionalmente aos litros reais (Total do pedido: ${formatCurrency(newTotalAmount)}).`
+          : `Barril ${keg.code} (${beerDesc} ${keg.capacity}L) conferido e vinculado com sucesso!`,
         order: updatedOrder,
       });
     }
