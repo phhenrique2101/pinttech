@@ -727,6 +727,8 @@ export default function PedidosPage() {
   // Selected order modal for details / edit / payment
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [orderModalTab, setOrderModalTab] = useState<'DETAILS' | 'EDIT' | 'PAYMENT'>('DETAILS');
+  const [newOrderTab, setNewOrderTab] = useState<'PRODUCTS' | 'EQUIPMENT' | 'DELIVERY'>('PRODUCTS');
+  const [editOrderTab, setEditOrderTab] = useState<'PRODUCTS' | 'EQUIPMENT' | 'DELIVERY'>('PRODUCTS');
   const [savingOrder, setSavingOrder] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
@@ -1203,6 +1205,7 @@ export default function PedidosPage() {
   const openOrderDetails = (order: any, tab: 'DETAILS' | 'EDIT' | 'PAYMENT' = 'DETAILS') => {
     setSelectedOrder(order);
     setOrderModalTab(tab);
+    setEditOrderTab('PRODUCTS');
     setCopiedAddress(false);
     setEditClientId(order.clientId || '');
     setEditPriceTableId(order.priceTableId || order.client?.priceTableId || priceTables.find((t) => t.isDefault)?.id || '');
@@ -2631,487 +2634,619 @@ export default function PedidosPage() {
             )}
 
             {/* TAB 2: EDITAR PEDIDO */}
-            {orderModalTab === 'EDIT' && (
-              <form onSubmit={handleSaveOrderEdits} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block font-bold text-slate-700">Cliente / Ponto de Venda</label>
+            {orderModalTab === 'EDIT' && (() => {
+              const editSubtotal = editItems.reduce((acc, it) => acc + (it.quantity || 0) * (it.unitPrice || 0), 0);
+              const editFee = parseFloat(editDeliveryFee) || 0;
+              const editDisc = parseFloat(editDiscount) || 0;
+              const editCaut = parseFloat(editCautionDeposit) || 0;
+              const editTotal = Math.max(0, editSubtotal + editFee + editCaut - editDisc);
+              const editTotalLiters = editItems.reduce((acc, it) => acc + (it.quantity || 0) * (it.kegCapacity || 50), 0);
+
+              return (
+                <form onSubmit={handleSaveOrderEdits} className="space-y-4 text-xs">
+                  {/* Card Fixo: Cliente, Tabela de Preço, Status e Data de Entrega */}
+                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                      {/* Cliente */}
+                      <div className="sm:col-span-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block font-bold text-slate-700">Cliente / Ponto de Venda <span className="text-amber-600">*</span></label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickClientTarget('EDIT_ORDER');
+                              setQuickClientInitialName('');
+                              setQuickClientModalOpen(true);
+                            }}
+                            className="text-[11px] font-extrabold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer transition-colors"
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            <span>+ Novo Cliente</span>
+                          </button>
+                        </div>
+                        <ClientSearchSelect
+                          clientId={editClientId}
+                          clients={clients}
+                          onSelectClient={(c) => {
+                            setEditClientId(c.id);
+                            if (!editAddress) {
+                              const addr = [c.address, c.number, c.neighborhood, c.city].filter(Boolean).join(', ');
+                              setEditAddress(addr);
+                            }
+                            if (c.priceTableId) {
+                              handleEditPriceTableChange(c.priceTableId);
+                            }
+                          }}
+                          onOpenQuickCreate={(initialName) => {
+                            setQuickClientTarget('EDIT_ORDER');
+                            setQuickClientInitialName(initialName);
+                            setQuickClientModalOpen(true);
+                          }}
+                        />
+                      </div>
+
+                      {/* Tabela de Preço */}
+                      <div className="sm:col-span-3">
+                        <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                          <span>Tabela de Preço</span>
+                          {editPriceTableId && priceTables.find((t) => t.id === editPriceTableId)?.type === 'AT_COST' && (
+                            <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200">Preço de Custo</span>
+                          )}
+                        </label>
+                        <select
+                          value={editPriceTableId}
+                          onChange={(e) => handleEditPriceTableChange(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                        >
+                          <option value="">Padrão da Cervejaria</option>
+                          {priceTables.map((pt) => (
+                            <option key={pt.id} value={pt.id}>
+                              {pt.name} {pt.isDefault ? '(Padrão)' : ''} {pt.adjustmentPercent ? `(${pt.adjustmentPercent > 0 ? '+' : ''}${pt.adjustmentPercent}%)` : ''} {pt.type === 'AT_COST' ? '(Custo)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Status */}
+                      <div className="sm:col-span-3">
+                        <label className="block font-bold text-slate-700 mb-1">Status do Pedido</label>
+                        <select
+                          value={editStatus}
+                          onChange={(e) => setEditStatus(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-amber-900 focus:bg-white focus:border-amber-500 focus:outline-none"
+                        >
+                          <option value="ORCAMENTO">ORÇAMENTO</option>
+                          <option value="CONFIRMADO">CONFIRMADO</option>
+                          <option value="EM_SEPARACAO">EM SEPARAÇÃO</option>
+                          <option value="EM_ROTA">EM ROTA DE ENTREGA</option>
+                          <option value="ENTREGUE">ENTREGUE</option>
+                          <option value="CONCLUIDO">CONCLUÍDO</option>
+                          <option value="CANCELADO">CANCELADO</option>
+                        </select>
+                      </div>
+
+                      {/* Data de Entrega */}
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-slate-700 mb-1">Data Entrega <span className="text-amber-600">*</span></label>
+                        <input
+                          type="date"
+                          value={editDeliveryDate}
+                          onChange={(e) => setEditDeliveryDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sub-Abas Ergonômicas de Edição (Estilo ERP BierHeld) */}
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-2xl border border-slate-300/80 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setEditOrderTab('PRODUCTS')}
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                        editOrderTab === 'PRODUCTS'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                      }`}
+                    >
+                      <span>🍺 Produtos</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        editOrderTab === 'PRODUCTS' ? 'bg-amber-100 text-amber-900' : 'bg-slate-300/80 text-slate-700'
+                      }`}>
+                        {editItems.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditOrderTab('EQUIPMENT')}
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                        editOrderTab === 'EQUIPMENT'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                      }`}
+                    >
+                      <span>🎛️ Comodato (Chopeiras)</span>
+                      {editEquipments.length > 0 && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                          editOrderTab === 'EQUIPMENT' ? 'bg-orange-100 text-orange-900' : 'bg-slate-300/80 text-slate-700'
+                        }`}>
+                          {editEquipments.length}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditOrderTab('DELIVERY')}
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                        editOrderTab === 'DELIVERY'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                      }`}
+                    >
+                      <span>🚚 Logística & Devolução</span>
+                      {editAddress && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* SUB-ABA 1: PRODUTOS */}
+                  {editOrderTab === 'PRODUCTS' && (
+                    <div className="space-y-3">
+                      {/* Tabela de Produtos */}
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                        <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-slate-800 text-xs sm:text-sm">
+                              🍺 Itens e Produtos do Pedido
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full">
+                              {editItems.length} {editItems.length === 1 ? 'item' : 'itens'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleAddEditItemRow}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Adicionar Item</span>
+                          </button>
+                        </div>
+
+                        {/* Grid / Tabela */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse min-w-[700px]">
+                            <thead>
+                              <tr className="bg-slate-100/80 text-[11px] font-extrabold uppercase text-slate-500 tracking-wider border-b border-slate-200">
+                                <th className="py-2.5 px-3 text-center w-12">#</th>
+                                <th className="py-2.5 px-3">Cerveja / Chopp</th>
+                                <th className="py-2.5 px-3 w-32">Barril</th>
+                                <th className="py-2.5 px-3 text-center w-24">Qtd</th>
+                                <th className="py-2.5 px-3 text-right w-32">Unitário (R$)</th>
+                                <th className="py-2.5 px-3 text-right w-36">Subtotal</th>
+                                <th className="py-2.5 px-3 text-center w-12"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {editItems.length === 0 ? (
+                                <tr>
+                                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                                    <p className="text-xs font-semibold mb-2">Nenhum produto vinculado a este pedido.</p>
+                                    <button
+                                      type="button"
+                                      onClick={handleAddEditItemRow}
+                                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-xs shadow-xs hover:bg-amber-600 transition-all cursor-pointer active:scale-95"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Adicionar Item</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ) : (
+                                editItems.map((item, idx) => {
+                                  const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50, selectedOrder?.id);
+                                  const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
+                                  const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
+                                  const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+
+                                  return (
+                                    <tr key={idx} className="hover:bg-slate-50/70 transition-colors group">
+                                      <td className="py-3 px-3 text-center align-top pt-4">
+                                        <span className="text-[11px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                          {idx + 1}
+                                        </span>
+                                      </td>
+
+                                      <td className="py-3 px-3 align-top">
+                                        <RecipeSearchSelect
+                                          recipeId={item.recipeId}
+                                          recipes={recipes}
+                                          kegs={kegs}
+                                          orders={orders}
+                                          resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, editPriceTableId)}
+                                          onSelectRecipe={(r, recommendedCap) => {
+                                            const updated = [...editItems];
+                                            const cap = recommendedCap || updated[idx].kegCapacity || 50;
+                                            updated[idx].recipeId = r.id;
+                                            updated[idx].kegCapacity = cap;
+                                            updated[idx].description = `Barril ${cap}L - ${r.name}`;
+                                            updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
+                                            updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                            setEditItems(updated);
+                                          }}
+                                        />
+                                        {item.recipeId && (
+                                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                            {stock.available > 0 ? (
+                                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                <span>{stock.available} barril(is) livres na câmara fria</span>
+                                                {stock.reserved > 0 && <span className="text-emerald-700">({stock.reserved} reservados)</span>}
+                                              </span>
+                                            ) : (
+                                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                                <span>Sem estoque envasado livre ({stock.matchingTotal} cheios • {stock.reserved} reservados)</span>
+                                              </span>
+                                            )}
+                                            {isInsufficient && (
+                                              <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-200">
+                                                Qtd pedida ({item.quantity}) supera estoque ({stock.available})
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </td>
+
+                                      <td className="py-3 px-3 align-top">
+                                        <select
+                                          value={item.kegCapacity || 50}
+                                          onChange={(e) => {
+                                            const cap = parseInt(e.target.value, 10) || 50;
+                                            const updated = [...editItems];
+                                            updated[idx].kegCapacity = cap;
+                                            const r = recipes.find((rec) => rec.id === updated[idx].recipeId);
+                                            if (r) {
+                                              updated[idx].description = `Barril ${cap}L - ${r.name}`;
+                                              updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
+                                              updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                            }
+                                            setEditItems(updated);
+                                          }}
+                                          className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                        >
+                                          {[50, 30, 20, 15, 10, 5].map((cap) => {
+                                            const avail = item.recipeId ? getStockAvailability(item.recipeId, cap, selectedOrder?.id).available : 0;
+                                            return (
+                                              <option key={cap} value={cap}>
+                                                {cap}L {avail > 0 ? `(${avail})` : ''}
+                                              </option>
+                                            );
+                                          })}
+                                        </select>
+                                      </td>
+
+                                      <td className="py-3 px-3 align-top">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          value={item.quantity}
+                                          onChange={(e) => {
+                                            const updated = [...editItems];
+                                            const qty = parseInt(e.target.value, 10) || 1;
+                                            updated[idx].quantity = qty;
+                                            updated[idx].totalPrice = qty * updated[idx].unitPrice;
+                                            setEditItems(updated);
+                                          }}
+                                          className="w-full px-2 py-2 rounded-xl font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
+                                        />
+                                      </td>
+
+                                      <td className="py-3 px-3 align-top">
+                                        <input
+                                          type="number"
+                                          step="5"
+                                          value={item.unitPrice}
+                                          onChange={(e) => {
+                                            const updated = [...editItems];
+                                            const price = parseFloat(e.target.value) || 0;
+                                            updated[idx].unitPrice = price;
+                                            updated[idx].totalPrice = updated[idx].quantity * price;
+                                            setEditItems(updated);
+                                          }}
+                                          className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                        />
+                                      </td>
+
+                                      <td className="py-3 px-3 text-right align-top pt-4">
+                                        <span className="font-mono font-black text-slate-900 text-xs sm:text-sm">
+                                          {formatCurrency(itemTotal)}
+                                        </span>
+                                      </td>
+
+                                      <td className="py-3 px-3 text-center align-top pt-3">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveEditItemRow(idx)}
+                                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                          title="Remover este item"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Rodapé da Tabela: Botão Adicionar Item (Esquerda) e Resumo Financeiro (Direita) */}
+                        <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div>
+                            <button
+                              type="button"
+                              onClick={handleAddEditItemRow}
+                              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-amber-50 text-slate-800 hover:text-amber-900 border border-slate-300 hover:border-amber-400 rounded-xl font-bold text-xs shadow-2xs transition-all cursor-pointer active:scale-95"
+                            >
+                              <Plus className="w-4 h-4 text-amber-600" />
+                              <span>+ Adicionar Produto</span>
+                            </button>
+                            <div className="text-[11px] text-slate-500 font-bold mt-2">
+                              Volume total: <strong className="text-slate-800">{editTotalLiters} Litros</strong>
+                            </div>
+                          </div>
+
+                          {/* Resumo Financeiro Compacto (Estilo BierHeld) */}
+                          <div className="w-full sm:w-80 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span>Subtotal dos Produtos:</span>
+                              <span className="font-mono font-bold text-slate-900">{formatCurrency(editSubtotal)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-slate-600 gap-2">
+                              <span>Entrega / Frete:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[11px] text-slate-400">R$</span>
+                                <input
+                                  type="number"
+                                  value={editDeliveryFee}
+                                  onChange={(e) => setEditDeliveryFee(e.target.value)}
+                                  className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none"
+                                  placeholder="0,00"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-slate-600 gap-2">
+                              <span>Desconto Comercial:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[11px] text-slate-400">R$</span>
+                                <input
+                                  type="number"
+                                  value={editDiscount}
+                                  onChange={(e) => setEditDiscount(e.target.value)}
+                                  className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none text-rose-600"
+                                  placeholder="0,00"
+                                />
+                              </div>
+                            </div>
+                            {editCaut > 0 && (
+                              <div className="flex items-center justify-between text-slate-600">
+                                <span>Caução Chopeiras:</span>
+                                <span className="font-mono font-bold text-slate-900">{formatCurrency(editCaut)}</span>
+                              </div>
+                            )}
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                              <span className="font-extrabold text-slate-900">Total do Pedido:</span>
+                              <span className="font-mono font-black text-amber-600 text-base">{formatCurrency(editTotal)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Observações Gerais */}
+                      <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Observações Gerais do Pedido
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                          placeholder="Instruções para o entregador, pontos de referência, detalhes comerciais..."
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-ABA 2: COMODATO (CHOPEIRAS & CILINDROS) */}
+                  {editOrderTab === 'EQUIPMENT' && (
+                    <div className="space-y-3">
+                      <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                          <div>
+                            <span className="font-black text-slate-900 text-sm block">
+                              🎛️ Equipamentos em Comodato (Chopeiras & Cilindros)
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              Selecione as chopeiras e equipamentos vinculados a este pedido
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-bold text-slate-600">Caução Chopeira (R$):</label>
+                            <input
+                              type="number"
+                              value={editCautionDeposit}
+                              onChange={(e) => setEditCautionDeposit(e.target.value)}
+                              className="w-28 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-xs focus:bg-white focus:outline-none"
+                              placeholder="0,00"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                          {equipment.length === 0 ? (
+                            <div className="col-span-2 py-8 text-center text-slate-400">
+                              Nenhum equipamento cadastrado na cervejaria.
+                            </div>
+                          ) : (
+                            equipment.map((eq) => {
+                              const isSelected = editEquipments.includes(eq.id);
+                              const conflict = getEquipmentReservationConflict(eq.id, selectedOrder?.id);
+
+                              return (
+                                <div
+                                  key={eq.id}
+                                  onClick={() => handleToggleEditOrderEquipment(eq)}
+                                  className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 ${
+                                    isSelected
+                                      ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-500/20'
+                                      : conflict
+                                      ? 'bg-orange-50/50 border-orange-200 hover:border-orange-300'
+                                      : 'bg-white border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    readOnly
+                                    className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="font-bold text-slate-800 truncate block leading-tight">{eq.name}</span>
+                                      <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">{eq.code}</span>
+                                    </div>
+                                    {conflict ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-800 bg-orange-100/90 px-1.5 py-0.5 rounded-md mt-1 border border-orange-200">
+                                        🔒 Reservado no Pedido #{conflict.orderNumber} ({conflict.client?.tradeName || conflict.client?.name})
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 mt-0.5">
+                                        ✓ Disponível na Cervejaria
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-ABA 3: LOGÍSTICA & DEVOLUÇÃO */}
+                  {editOrderTab === 'DELIVERY' && (
+                    <div className="space-y-3">
+                      <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+                        <span className="font-black text-slate-900 text-sm block pb-2 border-b border-slate-100">
+                          🚚 Dados de Transporte, Entrega e Devolução
+                        </span>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              Previsão Devolução / Recolha
+                            </label>
+                            <input
+                              type="date"
+                              value={editReturnDate}
+                              onChange={(e) => setEditReturnDate(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:outline-none"
+                            />
+                            <span className="text-[10px] text-slate-400 mt-0.5 block">
+                              Data estimada para recolha dos barris vazios e chopeiras
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              Retorno Efetivo (Recolha Realizada)
+                            </label>
+                            <input
+                              type="date"
+                              value={editActualReturnDate}
+                              onChange={(e) => setEditActualReturnDate(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:outline-none"
+                            />
+                            <span className="text-[10px] text-slate-400 mt-0.5 block">
+                              Preencha quando os equipamentos retornarem à cervejaria
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              Responsável pela Entrega / Motorista
+                            </label>
+                            <input
+                              type="text"
+                              list="drivers-datalist-edit"
+                              value={editDriverName}
+                              onChange={(e) => setEditDriverName(e.target.value)}
+                              placeholder="Nome do motorista / entregador..."
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:outline-none"
+                            />
+                            <datalist id="drivers-datalist-edit">
+                              {users.map((u) => (
+                                <option key={u.id} value={u.name}>
+                                  {u.name} ({u.role})
+                                </option>
+                              ))}
+                            </datalist>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              Endereço Completo de Entrega
+                            </label>
+                            <input
+                              type="text"
+                              value={editAddress}
+                              onChange={(e) => setEditAddress(e.target.value)}
+                              placeholder="Rua, número, complemento, bairro, cidade - UF, CEP"
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-xs focus:bg-white focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Barra Inferior com Total e Botão Salvar */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">Total do Pedido:</span>
+                      <span className="text-xl font-black text-amber-600 font-mono">{formatCurrency(editTotal)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                       <button
                         type="button"
-                        onClick={() => {
-                          setQuickClientTarget('EDIT_ORDER');
-                          setQuickClientInitialName('');
-                          setQuickClientModalOpen(true);
-                        }}
-                        className="text-[11px] font-extrabold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer transition-colors"
+                        onClick={() => setOrderModalTab('DETAILS')}
+                        className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl text-xs transition-all cursor-pointer"
                       >
-                        <UserPlus className="w-3 h-3" />
-                        <span>+ Novo Cliente</span>
+                        Voltar aos Detalhes
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={savingOrder}
+                        className="px-6 py-2.5 font-black rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-2 cursor-pointer"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>{savingOrder ? 'Salvando Alterações...' : 'Salvar Alterações do Pedido'}</span>
                       </button>
                     </div>
-                    <ClientSearchSelect
-                      clientId={editClientId}
-                      clients={clients}
-                      onSelectClient={(c) => {
-                        setEditClientId(c.id);
-                        if (!editAddress) {
-                          const addr = [c.address, c.number, c.neighborhood, c.city].filter(Boolean).join(', ');
-                          setEditAddress(addr);
-                        }
-                        if (c.priceTableId) {
-                          handleEditPriceTableChange(c.priceTableId);
-                        }
-                      }}
-                      onOpenQuickCreate={(initialName) => {
-                        setQuickClientTarget('EDIT_ORDER');
-                        setQuickClientInitialName(initialName);
-                        setQuickClientModalOpen(true);
-                      }}
-                    />
                   </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
-                      <span>Tabela de Preço</span>
-                      {editPriceTableId && priceTables.find((t) => t.id === editPriceTableId)?.type === 'AT_COST' && (
-                        <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200">Preço de Custo</span>
-                      )}
-                    </label>
-                    <select
-                      value={editPriceTableId}
-                      onChange={(e) => handleEditPriceTableChange(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
-                    >
-                      <option value="">Padrão da Cervejaria</option>
-                      {priceTables.map((pt) => (
-                        <option key={pt.id} value={pt.id}>
-                          {pt.name} {pt.isDefault ? '(Padrão)' : ''} {pt.adjustmentPercent ? `(${pt.adjustmentPercent > 0 ? '+' : ''}${pt.adjustmentPercent}%)` : ''} {pt.type === 'AT_COST' ? '(Custo)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Status do Pedido</label>
-                    <select
-                      value={editStatus}
-                      onChange={(e) => setEditStatus(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-amber-900"
-                    >
-                      <option value="ORCAMENTO">ORÇAMENTO</option>
-                      <option value="CONFIRMADO">CONFIRMADO</option>
-                      <option value="EM_SEPARACAO">EM SEPARAÇÃO</option>
-                      <option value="EM_ROTA">EM ROTA DE ENTREGA</option>
-                      <option value="ENTREGUE">ENTREGUE</option>
-                      <option value="CONCLUIDO">CONCLUÍDO</option>
-                      <option value="CANCELADO">CANCELADO</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Data de Entrega</label>
-                    <input
-                      type="date"
-                      value={editDeliveryDate}
-                      onChange={(e) => setEditDeliveryDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Previsão Devolução</label>
-                    <input
-                      type="date"
-                      value={editReturnDate}
-                      onChange={(e) => setEditReturnDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Retorno Efetivo</label>
-                    <input
-                      type="date"
-                      value={editActualReturnDate}
-                      onChange={(e) => setEditActualReturnDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Responsável pela Entrega</label>
-                    <input
-                      type="text"
-                      list="drivers-datalist-edit"
-                      value={editDriverName}
-                      onChange={(e) => setEditDriverName(e.target.value)}
-                      placeholder="Nome do motorista / entregador..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
-                    />
-                    <datalist id="drivers-datalist-edit">
-                      {users.map((u) => (
-                        <option key={u.id} value={u.name}>
-                          {u.name} ({u.role})
-                        </option>
-                      ))}
-                    </datalist>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Endereço Completo de Entrega</label>
-                    <input
-                      type="text"
-                      value={editAddress}
-                      onChange={(e) => setEditAddress(e.target.value)}
-                      placeholder="Rua, número, complemento, bairro, cidade - UF, CEP"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
-                    />
-                  </div>
-                </div>
-
-                {/* Items */}
-                <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-purple-950 flex items-center gap-1 text-xs">
-                      🍺 Itens do Pedido ({editItems.length})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleAddEditItemRow}
-                      className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs hover:bg-purple-100/50 transition-colors"
-                    >
-                      + Adicionar Item
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {editItems.length === 0 ? (
-                      <div className="bg-white/80 p-4 rounded-xl border border-dashed border-purple-300 text-center space-y-1.5">
-                        <p className="text-xs text-purple-900 font-semibold">
-                          Nenhum item adicionado a este pedido. Você pode bipar os barris na entrega!
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleAddEditItemRow}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Adicionar Item</span>
-                        </button>
-                      </div>
-                    ) : (
-                      editItems.map((item, idx) => {
-                      const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50, selectedOrder?.id);
-                      const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
-                      const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
-                      const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
-
-                      return (
-                        <div key={idx} className="bg-white p-3.5 sm:p-4 rounded-2xl border border-purple-200 shadow-xs space-y-3">
-                          {/* Top Header of Item Row */}
-                          <div className="flex items-center justify-between pb-2 border-b border-purple-100">
-                            <span className="text-xs font-black text-purple-900 bg-purple-100/70 px-2.5 py-0.5 rounded-lg">
-                              Item #{idx + 1}
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Subtotal Item</span>
-                                <span className="text-sm font-black text-purple-950 font-mono">
-                                  {formatCurrency(itemTotal)}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveEditItemRow(idx)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                                title="Excluir este item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-12 gap-3 items-end">
-                            {/* Busca Digitada de Cerveja */}
-                            <div className="col-span-12 sm:col-span-5">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Cerveja / Produto Selecionado</label>
-                              <RecipeSearchSelect
-                                recipeId={item.recipeId}
-                                recipes={recipes}
-                                kegs={kegs}
-                                orders={orders}
-                                resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, editPriceTableId)}
-                                onSelectRecipe={(r, recommendedCap) => {
-                                  const updated = [...editItems];
-                                  const cap = recommendedCap || updated[idx].kegCapacity || 50;
-                                  updated[idx].recipeId = r.id;
-                                  updated[idx].kegCapacity = cap;
-                                  updated[idx].description = `Barril ${cap}L - ${r.name}`;
-                                  updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
-                                  updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
-                                  setEditItems(updated);
-                                }}
-                              />
-                            </div>
-
-                            {/* Capacidade */}
-                            <div className="col-span-4 sm:col-span-2">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Tamanho</label>
-                              <select
-                                value={item.kegCapacity || 50}
-                                onChange={(e) => {
-                                  const cap = parseInt(e.target.value, 10) || 50;
-                                  const updated = [...editItems];
-                                  updated[idx].kegCapacity = cap;
-                                  const r = recipes.find((rec) => rec.id === updated[idx].recipeId);
-                                  if (r) {
-                                    updated[idx].description = `Barril ${cap}L - ${r.name}`;
-                                    updated[idx].unitPrice = resolveBeerPrice(r, cap, editPriceTableId);
-                                    updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
-                                  }
-                                  setEditItems(updated);
-                                }}
-                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs sm:text-sm"
-                              >
-                                {[50, 30, 20, 15, 10, 5].map((cap) => {
-                                  const avail = item.recipeId ? getStockAvailability(item.recipeId, cap, selectedOrder?.id).available : 0;
-                                  return (
-                                    <option key={cap} value={cap}>
-                                      {cap}L {avail > 0 ? `(${avail} livre${avail > 1 ? 's' : ''})` : ''}
-                                    </option>
-                                  );
-                                })}
-                              </select>
-                            </div>
-
-                            {/* Quantidade */}
-                            <div className="col-span-3 sm:col-span-2">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-center">Qtd</label>
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const updated = [...editItems];
-                                  const qty = parseInt(e.target.value, 10) || 1;
-                                  updated[idx].quantity = qty;
-                                  updated[idx].totalPrice = qty * updated[idx].unitPrice;
-                                  setEditItems(updated);
-                                }}
-                                className="w-full px-2.5 py-2 rounded-xl font-bold text-center text-xs sm:text-sm bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
-                                placeholder="Qtd"
-                              />
-                            </div>
-
-                            {/* Preço Unitário */}
-                            <div className="col-span-5 sm:col-span-3">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-right">Unitário (R$)</label>
-                              <input
-                                type="number"
-                                step="10"
-                                value={item.unitPrice}
-                                onChange={(e) => {
-                                  const updated = [...editItems];
-                                  const price = parseFloat(e.target.value) || 0;
-                                  updated[idx].unitPrice = price;
-                                  updated[idx].totalPrice = updated[idx].quantity * price;
-                                  setEditItems(updated);
-                                }}
-                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs sm:text-sm focus:bg-white focus:border-amber-500 focus:outline-none"
-                                placeholder="Preço Unit."
-                              />
-                            </div>
-                          </div>
-
-                          {/* Quantidade em Estoque / Disponibilidade */}
-                          {item.recipeId ? (
-                            stock.available > 0 ? (
-                              <div className="text-xs font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
-                                <span className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                  <span>
-                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
-                                    {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
-                                  </span>
-                                </span>
-                                <span className="text-[11px] text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md font-black">
-                                  {stock.matchingTotal} barris cheios
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
-                                <span className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                  <span>
-                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será salvo normalmente para programação de envase)
-                                  </span>
-                                </span>
-                                <span className="text-[11px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-md font-black">
-                                  {stock.matchingTotal} cheios • {stock.reserved} reservados
-                                </span>
-                              </div>
-                            )
-                          ) : null}
-
-                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 border-t border-purple-100">
-                            <span className="text-slate-500">
-                              Volume total: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
-                            </span>
-                            <span className="font-black text-purple-900 text-xs sm:text-sm">
-                              Total Item: {formatCurrency(item.quantity * item.unitPrice)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    }))}
-                  </div>
-
-                  {editItems.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleAddEditItemRow}
-                      className="w-full py-2.5 px-4 bg-white hover:bg-purple-100/60 active:scale-[0.99] text-purple-700 hover:text-purple-900 border-2 border-dashed border-purple-300 hover:border-purple-400 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer mt-2.5"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>+ Adicionar Outro Item ao Pedido</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Comodato de Chopeiras */}
-                <div className="p-3.5 bg-orange-50 rounded-2xl border border-orange-200 space-y-2">
-                  <span className="font-extrabold text-orange-900 block">
-                    Equipamentos em Comodato (Chopeiras / Cilindros)
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                    {equipment.map((eq) => {
-                      const isSelected = editEquipments.includes(eq.id);
-                      const conflict = getEquipmentReservationConflict(eq.id, selectedOrder?.id);
-
-                      return (
-                        <div
-                          key={eq.id}
-                          onClick={() => handleToggleEditOrderEquipment(eq)}
-                          className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 ${
-                            isSelected
-                              ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-500/20'
-                              : conflict
-                              ? 'bg-orange-50/50 border-orange-200 hover:border-orange-300'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            readOnly
-                            className="mt-0.5 rounded text-amber-600 focus:ring-amber-500"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="font-bold text-slate-800 truncate block leading-tight">{eq.name}</span>
-                              <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">{eq.code}</span>
-                            </div>
-                            {conflict ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-800 bg-orange-100/90 px-1.5 py-0.5 rounded-md mt-1 border border-orange-200">
-                                🔒 Reservado no Pedido #{conflict.orderNumber} ({conflict.client?.tradeName || conflict.client?.name})
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 mt-0.5">
-                                ✓ Disponível
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Taxas e Valores */}
-                <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Desconto (R$)</label>
-                    <input
-                      type="number"
-                      value={editDiscount}
-                      onChange={(e) => setEditDiscount(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Frete / Entrega (R$)</label>
-                    <input
-                      type="number"
-                      value={editDeliveryFee}
-                      onChange={(e) => setEditDeliveryFee(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Caução Chopeira (R$)</label>
-                    <input
-                      type="number"
-                      value={editCautionDeposit}
-                      onChange={(e) => setEditCautionDeposit(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-800"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Observações do Pedido</label>
-                  <textarea
-                    rows={2}
-                    value={editNotes}
-                    onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="Instruções para o entregador, pontos de referência..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                  />
-                </div>
-
-                {/* Recalculated Total Box */}
-                {(() => {
-                  const subtotal = editItems.reduce((acc, it) => acc + it.quantity * it.unitPrice, 0);
-                  const disc = parseFloat(editDiscount) || 0;
-                  const fee = parseFloat(editDeliveryFee) || 0;
-                  const caut = parseFloat(editCautionDeposit) || 0;
-                  const total = Math.max(0, subtotal + fee + caut - disc);
-
-                  return (
-                    <div className="p-3 bg-slate-900 text-white rounded-2xl flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block font-bold">Total Recalculado do Pedido:</span>
-                        <span className="text-xs text-slate-300 font-medium">Subtotal {formatCurrency(subtotal)} {disc > 0 && `- Desc. ${formatCurrency(disc)}`}</span>
-                      </div>
-                      <span className="text-2xl font-black text-amber-400">{formatCurrency(total)}</span>
-                    </div>
-                  );
-                })()}
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setOrderModalTab('DETAILS')}
-                    className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl text-xs transition-all"
-                  >
-                    Voltar aos Detalhes
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingOrder}
-                    className="px-5 py-2.5 font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-1.5"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>{savingOrder ? 'Salvando...' : 'Salvar Alterações do Pedido'}</span>
-                  </button>
-                </div>
-              </form>
-            )}
+                </form>
+              );
+            })()}
 
             {/* TAB 3: RECEBIMENTOS & PAGAMENTOS */}
             {orderModalTab === 'PAYMENT' && (
@@ -3371,470 +3506,621 @@ export default function PedidosPage() {
       {/* Modal: Novo Pedido */}
       {newModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200">
-            <h3 className="font-black text-lg text-slate-900 mb-1">Novo Pedido de Chopp</h3>
-            <p className="text-xs text-slate-500 mb-4">Cadastre a venda, comodato de chopeiras e agendamento de entrega e recolha</p>
+          <div className="bg-slate-50/70 rounded-3xl max-w-5xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200 flex flex-col space-y-4">
+            {/* Top Bar: Title & Live Total */}
+            {(() => {
+              const sub = orderItems.reduce((acc, it) => acc + ((it.quantity || 1) * (it.unitPrice || 0)), 0);
+              const fee = parseFloat(deliveryFee) || 0;
+              const caut = parseFloat(cautionDeposit) || 0;
+              const disc = parseFloat(discount) || 0;
+              const tot = Math.max(0, sub + fee + caut - disc);
+              const totalLiters = orderItems.reduce((acc, it) => acc + ((it.quantity || 1) * (it.kegCapacity || 50)), 0);
 
-            <form onSubmit={handleCreateOrder} className="space-y-4 text-xs">
-              <datalist id="recipes-datalist-new">
-                {recipes.map((r) => (
-                  <option key={r.id} value={r.name}>
-                    {r.style ? `${r.style} • ` : ''}{formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L
-                  </option>
-                ))}
-              </datalist>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Busca Digitada de Cliente */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block font-bold text-slate-700">
-                      Cliente / Ponto de Venda <span className="text-amber-600">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuickClientTarget('NEW_ORDER');
-                        setQuickClientInitialName('');
-                        setQuickClientModalOpen(true);
-                      }}
-                      className="text-[11px] font-extrabold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer transition-colors"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      <span>+ Novo Cliente</span>
-                    </button>
-                  </div>
-                  <ClientSearchSelect
-                    clientId={clientId}
-                    clients={clients}
-                    onSelectClient={(c) => {
-                      handleClientSelectForNewOrder(c.id);
-                    }}
-                    onOpenQuickCreate={(initialName) => {
-                      setQuickClientTarget('NEW_ORDER');
-                      setQuickClientInitialName(initialName);
-                      setQuickClientModalOpen(true);
-                    }}
-                  />
-                </div>
-
-                {/* Tabela de Preço */}
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>Tabela de Preço</span>
-                    {newPriceTableId && priceTables.find((t) => t.id === newPriceTableId)?.type === 'AT_COST' && (
-                      <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200">Preço de Custo</span>
-                    )}
-                  </label>
-                  <select
-                    value={newPriceTableId}
-                    onChange={(e) => handleNewPriceTableChange(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
-                  >
-                    <option value="">Padrão da Cervejaria</option>
-                    {priceTables.map((pt) => (
-                      <option key={pt.id} value={pt.id}>
-                        {pt.name} {pt.isDefault ? '(Padrão)' : ''} {pt.adjustmentPercent ? `(${pt.adjustmentPercent > 0 ? '+' : ''}${pt.adjustmentPercent}%)` : ''} {pt.type === 'AT_COST' ? '(Custo)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Data de Entrega Agendada</label>
-                  <input
-                    type="date"
-                    required
-                    value={deliveryDate}
-                    onChange={(e) => setDeliveryDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Previsão Devolução / Recolha</label>
-                  <input
-                    type="date"
-                    value={estimatedReturnDate}
-                    onChange={(e) => setEstimatedReturnDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Responsável pela Entrega</label>
-                  <input
-                    type="text"
-                    list="drivers-datalist-new"
-                    value={driverName}
-                    onChange={(e) => setDriverName(e.target.value)}
-                    placeholder="Nome do motorista / entregador..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs"
-                  />
-                  <datalist id="drivers-datalist-new">
-                    {users.map((u) => (
-                      <option key={u.id} value={u.name}>
-                        {u.name} ({u.role})
-                      </option>
-                    ))}
-                  </datalist>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Endereço Completo de Entrega</label>
-                  <input
-                    type="text"
-                    required
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    placeholder="Rua, número, bairro, cidade..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Itens */}
-              <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-purple-950 flex items-center gap-1.5 text-xs">
-                    🍺 Itens do Pedido ({orderItems.length})
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleAddItemRow}
-                    className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs hover:bg-purple-100/50 transition-colors"
-                  >
-                    + Adicionar Item
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {orderItems.length === 0 ? (
-                    <div className="bg-white/80 p-5 rounded-xl border border-dashed border-purple-300 text-center space-y-2">
-                      <p className="text-xs text-purple-900 font-semibold">
-                        Nenhum item adicionado ainda. Você pode salvar o pedido sem itens e bipar os barris diretamente na entrega!
+              return (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-black text-lg text-slate-900">Novo Pedido de Venda</h3>
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                          Chopp & Distribuição
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Cadastre os chopps, comodato de chopeiras e agendamento de entrega
                       </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="px-4 py-2 bg-slate-900 text-white rounded-2xl flex items-center gap-2.5 shadow-sm">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Previsto:</span>
+                        <span className="text-base font-black text-amber-400 font-mono">
+                          {formatCurrency(tot)}
+                        </span>
+                      </div>
                       <button
                         type="button"
-                        onClick={handleAddItemRow}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                        onClick={() => setNewModalOpen(false)}
+                        className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                        title="Fechar"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Adicionar Item Agora</span>
+                        <X className="w-5 h-5" />
                       </button>
                     </div>
-                  ) : (
-                    orderItems.map((item, idx) => {
-                      const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
-                      const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
-                      const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
-                      const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+                  </div>
 
-                      return (
-                        <div key={idx} className="bg-white p-3.5 sm:p-4 rounded-2xl border border-purple-200 shadow-xs space-y-3">
-                          {/* Top Header of Item Row */}
-                          <div className="flex items-center justify-between pb-2 border-b border-purple-100">
-                            <span className="text-xs font-black text-purple-900 bg-purple-100/70 px-2.5 py-0.5 rounded-lg">
-                              Item #{idx + 1}
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Subtotal Item</span>
-                                <span className="text-sm font-black text-purple-950 font-mono">
-                                  {formatCurrency(itemTotal)}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItemRow(idx)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                                title="Excluir este item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
+                  <form onSubmit={handleCreateOrder} className="space-y-4 text-xs">
+                    <datalist id="recipes-datalist-new">
+                      {recipes.map((r) => (
+                        <option key={r.id} value={r.name}>
+                          {r.style ? `${r.style} • ` : ''}{formatCurrency(r.salePricePerLiter || r.suggestedPricePerLiter || 20)}/L
+                        </option>
+                      ))}
+                    </datalist>
 
-                          <div className="grid grid-cols-12 gap-3 items-end">
-                            {/* Busca Digitada de Cerveja */}
-                            <div className="col-span-12 sm:col-span-5">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Cerveja / Produto Selecionado</label>
-                              <RecipeSearchSelect
-                                recipeId={item.recipeId}
-                                recipes={recipes}
-                                kegs={kegs}
-                                orders={orders}
-                                resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, newPriceTableId)}
-                                onSelectRecipe={(r, recommendedCap) => {
-                                  const newItems = [...orderItems];
-                                  const cap = recommendedCap || item.kegCapacity || 50;
-                                  newItems[idx].recipeId = r.id;
-                                  newItems[idx].kegCapacity = cap;
-                                  newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
-                                  setOrderItems(newItems);
-                                }}
-                              />
-                            </div>
-
-                            {/* Capacidade */}
-                            <div className="col-span-4 sm:col-span-2">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1">Tamanho</label>
-                              <select
-                                value={item.kegCapacity || 50}
-                                onChange={(e) => {
-                                  const cap = parseInt(e.target.value, 10) || 50;
-                                  const newItems = [...orderItems];
-                                  newItems[idx].kegCapacity = cap;
-                                  const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
-                                  if (r) {
-                                    newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
-                                  }
-                                  setOrderItems(newItems);
-                                }}
-                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs sm:text-sm"
-                              >
-                                {[50, 30, 20, 15, 10, 5].map((cap) => {
-                                  const avail = item.recipeId ? getStockAvailability(item.recipeId, cap).available : 0;
-                                  return (
-                                    <option key={cap} value={cap}>
-                                      {cap}L {avail > 0 ? `(${avail} livre${avail > 1 ? 's' : ''})` : ''}
-                                    </option>
-                                  );
-                                })}
-                              </select>
-                            </div>
-
-                            {/* Quantidade */}
-                            <div className="col-span-3 sm:col-span-2">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-center">Qtd</label>
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const newItems = [...orderItems];
-                                  newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
-                                  setOrderItems(newItems);
-                                }}
-                                className="w-full px-2.5 py-2 rounded-xl font-bold text-center text-xs sm:text-sm bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
-                              />
-                            </div>
-
-                            {/* Preço Unitário */}
-                            <div className="col-span-5 sm:col-span-3">
-                              <label className="block text-[11px] font-bold text-slate-600 mb-1 text-right">Unitário (R$)</label>
-                              <input
-                                type="number"
-                                step="5"
-                                value={item.unitPrice}
-                                onChange={(e) => {
-                                  const newItems = [...orderItems];
-                                  newItems[idx].unitPrice = parseFloat(e.target.value) || 0;
-                                  setOrderItems(newItems);
-                                }}
-                                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs sm:text-sm focus:bg-white focus:border-amber-500 focus:outline-none"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Quantidade em Estoque / Disponibilidade */}
-                          {item.recipeId ? (
-                            stock.available > 0 ? (
-                              <div className="text-xs font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
-                                <span className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                  <span>
-                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-emerald-950 font-black">{stock.available} barril(is) disponíveis</strong>
-                                    {stock.reserved > 0 ? ` (${stock.reserved} reservados em outros pedidos)` : ''}
-                                  </span>
-                                </span>
-                                <span className="text-[11px] text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md font-black">
-                                  {stock.matchingTotal} barris cheios
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
-                                <span className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                  <span>
-                                    Estoque ({item.kegCapacity || 50}L): <strong className="text-amber-950 font-black">0 disponíveis</strong> (O pedido será gerado normalmente para programação de envase)
-                                  </span>
-                                </span>
-                                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded font-black">
-                                  {stock.matchingTotal} cheios • {stock.reserved} reservados
-                                </span>
-                              </div>
-                            )
-                          ) : null}
-
-                          <div className="flex items-center justify-between text-[11px] font-bold pt-1.5 border-t border-purple-100">
-                            <span className="text-slate-500">
-                              Volume total: <strong className="text-slate-900">{item.quantity}x {item.kegCapacity || 50}L = {(item.quantity) * (item.kegCapacity || 50)} Litros</strong>
-                            </span>
-                            <span className="font-black text-purple-900 text-xs sm:text-sm">
-                              Total Item: {formatCurrency(item.unitPrice * item.quantity)}
-                            </span>
-                          </div>
+                    {/* Card Superior: Cliente, Tabela de Preço e Data de Entrega */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      {/* Busca Digitada de Cliente */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-bold text-slate-700">
+                            Cliente / Ponto de Venda <span className="text-amber-600">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickClientTarget('NEW_ORDER');
+                              setQuickClientInitialName('');
+                              setQuickClientModalOpen(true);
+                            }}
+                            className="text-[11px] font-extrabold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer transition-colors"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>+ Novo Cliente</span>
+                          </button>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
+                        <ClientSearchSelect
+                          clientId={clientId}
+                          clients={clients}
+                          onSelectClient={(c) => {
+                            handleClientSelectForNewOrder(c.id);
+                          }}
+                          onOpenQuickCreate={(initialName) => {
+                            setQuickClientTarget('NEW_ORDER');
+                            setQuickClientInitialName(initialName);
+                            setQuickClientModalOpen(true);
+                          }}
+                        />
+                      </div>
 
-                {orderItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleAddItemRow}
-                    className="w-full py-2.5 px-4 bg-white hover:bg-purple-100/60 active:scale-[0.99] text-purple-700 hover:text-purple-900 border-2 border-dashed border-purple-300 hover:border-purple-400 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer mt-2.5"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>+ Adicionar Outro Item ao Pedido</span>
-                  </button>
-                )}
-              </div>
+                      {/* Tabela de Preço */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                          <span>Tabela de Preço</span>
+                          {newPriceTableId && priceTables.find((t) => t.id === newPriceTableId)?.type === 'AT_COST' && (
+                            <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200">Preço de Custo</span>
+                          )}
+                        </label>
+                        <select
+                          value={newPriceTableId}
+                          onChange={(e) => handleNewPriceTableChange(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                        >
+                          <option value="">Padrão da Cervejaria</option>
+                          {priceTables.map((pt) => (
+                            <option key={pt.id} value={pt.id}>
+                              {pt.name} {pt.isDefault ? '(Padrão)' : ''} {pt.adjustmentPercent ? `(${pt.adjustmentPercent > 0 ? '+' : ''}${pt.adjustmentPercent}%)` : ''} {pt.type === 'AT_COST' ? '(Custo)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-              {/* Comodato de Chopeiras */}
-              <div className="p-3.5 bg-orange-50 rounded-2xl border border-orange-200 space-y-2">
-                <span className="font-extrabold text-orange-900 block">
-                  Equipamentos em Comodato (Chopeiras / Cilindros)
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {equipment.map((eq) => {
-                    const isSelected = selectedEquipments.includes(eq.id);
-                    const conflict = getEquipmentReservationConflict(eq.id);
+                      {/* Data de Entrega Agendada */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Data de Entrega Agendada <span className="text-amber-600">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={deliveryDate}
+                          onChange={(e) => setDeliveryDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
 
-                    return (
-                      <div
-                        key={eq.id}
-                        onClick={() => handleToggleNewOrderEquipment(eq)}
-                        className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 ${
-                          isSelected
-                            ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-500/20'
-                            : conflict
-                            ? 'bg-orange-50/50 border-orange-200 hover:border-orange-300'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
+                    {/* Barra de Navegação por Abas (Tabs) */}
+                    <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-2xl border border-slate-300/80 w-fit">
+                      <button
+                        type="button"
+                        onClick={() => setNewOrderTab('PRODUCTS')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                          newOrderTab === 'PRODUCTS'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          readOnly
-                          className="mt-0.5 rounded text-amber-600 focus:ring-amber-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-bold text-slate-800 truncate block leading-tight">{eq.name}</span>
-                            <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">{eq.code}</span>
+                        <span>🍺 Produtos</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                          newOrderTab === 'PRODUCTS' ? 'bg-amber-100 text-amber-900' : 'bg-slate-300/80 text-slate-700'
+                        }`}>
+                          {orderItems.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setNewOrderTab('EQUIPMENT')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                          newOrderTab === 'EQUIPMENT'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                        }`}
+                      >
+                        <span>🎛️ Comodato (Chopeiras)</span>
+                        {selectedEquipments.length > 0 && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            newOrderTab === 'EQUIPMENT' ? 'bg-orange-100 text-orange-900' : 'bg-slate-300/80 text-slate-700'
+                          }`}>
+                            {selectedEquipments.length}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setNewOrderTab('DELIVERY')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                          newOrderTab === 'DELIVERY'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                        }`}
+                      >
+                        <span>🚚 Logística & Entrega</span>
+                        {deliveryAddress && (
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* ABA 1: PRODUTOS */}
+                    {newOrderTab === 'PRODUCTS' && (
+                      <div className="space-y-3">
+                        {/* Tabela de Produtos */}
+                        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                          {/* Cabeçalho do Card */}
+                          <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-slate-800 text-xs sm:text-sm">
+                                🍺 Produtos do Pedido
+                              </span>
+                              <span className="text-[11px] font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full">
+                                {orderItems.length} {orderItems.length === 1 ? 'item' : 'itens'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleAddItemRow}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Adicionar Item</span>
+                            </button>
                           </div>
-                          {conflict ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-800 bg-orange-100/90 px-1.5 py-0.5 rounded-md mt-1 border border-orange-200">
-                              🔒 Reservado no Pedido #{conflict.orderNumber} ({conflict.client?.tradeName || conflict.client?.name})
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 mt-0.5">
-                              ✓ Disponível
-                            </span>
-                          )}
+
+                          {/* Grid / Tabela de Itens */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse min-w-[700px]">
+                              <thead>
+                                <tr className="bg-slate-100/80 text-[11px] font-extrabold uppercase text-slate-500 tracking-wider border-b border-slate-200">
+                                  <th className="py-2.5 px-3 text-center w-12">#</th>
+                                  <th className="py-2.5 px-3">Cerveja / Chopp</th>
+                                  <th className="py-2.5 px-3 w-32">Barril</th>
+                                  <th className="py-2.5 px-3 text-center w-24">Qtd</th>
+                                  <th className="py-2.5 px-3 text-right w-32">Unitário (R$)</th>
+                                  <th className="py-2.5 px-3 text-right w-36">Subtotal</th>
+                                  <th className="py-2.5 px-3 text-center w-12"></th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {orderItems.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={7} className="py-10 text-center text-slate-400">
+                                      <p className="text-xs font-semibold mb-2">Nenhum produto adicionado ao pedido ainda</p>
+                                      <button
+                                        type="button"
+                                        onClick={handleAddItemRow}
+                                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-xs shadow-xs hover:bg-amber-600 transition-all cursor-pointer active:scale-95"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Adicionar Primeiro Item</span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  orderItems.map((item, idx) => {
+                                    const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50);
+                                    const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
+                                    const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
+                                    const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+
+                                    return (
+                                      <tr key={idx} className="hover:bg-slate-50/70 transition-colors group">
+                                        <td className="py-3 px-3 text-center align-top pt-4">
+                                          <span className="text-[11px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                            {idx + 1}
+                                          </span>
+                                        </td>
+
+                                        <td className="py-3 px-3 align-top">
+                                          <RecipeSearchSelect
+                                            recipeId={item.recipeId}
+                                            recipes={recipes}
+                                            kegs={kegs}
+                                            orders={orders}
+                                            resolvePrice={(rec, cap) => resolveBeerPrice(rec, cap, newPriceTableId)}
+                                            onSelectRecipe={(r, recommendedCap) => {
+                                              const newItems = [...orderItems];
+                                              const cap = recommendedCap || item.kegCapacity || 50;
+                                              newItems[idx].recipeId = r.id;
+                                              newItems[idx].kegCapacity = cap;
+                                              newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
+                                              setOrderItems(newItems);
+                                            }}
+                                          />
+                                          {item.recipeId && (
+                                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                              {stock.available > 0 ? (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                  <span>{stock.available} barril(is) livres na câmara fria</span>
+                                                  {stock.reserved > 0 && <span className="text-emerald-700">({stock.reserved} reservados)</span>}
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                                  <span>Sem estoque envasado (será produzido/envasado)</span>
+                                                </span>
+                                              )}
+                                              {isInsufficient && (
+                                                <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-200">
+                                                  Qtd pedida ({item.quantity}) supera estoque ({stock.available})
+                                                </span>
+                                              )}
+                                            </div>
+                                          )}
+                                        </td>
+
+                                        <td className="py-3 px-3 align-top">
+                                          <select
+                                            value={item.kegCapacity || 50}
+                                            onChange={(e) => {
+                                              const cap = parseInt(e.target.value, 10) || 50;
+                                              const newItems = [...orderItems];
+                                              newItems[idx].kegCapacity = cap;
+                                              const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
+                                              if (r) {
+                                                newItems[idx].unitPrice = resolveBeerPrice(r, cap, newPriceTableId);
+                                              }
+                                              setOrderItems(newItems);
+                                            }}
+                                            className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                          >
+                                            {[50, 30, 20, 15, 10, 5].map((cap) => {
+                                              const avail = item.recipeId ? getStockAvailability(item.recipeId, cap).available : 0;
+                                              return (
+                                                <option key={cap} value={cap}>
+                                                  {cap}L {avail > 0 ? `(${avail})` : ''}
+                                                </option>
+                                              );
+                                            })}
+                                          </select>
+                                        </td>
+
+                                        <td className="py-3 px-3 align-top">
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            value={item.quantity}
+                                            onChange={(e) => {
+                                              const newItems = [...orderItems];
+                                              newItems[idx].quantity = parseInt(e.target.value, 10) || 1;
+                                              setOrderItems(newItems);
+                                            }}
+                                            className="w-full px-2 py-2 rounded-xl font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
+                                          />
+                                        </td>
+
+                                        <td className="py-3 px-3 align-top">
+                                          <input
+                                            type="number"
+                                            step="5"
+                                            value={item.unitPrice}
+                                            onChange={(e) => {
+                                              const newItems = [...orderItems];
+                                              newItems[idx].unitPrice = parseFloat(e.target.value) || 0;
+                                              setOrderItems(newItems);
+                                            }}
+                                            className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                                          />
+                                        </td>
+
+                                        <td className="py-3 px-3 text-right align-top pt-4">
+                                          <span className="font-mono font-black text-slate-900 text-xs sm:text-sm">
+                                            {formatCurrency(itemTotal)}
+                                          </span>
+                                        </td>
+
+                                        <td className="py-3 px-3 text-center align-top pt-3">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveItemRow(idx)}
+                                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                            title="Remover este item"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Rodapé da Tabela: Botão Adicionar Item (Esquerda) e Resumo Financeiro (Direita) */}
+                          <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                            <div>
+                              <button
+                                type="button"
+                                onClick={handleAddItemRow}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-amber-50 text-slate-800 hover:text-amber-900 border border-slate-300 hover:border-amber-400 rounded-xl font-bold text-xs shadow-2xs transition-all cursor-pointer active:scale-95"
+                              >
+                                <Plus className="w-4 h-4 text-amber-600" />
+                                <span>+ Adicionar Produto</span>
+                              </button>
+                              <div className="text-[11px] text-slate-500 font-bold mt-2">
+                                Volume total: <strong className="text-slate-800">{totalLiters} Litros</strong>
+                              </div>
+                            </div>
+
+                            {/* Resumo Financeiro Compacto (Estilo BierHeld) */}
+                            <div className="w-full sm:w-80 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
+                              <div className="flex items-center justify-between text-slate-600">
+                                <span>Subtotal dos Produtos:</span>
+                                <span className="font-mono font-bold text-slate-900">{formatCurrency(sub)}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-600 gap-2">
+                                <span>Entrega / Frete:</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] text-slate-400">R$</span>
+                                  <input
+                                    type="number"
+                                    value={deliveryFee}
+                                    onChange={(e) => setDeliveryFee(e.target.value)}
+                                    className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none"
+                                    placeholder="0,00"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-600 gap-2">
+                                <span>Desconto Comercial:</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] text-slate-400">R$</span>
+                                  <input
+                                    type="number"
+                                    value={discount}
+                                    onChange={(e) => setDiscount(e.target.value)}
+                                    className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none text-rose-600"
+                                    placeholder="0,00"
+                                  />
+                                </div>
+                              </div>
+                              {caut > 0 && (
+                                <div className="flex items-center justify-between text-slate-600">
+                                  <span>Caução Chopeiras:</span>
+                                  <span className="font-mono font-bold text-slate-900">{formatCurrency(caut)}</span>
+                                </div>
+                              )}
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                                <span className="font-extrabold text-slate-900">Total do Pedido:</span>
+                                <span className="font-mono font-black text-amber-600 text-base">{formatCurrency(tot)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card: Observações Gerais do Pedido */}
+                        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            Observações Gerais do Pedido
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Horário preferencial, restrições no local de entrega, detalhes comerciais..."
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
+                          />
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                    )}
 
-              {/* Valores Adicionais */}
-              <div className="grid grid-cols-3 gap-2.5 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Taxa de Entrega (R$)</label>
-                  <input
-                    type="number"
-                    value={deliveryFee}
-                    onChange={(e) => setDeliveryFee(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold"
-                  />
-                </div>
+                    {/* ABA 2: COMODATO (CHOPEIRAS & CILINDROS) */}
+                    {newOrderTab === 'EQUIPMENT' && (
+                      <div className="space-y-3">
+                        <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                            <div>
+                              <span className="font-black text-slate-900 text-sm block">
+                                🎛️ Equipamentos em Comodato (Chopeiras & Cilindros)
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                Selecione as chopeiras e equipamentos vinculados a este pedido
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-bold text-slate-600">Caução Chopeira (R$):</label>
+                              <input
+                                type="number"
+                                value={cautionDeposit}
+                                onChange={(e) => setCautionDeposit(e.target.value)}
+                                className="w-28 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-xs focus:bg-white focus:outline-none"
+                                placeholder="0,00"
+                              />
+                            </div>
+                          </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Caução Chopeira (R$)</label>
-                  <input
-                    type="number"
-                    value={cautionDeposit}
-                    onChange={(e) => setCautionDeposit(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold"
-                  />
-                </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                            {equipment.length === 0 ? (
+                              <div className="col-span-2 py-8 text-center text-slate-400">
+                                Nenhum equipamento cadastrado na cervejaria.
+                              </div>
+                            ) : (
+                              equipment.map((eq) => {
+                                const isSelected = selectedEquipments.includes(eq.id);
+                                const conflict = getEquipmentReservationConflict(eq.id);
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Desconto (R$)</label>
-                  <input
-                    type="number"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold"
-                  />
-                </div>
-              </div>
+                                return (
+                                  <div
+                                    key={eq.id}
+                                    onClick={() => handleToggleNewOrderEquipment(eq)}
+                                    className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 ${
+                                      isSelected
+                                        ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-500/20'
+                                        : conflict
+                                        ? 'bg-orange-50/50 border-orange-200 hover:border-orange-300'
+                                        : 'bg-white border-slate-200 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      readOnly
+                                      className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="font-bold text-slate-800 truncate block leading-tight">{eq.name}</span>
+                                        <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">{eq.code}</span>
+                                      </div>
+                                      {conflict ? (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-800 bg-orange-100/90 px-1.5 py-0.5 rounded-md mt-1 border border-orange-200">
+                                          🔒 Reservado no Pedido #{conflict.orderNumber} ({conflict.client?.tradeName || conflict.client?.name})
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 mt-0.5">
+                                          ✓ Disponível na Cervejaria
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Observações do Pedido</label>
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Horário preferencial, nome de quem vai receber no local..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
-                />
-              </div>
+                    {/* ABA 3: LOGÍSTICA & ENTREGA */}
+                    {newOrderTab === 'DELIVERY' && (
+                      <div className="space-y-3">
+                        <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+                          <span className="font-black text-slate-900 text-sm block pb-2 border-b border-slate-100">
+                            🚚 Dados de Entrega, Recolha e Transporte
+                          </span>
 
-              {/* Prévia do Total */}
-              {(() => {
-                const sub = orderItems.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0);
-                const fee = parseFloat(deliveryFee) || 0;
-                const caut = parseFloat(cautionDeposit) || 0;
-                const disc = parseFloat(discount) || 0;
-                const tot = Math.max(0, sub + fee + caut - disc);
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                                Previsão de Devolução / Recolha
+                              </label>
+                              <input
+                                type="date"
+                                value={estimatedReturnDate}
+                                onChange={(e) => setEstimatedReturnDate(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:outline-none"
+                              />
+                              <span className="text-[10px] text-slate-400 mt-0.5 block">
+                                Data estimada para recolha de barris vazios e chopeiras
+                              </span>
+                            </div>
 
-                return (
-                  <div className="p-3 bg-slate-900 text-white rounded-2xl flex items-center justify-between shadow-sm">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">Valor Total Previsto:</span>
-                      <span className="text-xs text-slate-300">Subtotal {formatCurrency(sub)} + Frete {formatCurrency(fee)}</span>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                                Responsável pela Entrega / Motorista
+                              </label>
+                              <input
+                                type="text"
+                                list="drivers-datalist-new"
+                                value={driverName}
+                                onChange={(e) => setDriverName(e.target.value)}
+                                placeholder="Nome do motorista / entregador..."
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:outline-none"
+                              />
+                              <datalist id="drivers-datalist-new">
+                                {users.map((u) => (
+                                  <option key={u.id} value={u.name}>
+                                    {u.name} ({u.role})
+                                  </option>
+                                ))}
+                              </datalist>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              Endereço Completo de Entrega <span className="text-amber-600">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={deliveryAddress}
+                              onChange={(e) => setDeliveryAddress(e.target.value)}
+                              placeholder="Rua, número, complemento, bairro, cidade - UF, CEP"
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-xs focus:bg-white focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Rodapé Fixo de Ações do Modal */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setNewModalOpen(false)}
+                        className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-all text-xs cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => handleCreateOrder(e, 'ORCAMENTO')}
+                          className="px-4 py-2.5 font-bold rounded-xl border-2 border-dashed border-amber-400 bg-amber-50/90 hover:bg-amber-100 text-amber-900 transition-all text-xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                          title="Gera orçamento e bloqueia preventivamente a data, chopp e chopeiras sem faturamento"
+                        >
+                          <Clock className="w-4 h-4 text-amber-600" />
+                          <span>Salvar Orçamento (Pré-Reserva)</span>
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2.5 font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Confirmar e Gerar Pedido ({formatCurrency(tot)})</span>
+                        </button>
+                      </div>
                     </div>
-                    <span className="text-xl font-black text-amber-400">{formatCurrency(tot)}</span>
-                  </div>
-                );
-              })()}
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setNewModalOpen(false)}
-                  className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all text-xs"
-                >
-                  Cancelar
-                </button>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => handleCreateOrder(e, 'ORCAMENTO')}
-                    className="px-4 py-2.5 font-bold rounded-xl border-2 border-dashed border-amber-400 bg-amber-50/90 hover:bg-amber-100 text-amber-900 transition-all text-xs active:scale-95 flex items-center gap-1.5"
-                    title="Gera orçamento e bloqueia preventivamente a data, chopp e chopeiras sem faturamento"
-                  >
-                    <Clock className="w-4 h-4 text-amber-600" />
-                    <span>Salvar Orçamento (Pré-Reserva)</span>
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs active:scale-95 flex items-center gap-1.5"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Gerar Pedido Confirmado</span>
-                  </button>
-                </div>
-              </div>
-            </form>
+                  </form>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
