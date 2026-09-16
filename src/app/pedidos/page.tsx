@@ -2968,6 +2968,17 @@ export default function PedidosPage() {
                       );
                     }))}
                   </div>
+
+                  {editItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleAddEditItemRow}
+                      className="w-full py-2.5 px-4 bg-white hover:bg-purple-100/60 active:scale-[0.99] text-purple-700 hover:text-purple-900 border-2 border-dashed border-purple-300 hover:border-purple-400 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer mt-2.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>+ Adicionar Outro Item ao Pedido</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Comodato de Chopeiras */}
@@ -3671,6 +3682,17 @@ export default function PedidosPage() {
                     })
                   )}
                 </div>
+
+                {orderItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleAddItemRow}
+                    className="w-full py-2.5 px-4 bg-white hover:bg-purple-100/60 active:scale-[0.99] text-purple-700 hover:text-purple-900 border-2 border-dashed border-purple-300 hover:border-purple-400 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer mt-2.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Adicionar Outro Item ao Pedido</span>
+                  </button>
+                )}
               </div>
 
               {/* Comodato de Chopeiras */}
