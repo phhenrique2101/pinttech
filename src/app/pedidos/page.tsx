@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ShoppingCart,
   Plus,
@@ -275,6 +276,43 @@ function RecipeSearchSelect({
     );
   }, [allProducts, effectiveFilter]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const updateCoords = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dropdownHeight = 360;
+    const margin = 4;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const showAbove = spaceBelow < 260 && rect.top > spaceBelow;
+
+    const top = showAbove
+      ? Math.max(10, rect.top - margin - dropdownHeight)
+      : rect.bottom + margin;
+
+    const targetWidth = Math.min(640, Math.max(rect.width, 420), window.innerWidth - 32);
+    let left = rect.left;
+    if (left + targetWidth > window.innerWidth - 16) {
+      left = window.innerWidth - targetWidth - 16;
+    }
+    if (left < 16) left = 16;
+
+    setCoords({ top, left, width: targetWidth });
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+      window.addEventListener('resize', updateCoords);
+      window.addEventListener('scroll', updateCoords, true);
+      return () => {
+        window.removeEventListener('resize', updateCoords);
+        window.removeEventListener('scroll', updateCoords, true);
+      };
+    }
+  }, [isOpen, updateCoords]);
+
   const handleSelect = (matchedRecipe: any, cap: number, pPerLiter: number) => {
     setIsTyping(false);
     setIsOpen(false);
@@ -295,7 +333,7 @@ function RecipeSearchSelect({
   };
 
   return (
-    <div className="relative w-full">
+    <div ref={containerRef} className="relative w-full">
       <div className="relative">
         <input
           type="text"
@@ -329,13 +367,21 @@ function RecipeSearchSelect({
         )}
       </div>
 
-      {isOpen && (
+      {isOpen && coords && typeof document !== 'undefined' && createPortal(
         <>
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[9998]"
             onClick={handleClose}
           />
-          <div className="absolute left-0 top-full mt-1.5 w-[520px] sm:w-[620px] max-w-[calc(100vw-2.5rem)] bg-white border border-slate-200/90 rounded-2xl shadow-2xl z-50 max-h-[420px] overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/5">
+          <div
+            style={{
+              position: 'fixed',
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              width: `${coords.width}px`,
+            }}
+            className="bg-white border border-slate-200/90 rounded-2xl shadow-2xl z-[9999] max-h-[380px] overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/10"
+          >
             {/* Cabeçalho informativo do Dropdown */}
             <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 sticky top-0 z-20 backdrop-blur-xs">
               <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
@@ -539,7 +585,8 @@ function RecipeSearchSelect({
               </>
             )}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
@@ -2845,14 +2892,13 @@ export default function PedidosPage() {
 
                         {/* Grid / Tabela */}
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse min-w-[760px]">
+                          <table className="w-full text-left border-collapse min-w-[680px]">
                             <thead>
                               <tr className="bg-slate-100/80 text-[11px] font-extrabold uppercase text-slate-500 tracking-wider border-b border-slate-200">
                                 <th className="py-2.5 px-3 text-center w-10">#</th>
                                 <th className="py-2.5 px-3 min-w-[200px]">Cerveja / Chopp</th>
-                                <th className="py-2.5 px-3 w-28 text-center">Barril</th>
                                 <th className="py-2.5 px-3 text-center w-20">Qtd</th>
-                                <th className="py-2.5 px-3 text-right w-28">Valor/L (R$)</th>
+                                <th className="py-2.5 px-3 text-right w-28 text-amber-700">Valor/L (R$)</th>
                                 <th className="py-2.5 px-3 text-right w-32">Unitário (R$)</th>
                                 <th className="py-2.5 px-3 text-right w-32">Subtotal</th>
                                 <th className="py-2.5 px-3 text-center w-10"></th>
@@ -2861,7 +2907,7 @@ export default function PedidosPage() {
                             <tbody className="divide-y divide-slate-100">
                               {editItems.length === 0 ? (
                                 <tr>
-                                  <td colSpan={8} className="py-10 text-center text-slate-400">
+                                  <td colSpan={7} className="py-10 text-center text-slate-400">
                                     <p className="text-xs font-semibold mb-2">Nenhum produto vinculado a este pedido.</p>
                                     <button
                                       type="button"
@@ -2916,9 +2962,14 @@ export default function PedidosPage() {
                                             setEditItems(updated);
                                           }}
                                         />
-                                        {item.recipeId && (
-                                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                            {stock.available > 0 ? (
+                                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                          {item.kegCapacity && (
+                                            <span className="text-[10px] font-black text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                                              Barril {item.kegCapacity}L
+                                            </span>
+                                          )}
+                                          {item.recipeId && (
+                                            stock.available > 0 ? (
                                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                                 <span>{stock.available} barril(is) livres na câmara fria</span>
@@ -2929,52 +2980,14 @@ export default function PedidosPage() {
                                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                                 <span>Sem estoque livre ({stock.matchingTotal} cheios • {stock.reserved} reservados)</span>
                                               </span>
-                                            )}
-                                            {isInsufficient && (
-                                              <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-200">
-                                                Qtd pedida ({item.quantity}) supera estoque ({stock.available})
-                                              </span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </td>
-
-                                      <td className="py-3 px-3 align-top">
-                                        <select
-                                          value={item.kegCapacity || 50}
-                                          onChange={(e) => {
-                                            const cap = parseInt(e.target.value, 10) || 50;
-                                            const updated = [...editItems];
-                                            updated[idx].kegCapacity = cap;
-                                            const literPrice =
-                                              updated[idx].pricePerLiter ||
-                                              (updated[idx].recipeId
-                                                ? resolveBeerPricePerLiter(
-                                                    recipes.find((rec) => rec.id === updated[idx].recipeId),
-                                                    editPriceTableId
-                                                  )
-                                                : 20);
-                                            updated[idx].pricePerLiter = literPrice;
-                                            const uPrice = Math.round(literPrice * cap * 100) / 100;
-                                            updated[idx].unitPrice = uPrice;
-                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * uPrice;
-                                            const r = recipes.find((rec) => rec.id === updated[idx].recipeId);
-                                            if (r) {
-                                              updated[idx].description = `Barril ${cap}L - ${r.name}`;
-                                            }
-                                            setEditItems(updated);
-                                          }}
-                                          className="w-full px-2 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs text-center focus:bg-white focus:border-amber-500 focus:outline-none"
-                                        >
-                                          {[50, 30, 20, 15, 10, 5].map((cap) => {
-                                            const avail = item.recipeId ? getStockAvailability(item.recipeId, cap, selectedOrder?.id).available : 0;
-                                            return (
-                                              <option key={cap} value={cap}>
-                                                {cap}L {avail > 0 ? `(${avail})` : ''}
-                                              </option>
-                                            );
-                                          })}
-                                        </select>
+                                            )
+                                          )}
+                                          {isInsufficient && (
+                                            <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-200">
+                                              Qtd pedida ({item.quantity}) supera estoque ({stock.available})
+                                            </span>
+                                          )}
+                                        </div>
                                       </td>
 
                                       <td className="py-3 px-3 align-top">
@@ -3786,12 +3799,11 @@ export default function PedidosPage() {
 
                           {/* Grid / Tabela de Itens */}
                           <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse min-w-[760px]">
+                            <table className="w-full text-left border-collapse min-w-[680px]">
                               <thead>
                                 <tr className="bg-slate-100/80 text-[11px] font-extrabold uppercase text-slate-500 tracking-wider border-b border-slate-200">
                                   <th className="py-2.5 px-3 text-center w-12">#</th>
                                   <th className="py-2.5 px-3">Cerveja / Chopp</th>
-                                  <th className="py-2.5 px-3 w-28">Barril</th>
                                   <th className="py-2.5 px-3 text-center w-20">Qtd</th>
                                   <th className="py-2.5 px-3 text-right w-28 text-amber-700">Valor/L (R$)</th>
                                   <th className="py-2.5 px-3 text-right w-32">Unitário (R$)</th>
@@ -3802,7 +3814,7 @@ export default function PedidosPage() {
                               <tbody className="divide-y divide-slate-100">
                                 {orderItems.length === 0 ? (
                                   <tr>
-                                    <td colSpan={8} className="py-10 text-center text-slate-400">
+                                    <td colSpan={7} className="py-10 text-center text-slate-400">
                                       <p className="text-xs font-semibold mb-2">Nenhum produto adicionado ao pedido ainda</p>
                                       <button
                                         type="button"
@@ -3855,9 +3867,14 @@ export default function PedidosPage() {
                                               setOrderItems(newItems);
                                             }}
                                           />
-                                          {item.recipeId && (
-                                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                              {stock.available > 0 ? (
+                                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                            {item.kegCapacity && (
+                                              <span className="text-[10px] font-black text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                                                Barril {item.kegCapacity}L
+                                              </span>
+                                            )}
+                                            {item.recipeId && (
+                                              stock.available > 0 ? (
                                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
                                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                                   <span>{stock.available} barril(is) livres na câmara fria</span>
@@ -3868,45 +3885,14 @@ export default function PedidosPage() {
                                                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                                   <span>Sem estoque envasado (será produzido/envasado)</span>
                                                 </span>
-                                              )}
-                                              {isInsufficient && (
-                                                <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-200">
-                                                  Qtd pedida ({item.quantity}) supera estoque ({stock.available})
-                                                </span>
-                                              )}
-                                            </div>
-                                          )}
-                                        </td>
-
-                                        <td className="py-3 px-3 align-top">
-                                          <select
-                                            value={item.kegCapacity || 50}
-                                            onChange={(e) => {
-                                              const newCap = parseInt(e.target.value, 10) || 50;
-                                              const newItems = [...orderItems];
-                                              newItems[idx].kegCapacity = newCap;
-                                              const r = recipes.find((rec) => rec.id === newItems[idx].recipeId);
-                                              const pPerLiter = newItems[idx].pricePerLiter || (r ? resolveBeerPricePerLiter(r, newPriceTableId) : 20);
-                                              newItems[idx].pricePerLiter = pPerLiter;
-                                              const uPrice = Math.round(pPerLiter * newCap * 100) / 100;
-                                              newItems[idx].unitPrice = uPrice;
-                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * uPrice;
-                                              if (r) {
-                                                newItems[idx].description = `Barril ${newCap}L - ${r.name}`;
-                                              }
-                                              setOrderItems(newItems);
-                                            }}
-                                            className="w-full px-2 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
-                                          >
-                                            {[50, 30, 20, 15, 10, 5].map((c) => {
-                                              const avail = item.recipeId ? getStockAvailability(item.recipeId, c).available : 0;
-                                              return (
-                                                <option key={c} value={c}>
-                                                  {c}L {avail > 0 ? `(${avail})` : ''}
-                                                </option>
-                                              );
-                                            })}
-                                          </select>
+                                              )
+                                            )}
+                                            {isInsufficient && (
+                                              <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-200">
+                                                Qtd pedida ({item.quantity}) supera estoque ({stock.available})
+                                              </span>
+                                            )}
+                                          </div>
                                         </td>
 
                                         <td className="py-3 px-3 align-top">
