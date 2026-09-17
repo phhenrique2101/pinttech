@@ -28,7 +28,7 @@ import {
   RotateCcw,
   Sliders,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, parseCurrencyInput } from '@/lib/utils';
 import {
   applyRounding,
   computeCalculatedPrice,
@@ -166,10 +166,10 @@ export default function PrecosPage() {
 
         const updated = { ...item, [field]: value, isModified: true };
 
-        const cost = parseFloat(String(updated.costPerLiter)) || 0;
-        let salePrice = parseFloat(String(updated.salePricePerLiter)) || 0;
-        const margin = parseFloat(String(updated.profitMarginPercent)) || 0;
-        const fixedVal = parseFloat(String(updated.costPlusFixedValue ?? 5)) || 0;
+        const cost = parseCurrencyInput(updated.costPerLiter);
+        let salePrice = parseCurrencyInput(updated.salePricePerLiter);
+        const margin = parseCurrencyInput(updated.profitMarginPercent);
+        const fixedVal = parseCurrencyInput(updated.costPlusFixedValue ?? 5);
         const rounding = (updated.roundingRule as RoundingRule) || 'NONE';
 
         if (field === 'salePricePerLiter') {
@@ -219,11 +219,11 @@ export default function PrecosPage() {
           updates: [
             {
               id: item.id,
-              costPerLiter: item.costPerLiter,
-              salePricePerLiter: item.salePricePerLiter,
+              costPerLiter: parseCurrencyInput(item.costPerLiter),
+              salePricePerLiter: parseCurrencyInput(item.salePricePerLiter),
               pricingModel: item.pricingModel,
-              profitMarginPercent: item.profitMarginPercent,
-              costPlusFixedValue: item.costPlusFixedValue,
+              profitMarginPercent: parseCurrencyInput(item.profitMarginPercent),
+              costPlusFixedValue: parseCurrencyInput(item.costPlusFixedValue),
               roundingRule: item.roundingRule,
             },
           ],
@@ -250,12 +250,12 @@ export default function PrecosPage() {
 
   // Aplica regra em massa para todas as receitas na matriz
   const handleApplyBulkRule = () => {
-    const val = parseFloat(bulkValue) || 0;
+    const val = parseCurrencyInput(bulkValue);
     let count = 0;
 
     setMatrix((prev) =>
       prev.map((item) => {
-        const cost = parseFloat(String(item.costPerLiter)) || 0;
+        const cost = parseCurrencyInput(item.costPerLiter);
         const newPrice = computeCalculatedPrice({
           cost,
           basePrice: item.salePricePerLiter,
@@ -295,11 +295,11 @@ export default function PrecosPage() {
       const payload = {
         updates: matrix.map((m) => ({
           id: m.id,
-          costPerLiter: m.costPerLiter,
-          salePricePerLiter: m.salePricePerLiter,
+          costPerLiter: parseCurrencyInput(m.costPerLiter),
+          salePricePerLiter: parseCurrencyInput(m.salePricePerLiter),
           pricingModel: m.pricingModel,
-          profitMarginPercent: m.profitMarginPercent,
-          costPlusFixedValue: m.costPlusFixedValue,
+          profitMarginPercent: parseCurrencyInput(m.profitMarginPercent),
+          costPlusFixedValue: parseCurrencyInput(m.costPlusFixedValue),
           roundingRule: m.roundingRule,
         })),
       };
@@ -362,8 +362,8 @@ export default function PrecosPage() {
 
   // Recalcular todos os preços no modal da tabela com base na regra e no arredondamento selecionado
   const handleRecalculateTablePrices = () => {
-    const adj = parseFloat(tableAdjustment) || 0;
-    const fixed = parseFloat(tableFixedAddition) || 0;
+    const adj = parseCurrencyInput(tableAdjustment);
+    const fixed = parseCurrencyInput(tableFixedAddition);
     const updated: Record<string, number> = {};
 
     matrix.forEach((m) => {
@@ -733,7 +733,7 @@ export default function PrecosPage() {
                   <div className="relative">
                     <input
                       type="number"
-                      step={bulkModel === 'PERCENT' ? '5' : '0.50'}
+                      step="any"
                       min="0"
                       value={bulkValue}
                       onChange={(e) => setBulkValue(e.target.value)}
@@ -868,11 +868,11 @@ export default function PrecosPage() {
                             <span className="text-slate-400 font-bold">R$</span>
                             <input
                               type="number"
-                              step="0.10"
+                              step="any"
                               min="0"
                               value={item.costPerLiter}
                               onChange={(e) =>
-                                handleMatrixChange(item.id, 'costPerLiter', parseFloat(e.target.value) || 0)
+                                handleMatrixChange(item.id, 'costPerLiter', e.target.value)
                               }
                               className="w-20 px-2 py-1 text-right font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-500"
                             />
@@ -899,11 +899,11 @@ export default function PrecosPage() {
                             <div className="inline-flex items-center gap-1">
                               <input
                                 type="number"
-                                step="5"
+                                step="any"
                                 min="0"
                                 value={item.profitMarginPercent}
                                 onChange={(e) =>
-                                  handleMatrixChange(item.id, 'profitMarginPercent', parseFloat(e.target.value) || 0)
+                                  handleMatrixChange(item.id, 'profitMarginPercent', e.target.value)
                                 }
                                 className="w-16 px-2 py-1 text-right font-bold rounded-lg border bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-500"
                               />
@@ -914,11 +914,11 @@ export default function PrecosPage() {
                               <span className="text-slate-400 font-bold">R$</span>
                               <input
                                 type="number"
-                                step="0.50"
+                                step="any"
                                 min="0"
                                 value={item.costPlusFixedValue ?? 5}
                                 onChange={(e) =>
-                                  handleMatrixChange(item.id, 'costPlusFixedValue', parseFloat(e.target.value) || 0)
+                                  handleMatrixChange(item.id, 'costPlusFixedValue', e.target.value)
                                 }
                                 className="w-16 px-2 py-1 text-right font-bold rounded-lg border bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-500"
                               />
@@ -960,11 +960,11 @@ export default function PrecosPage() {
                             <span className="text-amber-700 dark:text-amber-400 font-bold">R$</span>
                             <input
                               type="number"
-                              step="0.10"
+                              step="any"
                               min="0"
                               value={item.salePricePerLiter}
                               onChange={(e) =>
-                                handleMatrixChange(item.id, 'salePricePerLiter', parseFloat(e.target.value) || 0)
+                                handleMatrixChange(item.id, 'salePricePerLiter', e.target.value)
                               }
                               className={`w-24 px-2.5 py-1 text-right font-black text-sm rounded-lg border ${
                                 item.isModified
@@ -1232,7 +1232,7 @@ export default function PrecosPage() {
               </label>
               <input
                 type="number"
-                step="0.50"
+                step="any"
                 value={simCustomPrice}
                 onChange={(e) => setSimCustomPrice(e.target.value)}
                 className="w-full text-sm font-black p-2.5 bg-white dark:bg-slate-800 border-2 border-amber-500 rounded-xl text-slate-900 dark:text-amber-300"
@@ -1376,7 +1376,7 @@ export default function PrecosPage() {
                         <div className="relative">
                           <input
                             type="number"
-                            step="0.50"
+                            step="any"
                             min="0"
                             value={tableFixedAddition}
                             onChange={(e) => setTableFixedAddition(e.target.value)}
@@ -1404,7 +1404,7 @@ export default function PrecosPage() {
                         <div className="relative">
                           <input
                             type="number"
-                            step="1"
+                            step="any"
                             min="0"
                             max="200"
                             value={tableAdjustment}
@@ -1503,13 +1503,13 @@ export default function PrecosPage() {
                             <span className="font-black text-amber-600 dark:text-amber-400 text-xs">R$</span>
                             <input
                               type="number"
-                              step="0.10"
+                              step="any"
                               min="0"
                               value={tableItemPrices[m.id] ?? m.salePricePerLiter}
                               onChange={(e) =>
                                 setTableItemPrices((prev) => ({
                                   ...prev,
-                                  [m.id]: parseFloat(e.target.value) || 0,
+                                  [m.id]: parseCurrencyInput(e.target.value),
                                 }))
                               }
                               className="w-20 px-1 py-0.5 text-right font-black text-xs bg-transparent border-0 text-slate-900 dark:text-white focus:outline-none"

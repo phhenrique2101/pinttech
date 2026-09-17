@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionFromRequest } from '@/lib/auth';
+import { parseCurrencyInput } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   try {
@@ -101,9 +102,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nome do insumo é obrigatório' }, { status: 400 });
     }
 
-    const qty = currentQuantity !== undefined ? parseFloat(currentQuantity) : 0;
-    const minQty = minimumQuantity !== undefined ? parseFloat(minimumQuantity) : 0;
-    const cost = costPerUnit !== undefined ? parseFloat(costPerUnit) : 0;
+    const qty = currentQuantity !== undefined ? parseCurrencyInput(currentQuantity) : 0;
+    const minQty = minimumQuantity !== undefined ? parseCurrencyInput(minimumQuantity) : 0;
+    const cost = costPerUnit !== undefined ? parseCurrencyInput(costPerUnit) : 0;
     const lotNumberClean = supplierLot?.trim() || `LOTE-${new Date().getFullYear()}-001`;
 
     const item = await prisma.inventoryItem.create({

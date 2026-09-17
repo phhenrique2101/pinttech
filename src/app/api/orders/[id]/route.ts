@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionFromRequest } from '@/lib/auth';
+import { parseCurrencyInput } from '@/lib/utils';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -100,9 +101,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           desc = `Barril ${cap}L - Chopp Artesanal`;
         }
 
-        const qty = parseFloat(item.quantity) || 1;
-        const uPrice = parseFloat(item.unitPrice) || 0;
-        const tPrice = item.totalPrice !== undefined ? parseFloat(item.totalPrice) : qty * uPrice;
+        const qty = parseCurrencyInput(item.quantity) || 1;
+        const uPrice = parseCurrencyInput(item.unitPrice);
+        const tPrice = item.totalPrice !== undefined ? parseCurrencyInput(item.totalPrice) : qty * uPrice;
         computedSubtotal += tPrice;
 
         processedItems.push({
@@ -125,13 +126,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       totalAmount !== undefined;
 
     const finalSubtotal = subtotal !== undefined
-      ? parseFloat(subtotal)
+      ? parseCurrencyInput(subtotal)
       : (Array.isArray(items) ? computedSubtotal : existing.subtotal);
-    const finalDeliveryFee = deliveryFee !== undefined ? parseFloat(deliveryFee) : existing.deliveryFee;
-    const finalCautionDeposit = cautionDeposit !== undefined ? parseFloat(cautionDeposit) : existing.cautionDeposit;
-    const finalDiscount = discount !== undefined ? parseFloat(discount) : existing.discount;
+    const finalDeliveryFee = deliveryFee !== undefined ? parseCurrencyInput(deliveryFee) : existing.deliveryFee;
+    const finalCautionDeposit = cautionDeposit !== undefined ? parseCurrencyInput(cautionDeposit) : existing.cautionDeposit;
+    const finalDiscount = discount !== undefined ? parseCurrencyInput(discount) : existing.discount;
     const finalTotal = totalAmount !== undefined
-      ? parseFloat(totalAmount)
+      ? parseCurrencyInput(totalAmount)
       : (hasFinancialChanges
           ? Math.max(0, finalSubtotal + finalDeliveryFee + finalCautionDeposit - finalDiscount)
           : existing.totalAmount);

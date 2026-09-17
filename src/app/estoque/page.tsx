@@ -1665,7 +1665,7 @@ export default function EstoquePage() {
                   </label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     required
                     value={itemQty}
                     onChange={(e) => setItemQty(e.target.value)}
@@ -1677,7 +1677,7 @@ export default function EstoquePage() {
                   <label className="block font-bold text-slate-700 mb-1">Estoque Mínimo</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     value={itemMinQty}
                     onChange={(e) => setItemMinQty(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"
@@ -1688,7 +1688,7 @@ export default function EstoquePage() {
                   <label className="block font-bold text-slate-700 mb-1">Custo (R$/{itemUnit})</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     value={itemCost}
                     onChange={(e) => setItemCost(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-emerald-800"
@@ -1782,7 +1782,7 @@ export default function EstoquePage() {
                   <label className="block font-bold text-slate-700 mb-1">Quantidade a Adicionar ({movementModal.unit}) *</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     required
                     placeholder="Ex: 500"
                     value={movQty}
@@ -1795,7 +1795,7 @@ export default function EstoquePage() {
                   <label className="block font-bold text-slate-700 mb-1">Custo Unitário (R$/{movementModal.unit})</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     placeholder={String(movementModal.costPerUnit || '0.00')}
                     value={movCost}
                     onChange={(e) => setMovCost(e.target.value)}
@@ -1892,7 +1892,7 @@ export default function EstoquePage() {
                   <label className="block font-bold text-slate-700 mb-1">Saldo Atual ({editLotModal.parentItem.unit}) *</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     required
                     value={editLotCurrentQty}
                     onChange={(e) => setEditLotCurrentQty(e.target.value)}
@@ -1906,7 +1906,7 @@ export default function EstoquePage() {
                   <label className="block font-bold text-slate-700 mb-1">Custo Unitário (R$/{editLotModal.parentItem.unit})</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     value={editLotCost}
                     onChange={(e) => setEditLotCost(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold"

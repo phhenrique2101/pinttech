@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionFromRequest } from '@/lib/auth';
+import { parseCurrencyInput } from '@/lib/utils';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -85,7 +86,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       notes,
     } = body;
 
-    const newQty = currentQuantity !== undefined ? parseFloat(currentQuantity) : existing.currentQuantity;
+    const newQty = currentQuantity !== undefined ? parseCurrencyInput(currentQuantity) : existing.currentQuantity;
     const diffQty = newQty - existing.currentQuantity;
 
     const updated = await prisma.inventoryItem.update({
@@ -95,8 +96,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         category: category !== undefined ? category : existing.category,
         unit: unit !== undefined ? unit.toUpperCase() : existing.unit,
         currentQuantity: newQty,
-        minimumQuantity: minimumQuantity !== undefined ? parseFloat(minimumQuantity) : existing.minimumQuantity,
-        costPerUnit: costPerUnit !== undefined ? parseFloat(costPerUnit) : existing.costPerUnit,
+        minimumQuantity: minimumQuantity !== undefined ? parseCurrencyInput(minimumQuantity) : existing.minimumQuantity,
+        costPerUnit: costPerUnit !== undefined ? parseCurrencyInput(costPerUnit) : existing.costPerUnit,
         supplierId: supplierId !== undefined ? (supplierId || null) : existing.supplierId,
         supplierLot: supplierLot !== undefined ? (supplierLot?.trim() || null) : existing.supplierLot,
         expirationDate: expirationDate !== undefined ? (expirationDate ? new Date(expirationDate) : null) : existing.expirationDate,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionFromRequest } from '@/lib/auth';
+import { parseCurrencyInput } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,13 +136,13 @@ export async function PUT(req: NextRequest) {
         for (const up of updates) {
           if (!up.id) continue;
 
-          const cost = up.costPerLiter !== undefined ? parseFloat(up.costPerLiter) : undefined;
-          const margin = up.profitMarginPercent !== undefined ? parseFloat(up.profitMarginPercent) : undefined;
-          const fixedAddition = up.costPlusFixedValue !== undefined ? parseFloat(up.costPlusFixedValue) : undefined;
+          const cost = up.costPerLiter !== undefined ? parseCurrencyInput(up.costPerLiter) : undefined;
+          const margin = up.profitMarginPercent !== undefined ? parseCurrencyInput(up.profitMarginPercent) : undefined;
+          const fixedAddition = up.costPlusFixedValue !== undefined ? parseCurrencyInput(up.costPlusFixedValue) : undefined;
           const roundingRule = up.roundingRule || 'NONE';
           const model = up.pricingModel;
 
-          let salePrice = up.salePricePerLiter !== undefined ? parseFloat(up.salePricePerLiter) : undefined;
+          let salePrice = up.salePricePerLiter !== undefined ? parseCurrencyInput(up.salePricePerLiter) : undefined;
 
           // Se salePrice não foi explicitamente enviado, calcula conforme o modelo
           if (salePrice === undefined) {

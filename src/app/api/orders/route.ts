@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionFromRequest } from '@/lib/auth';
+import { parseCurrencyInput } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   try {
@@ -103,9 +104,9 @@ export async function POST(req: NextRequest) {
           desc = `Barril ${cap}L - Chopp Artesanal`;
         }
 
-        const qty = parseFloat(item.quantity) || 1;
-        const uPrice = parseFloat(item.unitPrice) || 0;
-        const tPrice = item.totalPrice !== undefined ? parseFloat(item.totalPrice) : qty * uPrice;
+        const qty = parseCurrencyInput(item.quantity) || 1;
+        const uPrice = parseCurrencyInput(item.unitPrice);
+        const tPrice = item.totalPrice !== undefined ? parseCurrencyInput(item.totalPrice) : qty * uPrice;
         computedSubtotal += tPrice;
 
         processedItems.push({
@@ -119,12 +120,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const finalSubtotal = subtotal !== undefined ? parseFloat(subtotal) : computedSubtotal;
-    const finalDeliveryFee = parseFloat(deliveryFee) || 0;
-    const finalCautionDeposit = parseFloat(cautionDeposit) || 0;
-    const finalDiscount = parseFloat(discount) || 0;
+    const finalSubtotal = subtotal !== undefined ? parseCurrencyInput(subtotal) : computedSubtotal;
+    const finalDeliveryFee = parseCurrencyInput(deliveryFee);
+    const finalCautionDeposit = parseCurrencyInput(cautionDeposit);
+    const finalDiscount = parseCurrencyInput(discount);
     const finalTotal = totalAmount !== undefined
-      ? parseFloat(totalAmount)
+      ? parseCurrencyInput(totalAmount)
       : Math.max(0, finalSubtotal + finalDeliveryFee + finalCautionDeposit - finalDiscount);
 
     const order = await prisma.order.create({

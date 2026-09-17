@@ -12,6 +12,26 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+export function parseCurrencyInput(value: any): number {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  let str = String(value).trim().replace(/R\$/gi, '').replace(/\s+/g, '');
+  if (!str) return 0;
+  if (str.includes(',') && str.includes('.')) {
+    if (str.indexOf('.') < str.indexOf(',')) {
+      // Brazilian standard: "1.234,56"
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      // US standard: "1,234.56"
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
+  }
+  const parsed = parseFloat(str);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 export function getLocalDateString(date: Date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

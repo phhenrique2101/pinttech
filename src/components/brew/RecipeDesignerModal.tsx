@@ -935,7 +935,7 @@ export default function RecipeDesignerModal({
                           <td className="p-3">
                             <input
                               type="number"
-                              step="0.5"
+                              step="any"
                               value={f.amountKg}
                               onChange={(e) => updateFermentable(idx, { amountKg: Math.max(0, parseFloat(e.target.value) || 0) })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-amber-700 font-black focus:outline-none focus:border-amber-500 focus:bg-white text-right"
@@ -947,7 +947,7 @@ export default function RecipeDesignerModal({
                           <td className="p-3">
                             <input
                               type="number"
-                              step="0.5"
+                              step="any"
                               value={f.colorEbc}
                               onChange={(e) => updateFermentable(idx, { colorEbc: Math.max(1, parseFloat(e.target.value) || 0) })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none text-right"
@@ -964,7 +964,7 @@ export default function RecipeDesignerModal({
                           <td className="p-3">
                             <input
                               type="number"
-                              step="0.1"
+                              step="any"
                               value={f.costPerKg || 0}
                               onChange={(e) => updateFermentable(idx, { costPerKg: Math.max(0, parseFloat(e.target.value) || 0) })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-emerald-700 font-bold focus:outline-none text-right"
@@ -1112,7 +1112,7 @@ export default function RecipeDesignerModal({
                           <td className="p-3">
                             <input
                               type="number"
-                              step="50"
+                              step="any"
                               value={h.amountGrams}
                               onChange={(e) => updateHop(idx, { amountGrams: Math.max(0, parseFloat(e.target.value) || 0) })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-emerald-700 font-black focus:outline-none focus:border-emerald-500 focus:bg-white text-right"
@@ -1121,10 +1121,10 @@ export default function RecipeDesignerModal({
                           <td className="p-3">
                             <input
                               type="number"
-                              step="0.1"
+                              step="any"
                               value={h.alphaAcidPercent}
                               onChange={(e) => updateHop(idx, { alphaAcidPercent: Math.max(0.1, parseFloat(e.target.value) || 0) })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold focus:outline-none text-right"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-bold focus:outline-none text-right"
                             />
                           </td>
                           <td className="p-3">
@@ -1154,7 +1154,7 @@ export default function RecipeDesignerModal({
                           <td className="p-3">
                             <input
                               type="number"
-                              step="0.01"
+                              step="any"
                               value={h.costPerGram || 0}
                               onChange={(e) => updateHop(idx, { costPerGram: Math.max(0, parseFloat(e.target.value) || 0) })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-purple-700 font-bold focus:outline-none text-right"

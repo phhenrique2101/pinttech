@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Save, Beer, ShieldCheck, FileText, Activity, DollarSign } from 'lucide-react';
 import MapaSelectorInput from '@/components/brew/MapaSelectorInput';
+import { parseCurrencyInput } from '@/lib/utils';
 
 interface EditRecipeModalProps {
   recipe: any;
@@ -54,14 +55,14 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
         mapaRegistration: mapaRegistration.trim() || null,
         commercialDenomination: commercialDenomination.trim() || null,
         mapaProductId: mapaProductId || null,
-        og: og ? parseFloat(og) : null,
-        fg: fg ? parseFloat(fg) : null,
-        abv: abv ? parseFloat(abv) : null,
+        og: og ? parseCurrencyInput(og) : null,
+        fg: fg ? parseCurrencyInput(fg) : null,
+        abv: abv ? parseCurrencyInput(abv) : null,
         ibu: ibu ? parseInt(ibu, 10) : null,
-        ebc: ebc ? parseFloat(ebc) : null,
-        batchYieldLiters: batchYieldLiters ? parseFloat(batchYieldLiters) : 500,
-        salePricePerLiter: salePricePerLiter ? parseFloat(salePricePerLiter) : 0,
-        costPerLiter: costPerLiter ? parseFloat(costPerLiter) : 0,
+        ebc: ebc ? parseCurrencyInput(ebc) : null,
+        batchYieldLiters: batchYieldLiters ? parseCurrencyInput(batchYieldLiters) : 500,
+        salePricePerLiter: parseCurrencyInput(salePricePerLiter),
+        costPerLiter: parseCurrencyInput(costPerLiter),
         description: description.trim() || null,
       };
 
@@ -176,7 +177,7 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-500">R$</span>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     min="0"
                     value={salePricePerLiter}
                     onChange={(e) => setSalePricePerLiter(e.target.value)}
@@ -192,7 +193,7 @@ export default function EditRecipeModal({ recipe, onClose, onSaved }: EditRecipe
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">R$</span>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     min="0"
                     value={costPerLiter}
                     onChange={(e) => setCostPerLiter(e.target.value)}

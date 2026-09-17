@@ -46,7 +46,7 @@ import {
   CalendarDays,
   UserPlus,
 } from 'lucide-react';
-import { formatCurrency, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMENT_TYPE_MAP } from '@/lib/utils';
+import { formatCurrency, parseCurrencyInput, formatDateShort, formatDate, ORDER_STATUS_MAP, EQUIPMENT_TYPE_MAP } from '@/lib/utils';
 import { exportJsonToExcel } from '@/lib/exportUtils';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import QuickClientModal from '@/components/clients/QuickClientModal';
@@ -774,7 +774,7 @@ export default function PedidosPage() {
   const [editActualReturnDate, setEditActualReturnDate] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const [editItems, setEditItems] = useState<{ id?: string; recipeId: string; description?: string; quantity: number; unitPrice: number; totalPrice: number; kegCapacity?: number; pricePerLiter?: number }[]>([]);
+  const [editItems, setEditItems] = useState<{ id?: string; recipeId: string; description?: string; quantity: number | string; unitPrice: number | string; totalPrice?: number | string; kegCapacity?: number; pricePerLiter?: number | string }[]>([]);
   const [editEquipments, setEditEquipments] = useState<string[]>([]);
   const [editDiscount, setEditDiscount] = useState('0');
   const [editDeliveryFee, setEditDeliveryFee] = useState('0');
@@ -795,11 +795,11 @@ export default function PedidosPage() {
   const [driverName, setDriverName] = useState('');
   const [orderItems, setOrderItems] = useState<{
     recipeId: string;
-    quantity: number;
-    unitPrice: number;
+    quantity: number | string;
+    unitPrice: number | string;
     kegCapacity?: number;
-    pricePerLiter?: number;
-    totalPrice?: number;
+    pricePerLiter?: number | string;
+    totalPrice?: number | string;
     description?: string;
   }[]>([]);
   const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
@@ -1159,7 +1159,7 @@ export default function PedidosPage() {
           ...it,
           pricePerLiter: pPerLiter,
           unitPrice: uPrice,
-          totalPrice: (it.quantity || 1) * uPrice,
+          totalPrice: (Number(it.quantity) || 1) * uPrice,
         };
       })
     );
@@ -1178,7 +1178,7 @@ export default function PedidosPage() {
           ...it,
           pricePerLiter: pPerLiter,
           unitPrice: uPrice,
-          totalPrice: (it.quantity || 1) * uPrice,
+          totalPrice: (Number(it.quantity) || 1) * uPrice,
         };
       })
     );
@@ -1214,7 +1214,7 @@ export default function PedidosPage() {
               ...it,
               pricePerLiter: pPerLiter,
               unitPrice: uPrice,
-              totalPrice: (it.quantity || 1) * uPrice,
+              totalPrice: (Number(it.quantity) || 1) * uPrice,
             };
           })
         );
@@ -1292,7 +1292,7 @@ export default function PedidosPage() {
             quantity: it.quantity || 1,
             pricePerLiter: pPerLiter,
             unitPrice: uPrice,
-            totalPrice: it.totalPrice || (it.quantity * uPrice),
+            totalPrice: it.totalPrice || ((Number(it.quantity) || 1) * uPrice),
             kegCapacity: cap,
           };
         })
@@ -1404,7 +1404,7 @@ export default function PedidosPage() {
       const stock = getStockAvailability(it.recipeId, it.kegCapacity || 50);
       if (stock.available <= 0) {
         stockNotes.push(`• ${stock.recipeName} (${it.kegCapacity || 50}L): 0 barris livres na câmara fria (${stock.matchingTotal} total, ${stock.reserved} reservados)`);
-      } else if (it.quantity > stock.available) {
+      } else if (Number(it.quantity) > stock.available) {
         stockNotes.push(`• ${stock.recipeName} (${it.kegCapacity || 50}L): solicitado ${it.quantity} un, mas há ${stock.available} livres (${stock.reserved} já reservados em outros pedidos)`);
       }
     }
@@ -1418,14 +1418,20 @@ export default function PedidosPage() {
           priceTableId: newPriceTableId || null,
           status: forcedStatus,
           driverName: driverName.trim() || null,
-          items: orderItems,
+          items: orderItems.map((it) => ({
+            ...it,
+            quantity: Number(it.quantity) || 1,
+            unitPrice: parseCurrencyInput(it.unitPrice),
+            pricePerLiter: parseCurrencyInput(it.pricePerLiter),
+            totalPrice: parseCurrencyInput(it.totalPrice) || (Number(it.quantity) || 1) * parseCurrencyInput(it.unitPrice),
+          })),
           equipmentIds: selectedEquipments,
           deliveryDate,
           estimatedReturnDate,
           deliveryAddress,
-          deliveryFee,
-          cautionDeposit,
-          discount,
+          deliveryFee: parseCurrencyInput(deliveryFee),
+          cautionDeposit: parseCurrencyInput(cautionDeposit),
+          discount: parseCurrencyInput(discount),
           notes,
         }),
       });
@@ -1474,17 +1480,17 @@ export default function PedidosPage() {
       const stock = getStockAvailability(it.recipeId, cap, selectedOrder.id);
       if (stock.available <= 0) {
         stockNotes.push(`• ${stock.recipeName} (${cap}L): 0 barris livres na câmara fria (${stock.matchingTotal} total, ${stock.reserved} reservados)`);
-      } else if (it.quantity > stock.available) {
+      } else if (Number(it.quantity) > stock.available) {
         stockNotes.push(`• ${stock.recipeName} (${cap}L): solicitado ${it.quantity} un, mas há ${stock.available} livres (${stock.reserved} reservados)`);
       }
     }
 
     setSavingOrder(true);
     try {
-      const computedSubtotal = editItems.reduce((acc, it) => acc + it.quantity * it.unitPrice, 0);
-      const disc = parseFloat(editDiscount) || 0;
-      const fee = parseFloat(editDeliveryFee) || 0;
-      const caut = parseFloat(editCautionDeposit) || 0;
+      const computedSubtotal = editItems.reduce((acc, it) => acc + (Number(it.quantity) || 1) * parseCurrencyInput(it.unitPrice), 0);
+      const disc = parseCurrencyInput(editDiscount);
+      const fee = parseCurrencyInput(editDeliveryFee);
+      const caut = parseCurrencyInput(editCautionDeposit);
       const finalTotal = Math.max(0, computedSubtotal + fee + caut - disc);
 
       const res = await fetch(`/api/orders/${selectedOrder.id}`, {
@@ -1500,7 +1506,13 @@ export default function PedidosPage() {
           actualReturnDate: editActualReturnDate || null,
           deliveryAddress: editAddress,
           notes: editNotes,
-          items: editItems,
+          items: editItems.map((it) => ({
+            ...it,
+            quantity: Number(it.quantity) || 1,
+            unitPrice: parseCurrencyInput(it.unitPrice),
+            pricePerLiter: parseCurrencyInput(it.pricePerLiter),
+            totalPrice: parseCurrencyInput(it.totalPrice) || (Number(it.quantity) || 1) * parseCurrencyInput(it.unitPrice),
+          })),
           equipmentIds: editEquipments,
           subtotal: computedSubtotal,
           discount: disc,
@@ -2709,12 +2721,12 @@ export default function PedidosPage() {
 
             {/* TAB 2: EDITAR PEDIDO */}
             {orderModalTab === 'EDIT' && (() => {
-              const editSubtotal = editItems.reduce((acc, it) => acc + (it.quantity || 0) * (it.unitPrice || 0), 0);
-              const editFee = parseFloat(editDeliveryFee) || 0;
-              const editDisc = parseFloat(editDiscount) || 0;
-              const editCaut = parseFloat(editCautionDeposit) || 0;
+              const editSubtotal = editItems.reduce((acc, it) => acc + (Number(it.quantity) || 0) * parseCurrencyInput(it.unitPrice), 0);
+              const editFee = parseCurrencyInput(editDeliveryFee);
+              const editDisc = parseCurrencyInput(editDiscount);
+              const editCaut = parseCurrencyInput(editCautionDeposit);
               const editTotal = Math.max(0, editSubtotal + editFee + editCaut - editDisc);
-              const editTotalLiters = editItems.reduce((acc, it) => acc + (it.quantity || 0) * (it.kegCapacity || 50), 0);
+              const editTotalLiters = editItems.reduce((acc, it) => acc + (Number(it.quantity) || 0) * (it.kegCapacity || 50), 0);
 
               return (
                 <form onSubmit={handleSaveOrderEdits} className="space-y-4 text-xs">
@@ -2921,16 +2933,17 @@ export default function PedidosPage() {
                                 </tr>
                               ) : (
                                 editItems.map((item, idx) => {
-                                  const stock = getStockAvailability(item.recipeId, item.kegCapacity || 50, selectedOrder?.id);
+                                  const cap = item.kegCapacity || 50;
+                                  const stock = getStockAvailability(item.recipeId, cap, selectedOrder?.id);
                                   const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
-                                  const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
-                                  const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+                                  const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && (Number(item.quantity) || 1) > stock.available;
+                                  const itemTotal = (Number(item.quantity) || 1) * parseCurrencyInput(item.unitPrice);
                                   const pPerLiterVal =
-                                    item.pricePerLiter !== undefined && item.pricePerLiter > 0
+                                    item.pricePerLiter !== undefined && item.pricePerLiter !== null && item.pricePerLiter !== ''
                                       ? item.pricePerLiter
-                                      : item.kegCapacity
-                                      ? Math.round(((item.unitPrice || 0) / item.kegCapacity) * 100) / 100
-                                      : 20;
+                                      : item.unitPrice !== undefined && item.unitPrice !== null && item.unitPrice !== ''
+                                      ? Math.round((parseCurrencyInput(item.unitPrice) / cap) * 100) / 100
+                                      : '';
 
                                   return (
                                     <tr key={idx} className="hover:bg-slate-50/70 transition-colors group">
@@ -2957,7 +2970,7 @@ export default function PedidosPage() {
                                             updated[idx].kegCapacity = finalCap;
                                             updated[idx].pricePerLiter = finalLiterPrice;
                                             updated[idx].unitPrice = uPrice;
-                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * uPrice;
+                                            updated[idx].totalPrice = (Number(updated[idx].quantity) || 1) * uPrice;
                                             updated[idx].description = `Barril ${finalCap}L - ${r.name}`;
                                             setEditItems(updated);
                                           }}
@@ -2994,12 +3007,15 @@ export default function PedidosPage() {
                                         <input
                                           type="number"
                                           min="1"
+                                          step="any"
                                           value={item.quantity}
                                           onChange={(e) => {
                                             const updated = [...editItems];
-                                            const qty = parseInt(e.target.value, 10) || 1;
+                                            const raw = e.target.value;
+                                            const qty = raw === '' ? '' : (parseInt(raw, 10) || 1);
                                             updated[idx].quantity = qty;
-                                            updated[idx].totalPrice = qty * (updated[idx].unitPrice || 0);
+                                            const uPrice = parseCurrencyInput(updated[idx].unitPrice);
+                                            updated[idx].totalPrice = (Number(qty) || 1) * uPrice;
                                             setEditItems(updated);
                                           }}
                                           className="w-full px-2 py-2 rounded-xl font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
@@ -3010,17 +3026,23 @@ export default function PedidosPage() {
                                       <td className="py-3 px-3 align-top">
                                         <input
                                           type="number"
-                                          step="0.50"
+                                          step="any"
                                           min="0"
                                           value={pPerLiterVal}
                                           onChange={(e) => {
                                             const updated = [...editItems];
-                                            const pPerLiter = parseFloat(e.target.value) || 0;
-                                            updated[idx].pricePerLiter = pPerLiter;
-                                            const cap = updated[idx].kegCapacity || 50;
-                                            const uPrice = Math.round(pPerLiter * cap * 100) / 100;
-                                            updated[idx].unitPrice = uPrice;
-                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * uPrice;
+                                            const raw = e.target.value;
+                                            if (raw === '') {
+                                              updated[idx].pricePerLiter = '';
+                                              updated[idx].unitPrice = '';
+                                              updated[idx].totalPrice = 0;
+                                            } else {
+                                              const pPerLiter = parseCurrencyInput(raw);
+                                              updated[idx].pricePerLiter = raw;
+                                              const uPrice = Math.round(pPerLiter * cap * 100) / 100;
+                                              updated[idx].unitPrice = uPrice;
+                                              updated[idx].totalPrice = (Number(updated[idx].quantity) || 1) * uPrice;
+                                            }
                                             setEditItems(updated);
                                           }}
                                           className="w-full px-2 py-2 bg-amber-50/60 border border-amber-300 rounded-xl font-bold text-right text-amber-950 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
@@ -3032,16 +3054,22 @@ export default function PedidosPage() {
                                       <td className="py-3 px-3 align-top">
                                         <input
                                           type="number"
-                                          step="5"
+                                          step="any"
                                           min="0"
-                                          value={item.unitPrice}
+                                          value={item.unitPrice ?? ''}
                                           onChange={(e) => {
                                             const updated = [...editItems];
-                                            const price = parseFloat(e.target.value) || 0;
-                                            updated[idx].unitPrice = price;
-                                            const cap = updated[idx].kegCapacity || 50;
-                                            updated[idx].pricePerLiter = cap > 0 ? Math.round((price / cap) * 100) / 100 : 0;
-                                            updated[idx].totalPrice = (updated[idx].quantity || 1) * price;
+                                            const raw = e.target.value;
+                                            if (raw === '') {
+                                              updated[idx].unitPrice = '';
+                                              updated[idx].pricePerLiter = '';
+                                              updated[idx].totalPrice = 0;
+                                            } else {
+                                              const price = parseCurrencyInput(raw);
+                                              updated[idx].unitPrice = raw;
+                                              updated[idx].pricePerLiter = cap > 0 ? Math.round((price / cap) * 100) / 100 : 0;
+                                              updated[idx].totalPrice = (Number(updated[idx].quantity) || 1) * price;
+                                            }
                                             setEditItems(updated);
                                           }}
                                           className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
@@ -3101,6 +3129,7 @@ export default function PedidosPage() {
                                 <span className="text-[11px] text-slate-400">R$</span>
                                 <input
                                   type="number"
+                                  step="any"
                                   value={editDeliveryFee}
                                   onChange={(e) => setEditDeliveryFee(e.target.value)}
                                   className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none"
@@ -3114,6 +3143,7 @@ export default function PedidosPage() {
                                 <span className="text-[11px] text-slate-400">R$</span>
                                 <input
                                   type="number"
+                                  step="any"
                                   value={editDiscount}
                                   onChange={(e) => setEditDiscount(e.target.value)}
                                   className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none text-rose-600"
@@ -3371,7 +3401,7 @@ export default function PedidosPage() {
                       <label className="block font-bold text-slate-700 mb-1">Valor Recebido (R$)</label>
                       <input
                         type="number"
-                        step="0.01"
+                        step="any"
                         required
                         value={paymentAmount}
                         onChange={(e) => setPaymentAmount(e.target.value)}
@@ -3566,10 +3596,10 @@ export default function PedidosPage() {
                       </div>
                       <div className="text-right">
                         <span className="font-black text-slate-800 block">
-                          {formatCurrency(it.totalPrice || (it.quantity * it.unitPrice))}
+                          {formatCurrency(parseCurrencyInput(it.totalPrice) || ((Number(it.quantity) || 1) * parseCurrencyInput(it.unitPrice)))}
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          {it.quantity}x {formatCurrency(it.unitPrice)}
+                          {it.quantity}x {formatCurrency(parseCurrencyInput(it.unitPrice))}
                         </span>
                       </div>
                     </div>
@@ -3597,12 +3627,12 @@ export default function PedidosPage() {
           <div className="bg-slate-50/70 rounded-3xl max-w-5xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl border border-slate-200 flex flex-col space-y-4">
             {/* Top Bar: Title & Live Total */}
             {(() => {
-              const sub = orderItems.reduce((acc, it) => acc + ((it.quantity || 1) * (it.unitPrice || 0)), 0);
-              const fee = parseFloat(deliveryFee) || 0;
-              const caut = parseFloat(cautionDeposit) || 0;
-              const disc = parseFloat(discount) || 0;
+              const sub = orderItems.reduce((acc, it) => acc + ((Number(it.quantity) || 1) * parseCurrencyInput(it.unitPrice)), 0);
+              const fee = parseCurrencyInput(deliveryFee);
+              const caut = parseCurrencyInput(cautionDeposit);
+              const disc = parseCurrencyInput(discount);
               const tot = Math.max(0, sub + fee + caut - disc);
-              const totalLiters = orderItems.reduce((acc, it) => acc + ((it.quantity || 1) * (it.kegCapacity || 50)), 0);
+              const totalLiters = orderItems.reduce((acc, it) => acc + ((Number(it.quantity) || 1) * (it.kegCapacity || 50)), 0);
 
               return (
                 <>
@@ -3829,13 +3859,16 @@ export default function PedidosPage() {
                                 ) : (
                                   orderItems.map((item, idx) => {
                                     const cap = item.kegCapacity || 50;
-                                    const pPerLiterVal = item.pricePerLiter !== undefined
-                                      ? item.pricePerLiter
-                                      : (item.unitPrice ? Math.round((item.unitPrice / cap) * 100) / 100 : 0);
                                     const stock = getStockAvailability(item.recipeId, cap);
                                     const isOutOfStock = Boolean(item.recipeId) && stock.available <= 0;
-                                    const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && item.quantity > stock.available;
-                                    const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+                                    const isInsufficient = Boolean(item.recipeId) && !isOutOfStock && (Number(item.quantity) || 1) > stock.available;
+                                    const itemTotal = (Number(item.quantity) || 1) * parseCurrencyInput(item.unitPrice);
+                                    const pPerLiterVal =
+                                      item.pricePerLiter !== undefined && item.pricePerLiter !== null && item.pricePerLiter !== ''
+                                        ? item.pricePerLiter
+                                        : item.unitPrice !== undefined && item.unitPrice !== null && item.unitPrice !== ''
+                                        ? Math.round((parseCurrencyInput(item.unitPrice) / cap) * 100) / 100
+                                        : '';
 
                                     return (
                                       <tr key={idx} className="hover:bg-slate-50/70 transition-colors group">
@@ -3862,7 +3895,7 @@ export default function PedidosPage() {
                                               newItems[idx].kegCapacity = itemCap;
                                               newItems[idx].pricePerLiter = resolvedPerLiter;
                                               newItems[idx].unitPrice = uPrice;
-                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * uPrice;
+                                              newItems[idx].totalPrice = (Number(newItems[idx].quantity) || 1) * uPrice;
                                               newItems[idx].description = `Barril ${itemCap}L - ${r.name}`;
                                               setOrderItems(newItems);
                                             }}
@@ -3899,12 +3932,15 @@ export default function PedidosPage() {
                                           <input
                                             type="number"
                                             min="1"
+                                            step="any"
                                             value={item.quantity}
                                             onChange={(e) => {
                                               const newItems = [...orderItems];
-                                              const qty = parseInt(e.target.value, 10) || 1;
+                                              const raw = e.target.value;
+                                              const qty = raw === '' ? '' : (parseInt(raw, 10) || 1);
                                               newItems[idx].quantity = qty;
-                                              newItems[idx].totalPrice = qty * (newItems[idx].unitPrice || 0);
+                                              const uPrice = parseCurrencyInput(newItems[idx].unitPrice);
+                                              newItems[idx].totalPrice = (Number(qty) || 1) * uPrice;
                                               setOrderItems(newItems);
                                             }}
                                             className="w-full px-2 py-2 rounded-xl font-bold text-center text-xs bg-slate-50 border border-slate-300 focus:bg-white focus:border-amber-500 focus:outline-none"
@@ -3915,17 +3951,23 @@ export default function PedidosPage() {
                                         <td className="py-3 px-3 align-top">
                                           <input
                                             type="number"
-                                            step="0.50"
+                                            step="any"
                                             min="0"
                                             value={pPerLiterVal}
                                             onChange={(e) => {
                                               const newItems = [...orderItems];
-                                              const pPerLiter = parseFloat(e.target.value) || 0;
-                                              newItems[idx].pricePerLiter = pPerLiter;
-                                              const c = newItems[idx].kegCapacity || 50;
-                                              const uPrice = Math.round(pPerLiter * c * 100) / 100;
-                                              newItems[idx].unitPrice = uPrice;
-                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * uPrice;
+                                              const raw = e.target.value;
+                                              if (raw === '') {
+                                                newItems[idx].pricePerLiter = '';
+                                                newItems[idx].unitPrice = '';
+                                                newItems[idx].totalPrice = 0;
+                                              } else {
+                                                const pPerLiter = parseCurrencyInput(raw);
+                                                newItems[idx].pricePerLiter = raw;
+                                                const uPrice = Math.round(pPerLiter * cap * 100) / 100;
+                                                newItems[idx].unitPrice = uPrice;
+                                                newItems[idx].totalPrice = (Number(newItems[idx].quantity) || 1) * uPrice;
+                                              }
                                               setOrderItems(newItems);
                                             }}
                                             className="w-full px-2 py-2 bg-amber-50/60 border border-amber-300 rounded-xl font-bold text-right text-amber-950 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
@@ -3937,16 +3979,22 @@ export default function PedidosPage() {
                                         <td className="py-3 px-3 align-top">
                                           <input
                                             type="number"
-                                            step="5"
+                                            step="any"
                                             min="0"
-                                            value={item.unitPrice}
+                                            value={item.unitPrice ?? ''}
                                             onChange={(e) => {
                                               const newItems = [...orderItems];
-                                              const price = parseFloat(e.target.value) || 0;
-                                              newItems[idx].unitPrice = price;
-                                              const c = newItems[idx].kegCapacity || 50;
-                                              newItems[idx].pricePerLiter = c > 0 ? Math.round((price / c) * 100) / 100 : 0;
-                                              newItems[idx].totalPrice = (newItems[idx].quantity || 1) * price;
+                                              const raw = e.target.value;
+                                              if (raw === '') {
+                                                newItems[idx].unitPrice = '';
+                                                newItems[idx].pricePerLiter = '';
+                                                newItems[idx].totalPrice = 0;
+                                              } else {
+                                                const price = parseCurrencyInput(raw);
+                                                newItems[idx].unitPrice = raw;
+                                                newItems[idx].pricePerLiter = cap > 0 ? Math.round((price / cap) * 100) / 100 : 0;
+                                                newItems[idx].totalPrice = (Number(newItems[idx].quantity) || 1) * price;
+                                              }
                                               setOrderItems(newItems);
                                             }}
                                             className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-right text-slate-800 text-xs focus:bg-white focus:border-amber-500 focus:outline-none"
@@ -4006,6 +4054,7 @@ export default function PedidosPage() {
                                   <span className="text-[11px] text-slate-400">R$</span>
                                   <input
                                     type="number"
+                                    step="any"
                                     value={deliveryFee}
                                     onChange={(e) => setDeliveryFee(e.target.value)}
                                     className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none"
@@ -4019,6 +4068,7 @@ export default function PedidosPage() {
                                   <span className="text-[11px] text-slate-400">R$</span>
                                   <input
                                     type="number"
+                                    step="any"
                                     value={discount}
                                     onChange={(e) => setDiscount(e.target.value)}
                                     className="w-24 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-right text-xs focus:bg-white focus:outline-none text-rose-600"
@@ -4373,8 +4423,8 @@ export default function PedidosPage() {
                   <span className="text-slate-800 font-black">Litros restantes no barril:</span>
                   <input
                     type="number"
-                    step="0.5"
-                    min="0.5"
+                    step="any"
+                    min="0"
                     max={returnKegModal.keg.capacity}
                     value={returnKegModal.returnVolumeLiters}
                     onChange={(e) => setReturnKegModal({ ...returnKegModal, returnVolumeLiters: e.target.value })}

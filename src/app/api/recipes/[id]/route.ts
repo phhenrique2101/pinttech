@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionFromRequest } from '@/lib/auth';
+import { parseCurrencyInput } from '@/lib/utils';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -73,11 +74,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ingredients,
     } = body;
 
-    const cost = costPerLiter !== undefined ? parseFloat(costPerLiter) : existing.costPerLiter || 0;
-    const margin = profitMarginPercent !== undefined ? parseFloat(profitMarginPercent) : existing.profitMarginPercent || 50.0;
+    const cost = costPerLiter !== undefined ? parseCurrencyInput(costPerLiter) : existing.costPerLiter || 0;
+    const margin = profitMarginPercent !== undefined ? parseCurrencyInput(profitMarginPercent) : existing.profitMarginPercent || 50.0;
     const model = pricingModel || existing.pricingModel || 'MANUAL';
 
-    let calculatedSalePrice = salePricePerLiter !== undefined ? parseFloat(salePricePerLiter) : existing.salePricePerLiter || 18.0;
+    let calculatedSalePrice = salePricePerLiter !== undefined ? parseCurrencyInput(salePricePerLiter) : existing.salePricePerLiter || 18.0;
 
     if (model === 'AT_COST') {
       calculatedSalePrice = cost > 0 ? cost : calculatedSalePrice;
