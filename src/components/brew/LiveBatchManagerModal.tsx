@@ -153,6 +153,48 @@ export default function LiveBatchManagerModal({
   const [volumePlanned, setVolumePlanned] = useState<number>(batch.volumePlannedLiters || 500);
   const [volumeProduced, setVolumeProduced] = useState<number>(batch.volumeProducedLiters || batch.volumePlannedLiters || 500);
   const [measuredOg, setMeasuredOg] = useState<string>(batch.measuredOg ? String(batch.measuredOg) : '');
+  const [ogInputUnit, setOgInputUnit] = useState<'SG' | 'BRIX'>('SG');
+  const [measuredOgBrix, setMeasuredOgBrix] = useState<string>(() => {
+    const pOg = parseBreweryGravity(batch.measuredOg);
+    return pOg && pOg > 1.0 ? sgToBrix(pOg).toFixed(1) : '';
+  });
+
+  const handleOgChange = (val: string) => {
+    setMeasuredOg(val);
+    const pOg = parseBreweryGravity(val);
+    if (pOg && pOg > 1.0) {
+      setMeasuredOgBrix(sgToBrix(pOg).toFixed(1));
+    } else if (val === '') {
+      setMeasuredOgBrix('');
+    }
+  };
+
+  const handleOgBrixChange = (val: string) => {
+    setMeasuredOgBrix(val);
+    const num = parseFloat(val.replace(',', '.'));
+    if (!isNaN(num) && num > 0) {
+      const convertedSg = brixToSg(num);
+      setMeasuredOg(convertedSg.toFixed(3));
+    } else if (val === '') {
+      setMeasuredOg('');
+    }
+  };
+
+  const handleOgUnitChange = (unit: 'SG' | 'BRIX') => {
+    setOgInputUnit(unit);
+    if (unit === 'BRIX') {
+      const pOg = parseBreweryGravity(measuredOg);
+      if (pOg && pOg > 1.0) {
+        setMeasuredOgBrix(sgToBrix(pOg).toFixed(1));
+      }
+    } else {
+      const numBrix = parseFloat(measuredOgBrix.replace(',', '.'));
+      if (!isNaN(numBrix) && numBrix > 0) {
+        setMeasuredOg(brixToSg(numBrix).toFixed(3));
+      }
+    }
+  };
+
   const [measuredFg, setMeasuredFg] = useState<string>(batch.measuredFg ? String(batch.measuredFg) : '');
   const [measuredIbu, setMeasuredIbu] = useState<string>(
     batch.measuredIbu ? String(batch.measuredIbu) : batch.recipe?.ibu ? String(batch.recipe.ibu) : ''
@@ -1222,22 +1264,71 @@ export default function LiveBatchManagerModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">OG Medida (Gravidade Inicial)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 1.054 ou 1054"
-                      value={measuredOg}
-                      onChange={(e) => setMeasuredOg(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    {(() => {
-                      const pOg = parseBreweryGravity(measuredOg);
-                      return pOg ? (
-                        <span className="text-[10px] font-bold text-amber-700 block mt-1">
-                          ≈ {sgToBrix(pOg).toFixed(1)} °Bx / Plato
-                        </span>
-                      ) : null;
-                    })()}
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">OG Medida (Gravidade Inicial)</label>
+                      <div className="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => handleOgUnitChange('SG')}
+                          className={`px-2 py-0.5 text-[10px] font-black rounded transition-all ${
+                            ogInputUnit === 'SG'
+                              ? 'bg-amber-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          SG
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOgUnitChange('BRIX')}
+                          className={`px-2 py-0.5 text-[10px] font-black rounded transition-all ${
+                            ogInputUnit === 'BRIX'
+                              ? 'bg-cyan-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          °Brix
+                        </button>
+                      </div>
+                    </div>
+
+                    {ogInputUnit === 'BRIX' ? (
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Ex: 12.5 ou 14.0"
+                          value={measuredOgBrix}
+                          onChange={(e) => handleOgBrixChange(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                        {(() => {
+                          const pOg = parseBreweryGravity(measuredOg);
+                          return pOg ? (
+                            <span className="text-[10px] font-bold text-cyan-700 block mt-1">
+                              ≈ {pOg.toFixed(3)} SG (Densímetro)
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Ex: 1.054 ou 1054"
+                          value={measuredOg}
+                          onChange={(e) => handleOgChange(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        {(() => {
+                          const pOg = parseBreweryGravity(measuredOg);
+                          return pOg ? (
+                            <span className="text-[10px] font-bold text-amber-700 block mt-1">
+                              ≈ {sgToBrix(pOg).toFixed(1)} °Bx / Plato
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
                   </div>
 
                   <div>
