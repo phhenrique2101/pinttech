@@ -13,6 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         recipe: {
           include: {
             ingredients: true,
+            mapaProduct: true,
           },
         },
         tank: true,

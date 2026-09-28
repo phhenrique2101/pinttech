@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
         recipe: {
           include: {
             ingredients: true,
+            mapaProduct: true,
           },
         },
         tank: true,

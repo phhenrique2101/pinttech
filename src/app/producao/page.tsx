@@ -253,6 +253,24 @@ export default function ProducaoPage() {
     return activeBatches.filter((b) => !b.tankId && !b.tank);
   }, [activeBatches]);
 
+  // Obtém o estilo da cerveja priorizando o Registro MAPA vinculado
+  const getBatchBeerStyle = (b: any): string => {
+    if (!b) return '';
+    const reg = (b.mapaRegistration || b.recipe?.mapaRegistration || '').trim().toLowerCase();
+    if (reg && mapaProducts.length > 0) {
+      const match = mapaProducts.find(
+        (p) => p.mapaRegistration && p.mapaRegistration.trim().toLowerCase() === reg
+      );
+      if (match?.style?.trim()) {
+        return match.style.trim();
+      }
+    }
+    if (b.recipe?.mapaProduct?.style?.trim()) {
+      return b.recipe.mapaProduct.style.trim();
+    }
+    return b.recipe?.style || 'Standard';
+  };
+
   const filteredUnassignedBatches = useMemo(() => {
     if (!search.trim()) return unassignedBatches;
     const q = search.toLowerCase();
@@ -260,9 +278,10 @@ export default function ProducaoPage() {
       (b) =>
         b.batchNumber?.toLowerCase().includes(q) ||
         b.recipe?.name?.toLowerCase().includes(q) ||
-        b.recipe?.style?.toLowerCase().includes(q)
+        b.recipe?.style?.toLowerCase().includes(q) ||
+        getBatchBeerStyle(b).toLowerCase().includes(q)
     );
-  }, [unassignedBatches, search]);
+  }, [unassignedBatches, search, mapaProducts]);
 
   // Busca do Lote Ativo correspondente a um Tanque
   const getTankActiveBatch = (t: any) => {
@@ -290,6 +309,7 @@ export default function ProducaoPage() {
         item.batchNumber?.toLowerCase().includes(q) ||
         item.recipe?.name?.toLowerCase().includes(q) ||
         item.recipe?.style?.toLowerCase().includes(q) ||
+        getBatchBeerStyle(item).toLowerCase().includes(q) ||
         item.mapaRegistration?.toLowerCase().includes(q) ||
         item.tank?.name?.toLowerCase().includes(q)
     );
@@ -348,13 +368,14 @@ export default function ProducaoPage() {
           activeBatch.batchNumber?.toLowerCase().includes(q) ||
           activeBatch.recipe?.name?.toLowerCase().includes(q) ||
           activeBatch.recipe?.style?.toLowerCase().includes(q) ||
+          getBatchBeerStyle(activeBatch).toLowerCase().includes(q) ||
           activeBatch.mapaRegistration?.toLowerCase().includes(q) ||
           activeBatch.commercialDenomination?.toLowerCase().includes(q)
         ));
 
       return matchesStatus && matchesSearch;
     });
-  }, [tanks, tankStatusFilter, search, activeBatches]);
+  }, [tanks, tankStatusFilter, search, activeBatches, mapaProducts]);
 
   // Ordenação Unificada de Tanques & Lotes
   const sortedTanks = useMemo(() => {
@@ -537,7 +558,7 @@ export default function ProducaoPage() {
               batchId: b.id,
               batchNumber: b.batchNumber || 'S/N',
               recipeName: b.recipe?.name || 'Cerveja',
-              recipeStyle: b.recipe?.style || '',
+              recipeStyle: getBatchBeerStyle(b) || b.recipe?.style || '',
               tankName,
               tankId: b.tankId,
               batch: b,
@@ -560,7 +581,7 @@ export default function ProducaoPage() {
     });
 
     return list;
-  }, [activeBatches, tanks]);
+  }, [activeBatches, tanks, mapaProducts]);
 
   const lateTasksCount = useMemo(() => {
     return allCellarTasks.filter((t) => t.urgency === 'LATE').length;
@@ -1233,8 +1254,8 @@ export default function ProducaoPage() {
                           <strong className="text-white block text-sm mt-1 truncate">
                             {b.recipe?.name || 'Cerveja'}
                           </strong>
-                          <span className="text-[11px] text-slate-400 block truncate">
-                            {b.recipe?.style || 'Standard'} • {b.volumeProducedLiters || b.volumePlannedLiters || 0}L • {formatDate(b.brewDate)}
+                          <span className="text-[11px] text-slate-400 block truncate" title={getBatchBeerStyle(b)}>
+                            {getBatchBeerStyle(b)} • {b.volumeProducedLiters || b.volumePlannedLiters || 0}L • {formatDate(b.brewDate)}
                           </span>
                         </div>
 
@@ -1523,11 +1544,11 @@ export default function ProducaoPage() {
                                     </span>
                                   )}
                                 </div>
-                                <strong className="text-white block text-xs truncate max-w-[200px]">
+                                <strong className="text-white block text-xs truncate max-w-[280px]">
                                   {activeBatch.recipe?.name || activeBatch.commercialDenomination || 'Cerveja'}
                                 </strong>
-                                <span className="text-[11px] text-slate-400 block truncate max-w-[200px]">
-                                  {activeBatch.recipe?.style || 'Standard'}
+                                <span className="text-[11px] text-slate-400 block truncate max-w-[280px]" title={getBatchBeerStyle(activeBatch)}>
+                                  {getBatchBeerStyle(activeBatch)}
                                 </span>
                               </div>
                             ) : (
@@ -1554,16 +1575,21 @@ export default function ProducaoPage() {
                           {/* MAPA */}
                           <td className="p-3.5 whitespace-nowrap text-xs">
                             {isOccupied && activeBatch ? (
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold block truncate max-w-[140px] ${
-                                  activeBatch.mapaRegistration
-                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                    : 'bg-slate-800 text-slate-400'
-                                }`}
-                                title={activeBatch.mapaRegistration || 'Registro MAPA não informado'}
-                              >
-                                {activeBatch.mapaRegistration || 'Sem MAPA'}
-                              </span>
+                              (() => {
+                                const reg = activeBatch.mapaRegistration || activeBatch.recipe?.mapaRegistration;
+                                return (
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold block truncate max-w-[140px] ${
+                                      reg
+                                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                        : 'bg-slate-800 text-slate-400'
+                                    }`}
+                                    title={reg || 'Registro MAPA não informado'}
+                                  >
+                                    {reg || 'Sem MAPA'}
+                                  </span>
+                                );
+                              })()
                             ) : (
                               <span className="text-slate-600">—</span>
                             )}
@@ -1772,8 +1798,8 @@ export default function ProducaoPage() {
                             <strong className="text-white block text-sm font-bold">
                               {activeBatch.recipe?.name || activeBatch.commercialDenomination || 'Cerveja'}
                             </strong>
-                            <span className="text-slate-400 text-[11px] block mt-0.5">
-                              {activeBatch.recipe?.style || 'Estilo não especificado'}
+                            <span className="text-slate-400 text-[11px] block mt-0.5" title={getBatchBeerStyle(activeBatch)}>
+                              {getBatchBeerStyle(activeBatch) || 'Estilo não especificado'}
                             </span>
                           </div>
 
@@ -1781,13 +1807,13 @@ export default function ProducaoPage() {
                           <div className="flex items-center justify-between gap-2 text-[10px] pt-1">
                             <span
                               className={`px-2 py-0.5 rounded font-mono font-bold truncate max-w-[170px] ${
-                                activeBatch.mapaRegistration
+                                (activeBatch.mapaRegistration || activeBatch.recipe?.mapaRegistration)
                                   ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                                   : 'bg-slate-800 text-slate-400'
                               }`}
-                              title={activeBatch.mapaRegistration || 'Registro MAPA pendente'}
+                              title={activeBatch.mapaRegistration || activeBatch.recipe?.mapaRegistration || 'Registro MAPA pendente'}
                             >
-                              MAPA: {activeBatch.mapaRegistration || 'Pendente'}
+                              MAPA: {activeBatch.mapaRegistration || activeBatch.recipe?.mapaRegistration || 'Pendente'}
                             </span>
 
                             {ingredientsCount > 0 && (
@@ -2530,11 +2556,11 @@ export default function ProducaoPage() {
                       <td className="p-3 font-mono font-bold text-amber-400">{batch.batchNumber}</td>
                       <td className="p-3">
                         <span className="font-bold text-white block">{batch.recipe?.name}</span>
-                        <span className="text-slate-400 text-[11px]">{batch.recipe?.style}</span>
+                        <span className="text-slate-400 text-[11px]" title={getBatchBeerStyle(batch)}>{getBatchBeerStyle(batch)}</span>
                       </td>
                       <td className="p-3 text-slate-300">{formatDate(batch.brewDate)}</td>
                       <td className="p-3 font-mono">{batch.volumeProducedLiters || batch.volumePlannedLiters}L</td>
-                      <td className="p-3 font-mono text-slate-400">{batch.mapaRegistration || '—'}</td>
+                      <td className="p-3 font-mono text-slate-400">{batch.mapaRegistration || batch.recipe?.mapaRegistration || '—'}</td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
                           {batch.status}
