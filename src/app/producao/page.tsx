@@ -1426,35 +1426,6 @@ export default function ProducaoPage() {
                         </div>
                       </th>
 
-                      <th
-                        onClick={() => handleTankSortChange('capacity')}
-                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
-                        title="Clique para ordenar por Capacidade"
-                      >
-                        <div className="inline-flex items-center gap-1.5">
-                          <span>Capacidade</span>
-                          {tankSortBy === 'capacity' ? (
-                            tankSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
-                          ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
-                          )}
-                        </div>
-                      </th>
-
-                      <th
-                        onClick={() => handleTankSortChange('occupation')}
-                        className="p-3.5 cursor-pointer select-none hover:text-amber-400 transition"
-                        title="Clique para ordenar por Ocupação"
-                      >
-                        <div className="inline-flex items-center gap-1.5">
-                          <span>Ocupação</span>
-                          {tankSortBy === 'occupation' ? (
-                            tankSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-amber-400" /> : <ArrowDown className="w-3 h-3 text-amber-400" />
-                          ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-600" />
-                          )}
-                        </div>
-                      </th>
 
                       <th
                         onClick={() => handleTankSortChange('batch')}
@@ -1480,14 +1451,12 @@ export default function ProducaoPage() {
                     {sortedTanks.map((tank) => {
                       const activeBatch = getTankActiveBatch(tank);
                       const isOccupied = tank.status === 'OCUPADO' || !!activeBatch;
-                      const volumeInTank = activeBatch ? (activeBatch.volumeProducedLiters || activeBatch.volumePlannedLiters || tank.capacityLiters) : 0;
-                      const fillPercent = tank.capacityLiters > 0 ? Math.min(100, Math.round((volumeInTank / tank.capacityLiters) * 100)) : 0;
                       const elapsedDays = activeBatch ? getElapsedDays(activeBatch.brewDate || activeBatch.createdAt) : null;
 
                       return (
                         <tr key={tank.id} className="hover:bg-slate-800/40 transition group">
                           {/* Tanque & Tipo */}
-                          <td className="p-3.5 whitespace-nowrap">
+                          <td className="p-3.5 whitespace-nowrap" title={`${tank.name} • ${tank.capacityLiters}L`}>
                             <div className="flex items-center gap-2">
                               <span
                                 className={`w-2.5 h-2.5 rounded-full shrink-0 ${
@@ -1526,27 +1495,6 @@ export default function ProducaoPage() {
                             >
                               {isOccupied ? (activeBatch?.status || 'OCUPADO') : tank.status}
                             </span>
-                          </td>
-
-                          {/* Capacidade */}
-                          <td className="p-3.5 whitespace-nowrap font-mono font-bold text-xs text-slate-200">
-                            {tank.capacityLiters}L
-                          </td>
-
-                          {/* Ocupação */}
-                          <td className="p-3.5 whitespace-nowrap min-w-[130px]">
-                            <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 mb-1">
-                              <span>{isOccupied ? `${fillPercent}%` : '0%'}</span>
-                              <span className="text-slate-400">{isOccupied ? `${volumeInTank}L` : 'Vazio'}</span>
-                            </div>
-                            <div className="w-28 h-1.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
-                              <div
-                                className={`h-full transition-all duration-300 ${
-                                  isOccupied ? 'bg-gradient-to-r from-amber-500 to-amber-400' : 'bg-slate-700'
-                                }`}
-                                style={{ width: `${isOccupied ? fillPercent : 0}%` }}
-                              />
-                            </div>
                           </td>
 
                           {/* Lote Contido / Cerveja */}
