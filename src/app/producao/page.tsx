@@ -37,12 +37,14 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Camera,
 } from 'lucide-react';
 import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import MapaTraceabilitySheetModal from '@/components/brew/MapaTraceabilitySheetModal';
 import LiveBatchManagerModal from '@/components/brew/LiveBatchManagerModal';
 import EditRecipeModal from '@/components/brew/EditRecipeModal';
 import MapaProductModal, { MapaProduct } from '@/components/brew/MapaProductModal';
+import BoardPhotoReaderModal from '@/components/brew/BoardPhotoReaderModal';
 import { formatDate, formatDateShort, formatCurrency, getLocalDateString } from '@/lib/utils';
 
 export default function ProducaoPage() {
@@ -54,6 +56,7 @@ export default function ProducaoPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'PRODUCTION_TANKS' | 'HISTORY_MAPA' | 'RECIPES' | 'MAPA_REGISTRATIONS'>('PRODUCTION_TANKS');
+  const [isBoardPhotoModalOpen, setIsBoardPhotoModalOpen] = useState<boolean>(false);
 
   // MAPA Products State
   const [mapaModalOpen, setMapaModalOpen] = useState<boolean>(false);
@@ -933,6 +936,15 @@ export default function ProducaoPage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setIsBoardPhotoModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition active:scale-95"
+            title="Tirar foto do quadro físico de tarefas para atualizar a adega com IA"
+          >
+            <Camera className="w-4 h-4 text-amber-400" />
+            <span>Ler Quadro (IA)</span>
+          </button>
+
           <button
             onClick={() => setImporterModalOpen(true)}
             className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-xs transition active:scale-95"
@@ -1914,6 +1926,16 @@ export default function ProducaoPage() {
               </div>
 
               <div className="flex items-center flex-wrap gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsBoardPhotoModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95"
+                  title="Tirar foto do quadro físico de tarefas com a câmera do celular ou computador"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Ler Quadro (IA)</span>
+                </button>
+
                 {/* Ordenação */}
                 <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5">
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
@@ -3264,6 +3286,17 @@ export default function ProducaoPage() {
           }}
         />
       )}
+
+      {/* MODAL LEITOR INTELIGENTE DE QUADRO FÍSICO DE TAREFAS (IA) */}
+      <BoardPhotoReaderModal
+        isOpen={isBoardPhotoModalOpen}
+        onClose={() => setIsBoardPhotoModalOpen(false)}
+        onSuccess={() => {
+          fetchData();
+        }}
+        batches={batches}
+        tanks={tanks}
+      />
 
       {/* MODAL PARA INICIAR BRASSAGEM DE RECEITA EXISTENTE */}
       {selectedRecipeForBrew && (
