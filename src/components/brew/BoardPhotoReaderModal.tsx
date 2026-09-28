@@ -60,9 +60,10 @@ export default function BoardPhotoReaderModal({
   }, []);
 
   const handleSaveApiKey = (key: string) => {
-    setApiKey(key);
+    const cleaned = key.trim().replace(/^["']|["']$/g, '');
+    setApiKey(cleaned);
     try {
-      localStorage.setItem('pinttech_gemini_api_key', key);
+      localStorage.setItem('pinttech_gemini_api_key', cleaned);
     } catch {}
   };
 
@@ -77,10 +78,46 @@ export default function BoardPhotoReaderModal({
 
     setErrorMessage(null);
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setImagePreview(result);
-      setImageBase64(result);
+    reader.onload = (event) => {
+      const rawResult = event.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 1600;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.85);
+            setImagePreview(compressed);
+            setImageBase64(compressed);
+            return;
+          }
+        } catch (err) {
+          console.warn('Falha no canvas, usando imagem original:', err);
+        }
+        setImagePreview(rawResult);
+        setImageBase64(rawResult);
+      };
+      img.onerror = () => {
+        setImagePreview(rawResult);
+        setImageBase64(rawResult);
+      };
+      img.src = rawResult;
     };
     reader.readAsDataURL(file);
   };
@@ -100,7 +137,7 @@ export default function BoardPhotoReaderModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64,
-          apiKey: apiKey.trim() || undefined,
+          apiKey: apiKey.trim().replace(/^["']|["']$/g, '') || undefined,
         }),
       });
 

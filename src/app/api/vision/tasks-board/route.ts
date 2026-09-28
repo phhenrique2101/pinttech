@@ -18,11 +18,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve chave de API (fornecida pelo usuário na tela ou salva no .env)
-    const geminiKey =
+    const rawGeminiKey =
       customApiKey ||
       req.headers.get('x-gemini-key') ||
       process.env.GEMINI_API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+    const geminiKey = rawGeminiKey ? rawGeminiKey.trim().replace(/^["']|["']$/g, '') : null;
 
     const openaiKey =
       !geminiKey ? (process.env.OPENAI_API_KEY || req.headers.get('x-openai-key')) : null;
@@ -166,7 +168,43 @@ RETORNE ESTRITAMENTE UM JSON COM O SEGUINTE FORMATO (sem markdown envolvente):
 
     // Processamento via Gemini API
     if (geminiKey) {
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      // 1. Tenta listar os modelos disponíveis para esta chave específica
+      const preferredModels = [
+        'gemini-2.0-flash',
+        'gemini-2.5-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-flash-latest',
+        'gemini-2.0-flash-exp',
+      ];
+
+      let candidateModels = [...preferredModels];
+
+      try {
+        const listRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`
+        );
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const available = (listData.models || [])
+            .filter((m: any) =>
+              Array.isArray(m.supportedGenerationMethods)
+                ? m.supportedGenerationMethods.includes('generateContent')
+                : true
+            )
+            .map((m: any) => m.name.replace('models/', ''));
+
+          // Se conseguiu listar, prioriza os modelos que a conta tem acesso
+          const matched = preferredModels.filter((pref) => available.includes(pref));
+          if (matched.length > 0) {
+            candidateModels = matched;
+          } else if (available.length > 0) {
+            candidateModels = available;
+          }
+        }
+      } catch (err) {
+        console.warn('Não foi possível listar modelos do Gemini, usando lista padrão:', err);
+      }
 
       const geminiPayload = {
         contents: [
@@ -188,31 +226,57 @@ RETORNE ESTRITAMENTE UM JSON COM O SEGUINTE FORMATO (sem markdown envolvente):
         },
       };
 
-      const geminiRes = await fetch(geminiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload),
-      });
+      let lastErrorDetail = '';
+      let rawText: string | null = null;
 
-      if (!geminiRes.ok) {
-        const errorText = await geminiRes.text();
-        console.error('Erro na API Gemini:', errorText);
-        return NextResponse.json(
-          {
-            error: 'FALHA_GEMINI',
-            message: `Erro ao comunicar com a IA do Gemini: ${geminiRes.status} ${geminiRes.statusText}. Verifique se a chave de API é válida.`,
-          },
-          { status: 502 }
-        );
+      // Testa os modelos candidatos até encontrar um suportado
+      for (const modelName of candidateModels) {
+        try {
+          const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
+
+          const geminiRes = await fetch(geminiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(geminiPayload),
+          });
+
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json();
+            rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawText) {
+              // Sucesso com este modelo!
+              break;
+            }
+          } else {
+            const errorText = await geminiRes.text();
+            console.error(`Erro com modelo ${modelName}:`, errorText);
+            try {
+              const parsed = JSON.parse(errorText);
+              lastErrorDetail =
+                parsed?.error?.message || `${geminiRes.status} ${geminiRes.statusText}`;
+            } catch {
+              lastErrorDetail = `${geminiRes.status} ${geminiRes.statusText}`;
+            }
+            // Se for 404, continua o loop para testar o próximo modelo
+            if (geminiRes.status === 404) {
+              continue;
+            } else {
+              // Outro erro (ex: quota ou chave inválida)
+              break;
+            }
+          }
+        } catch (fetchErr: any) {
+          lastErrorDetail = fetchErr.message || 'Erro de rede ao conectar com a Google API';
+        }
       }
-
-      const geminiData = await geminiRes.json();
-      const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!rawText) {
         return NextResponse.json(
-          { error: 'RESPOSTA_VAZIA', message: 'A IA não retornou dados para a imagem enviada.' },
-          { status: 500 }
+          {
+            error: 'FALHA_GEMINI',
+            message: `Erro ao comunicar com a IA do Gemini: ${lastErrorDetail}. Verifique se a sua chave do Google AI Studio está ativa e possui permissão para gerar conteúdo.`,
+          },
+          { status: 502 }
         );
       }
 
