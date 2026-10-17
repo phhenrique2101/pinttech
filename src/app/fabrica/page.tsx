@@ -386,13 +386,26 @@ export default function FabricaChaoDeFabricaPage() {
     } catch {}
   };
 
-  const formatGravityDisplay = (sgVal: number | null | undefined, unit: 'SG' | 'BRIX' = measurementUnit) => {
+  const formatGravityPrimary = (sgVal: number | null | undefined, unit: 'SG' | 'BRIX' = measurementUnit) => {
     if (!sgVal || isNaN(sgVal) || sgVal <= 0) return '—';
-    const brix = Math.round(sgToBrix(sgVal) * 10) / 10;
     if (unit === 'BRIX') {
-      return `${brix.toFixed(1)} °Bx (${sgVal.toFixed(3)})`;
+      const brix = Math.round(sgToBrix(sgVal) * 10) / 10;
+      return `${brix.toFixed(1)}°Bx`;
     }
-    return `${sgVal.toFixed(3)} (${brix.toFixed(1)} °Bx)`;
+    return sgVal.toFixed(3);
+  };
+
+  const formatGravitySecondary = (sgVal: number | null | undefined, unit: 'SG' | 'BRIX' = measurementUnit) => {
+    if (!sgVal || isNaN(sgVal) || sgVal <= 0) return null;
+    if (unit === 'BRIX') {
+      return `${sgVal.toFixed(3)} SG`;
+    }
+    const brix = Math.round(sgToBrix(sgVal) * 10) / 10;
+    return `${brix.toFixed(1)}°Bx`;
+  };
+
+  const formatGravityDisplay = (sgVal: number | null | undefined, unit: 'SG' | 'BRIX' = measurementUnit) => {
+    return formatGravityPrimary(sgVal, unit);
   };
 
   const getBatchOg = (batch: any): number | null => {
@@ -1590,8 +1603,8 @@ export default function FabricaChaoDeFabricaPage() {
                               </span>
                             )}
                             {co2Alert && (
-                              <span className="px-3 py-1 rounded-xl bg-cyan-500 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md">
-                                <AlertCircle className="w-4 h-4 text-slate-950" />
+                              <span className="px-3 py-1 rounded-xl bg-sky-600 text-white font-black text-xs flex items-center gap-1.5 shadow-md">
+                                <AlertCircle className="w-4 h-4 text-white" />
                                 ⚠️ ALERTA: BATER CO2
                               </span>
                             )}
@@ -1639,7 +1652,7 @@ export default function FabricaChaoDeFabricaPage() {
                             onClick={(e) => handleToggleTankAlert(tank, 'CO2', e)}
                             className={`py-2 px-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow ${
                               co2Alert
-                                ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-md ring-2 ring-cyan-400/40'
+                                ? 'bg-sky-600 text-white border-sky-400 shadow-md ring-2 ring-sky-500/40'
                                 : 'bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-600'
                             }`}
                           >
@@ -1657,49 +1670,65 @@ export default function FabricaChaoDeFabricaPage() {
                               <span className="text-xs font-mono font-bold text-slate-300">#{batchNumber}</span>
                             </div>
 
-                            {/* PAINEL DE DENSIDADES E METAS COM ALTO CONTRASTE */}
-                            <div className="grid grid-cols-3 gap-2 bg-slate-950 p-3 rounded-2xl border-2 border-slate-800 text-center">
+                            {/* PAINEL DE DENSIDADES E METAS REFINADO */}
+                            <div className="grid grid-cols-3 gap-2 bg-slate-950/70 p-3 rounded-2xl border border-slate-800 text-center">
                               <div>
-                                <span className="block text-[11px] uppercase font-bold text-slate-300">OG Inicial</span>
-                                <span className="text-sm font-black text-white font-mono">
-                                  {m.og ? (measurementUnit === 'BRIX' ? `${(Math.round(sgToBrix(m.og) * 10) / 10).toFixed(1)}°Bx` : m.og.toFixed(3)) : '—'}
+                                <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">OG Inicial</span>
+                                <span className="text-sm font-black text-slate-100 font-mono block">
+                                  {m.og ? formatGravityPrimary(m.og) : '—'}
                                 </span>
+                                {m.og && (
+                                  <span className="text-[10px] text-slate-500 font-mono block">
+                                    {formatGravitySecondary(m.og)}
+                                  </span>
+                                )}
                               </div>
-                              <div className="border-x-2 border-slate-800">
-                                <span className="block text-[11px] uppercase font-bold text-amber-400">Meta FG</span>
-                                <span className="text-sm font-black text-amber-400 font-mono">
-                                  {m.targetFg ? (measurementUnit === 'BRIX' ? `${(Math.round(sgToBrix(m.targetFg) * 10) / 10).toFixed(1)}°Bx` : m.targetFg.toFixed(3)) : '—'}
+                              <div className="border-x border-slate-800/80">
+                                <span className="block text-[10px] uppercase font-bold text-amber-400/90 tracking-wider">Meta FG</span>
+                                <span className="text-sm font-black text-amber-400 font-mono block">
+                                  {m.targetFg ? formatGravityPrimary(m.targetFg) : '—'}
                                 </span>
+                                {m.targetFg && (
+                                  <span className="text-[10px] text-amber-500/70 font-mono block">
+                                    {formatGravitySecondary(m.targetFg)}
+                                  </span>
+                                )}
                               </div>
                               <div>
-                                <span className="block text-[11px] uppercase font-bold text-emerald-400">ABV Atual</span>
-                                <span className="text-sm font-black text-emerald-400 font-mono">
+                                <span className="block text-[10px] uppercase font-bold text-slate-300 tracking-wider">ABV Atual</span>
+                                <span className="text-sm font-black text-amber-400 font-mono block">
                                   {m.currentAbv ? `${m.currentAbv}%` : '—'}
                                 </span>
                                 {m.targetAbv && (
-                                  <span className="text-[10px] text-slate-400 block">Alvo: {m.targetAbv}%</span>
+                                  <span className="text-[10px] text-slate-500 block">Alvo: {m.targetAbv}%</span>
                                 )}
                               </div>
                             </div>
 
                             {/* BARRA DE PROGRESSO VISUAL DA FERMENTAÇÃO */}
                             {m.targetFg && m.og && (
-                              <div className="space-y-1 pt-0.5">
-                                <div className="flex justify-between text-xs font-bold text-slate-200">
-                                  <span>
-                                    {m.currentGravity
-                                      ? `Atual: ${m.currentGravity.toFixed(3)} SG (${(Math.round(sgToBrix(m.currentGravity) * 10) / 10).toFixed(1)} °Bx)`
-                                      : 'Sem medição'}
+                              <div className="space-y-1.5 pt-0.5">
+                                <div className="flex justify-between items-center text-xs font-semibold text-slate-300">
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="text-slate-400">Atual:</span>
+                                    <span className="font-mono font-bold text-white">
+                                      {m.currentGravity ? formatGravityPrimary(m.currentGravity) : '—'}
+                                    </span>
+                                    {m.currentGravity && (
+                                      <span className="text-[10px] text-slate-400 font-mono">
+                                        ({formatGravitySecondary(m.currentGravity)})
+                                      </span>
+                                    )}
                                   </span>
-                                  <span className="text-amber-300 font-black">
+                                  <span className="text-amber-400 font-bold text-[11px]">
                                     {m.pointsRemaining > 0
                                       ? `Faltam ${m.pointsRemaining} pts p/ FG`
-                                      : 'Meta FG Atingida! 🎉'}
+                                      : 'Meta FG Atingida 🎉'}
                                   </span>
                                 </div>
-                                <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                                <div className="w-full bg-slate-800/90 rounded-full h-2 overflow-hidden border border-slate-700/60">
                                   <div
-                                    className="bg-gradient-to-r from-amber-500 via-amber-400 to-emerald-400 h-2.5 rounded-full transition-all duration-500"
+                                    className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-400 h-2 rounded-full transition-all duration-500"
                                     style={{ width: `${m.progressPercent}%` }}
                                   />
                                 </div>
@@ -1764,7 +1793,7 @@ export default function FabricaChaoDeFabricaPage() {
                       onClick={() => handleToggleTankAlert(selectedTankForDetails, 'CO2')}
                       className={`py-3 rounded-2xl text-xs font-black border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow ${
                         hasCo2Alert(selectedTankForDetails)
-                          ? 'bg-cyan-500 text-slate-950 border-cyan-300 ring-2 ring-cyan-400/50'
+                          ? 'bg-sky-600 text-white border-sky-400 ring-2 ring-sky-500/50'
                           : 'bg-slate-800 text-slate-200 border-slate-600'
                       }`}
                     >
@@ -1799,44 +1828,59 @@ export default function FabricaChaoDeFabricaPage() {
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
-                            <span className="text-[11px] text-slate-300 uppercase font-bold block">OG Inicial</span>
-                            <span className="text-sm font-black text-white font-mono">
-                              {formatGravityDisplay(og)}
+                          <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block mb-1">OG Inicial</span>
+                            <span className="text-base font-black text-white font-mono block">
+                              {formatGravityPrimary(og)}
                             </span>
+                            {og && (
+                              <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
+                                {formatGravitySecondary(og)}
+                              </span>
+                            )}
                           </div>
 
-                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
-                            <span className="text-[11px] text-amber-400 uppercase font-bold block">Objetivo (Meta FG)</span>
-                            <span className="text-sm font-black text-amber-400 font-mono">
-                              {formatGravityDisplay(targetFg)}
+                          <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80">
+                            <span className="text-[10px] text-amber-400/90 uppercase font-bold tracking-wider block mb-1">Objetivo (Meta FG)</span>
+                            <span className="text-base font-black text-amber-400 font-mono block">
+                              {formatGravityPrimary(targetFg)}
                             </span>
+                            {targetFg && (
+                              <span className="text-[11px] text-amber-500/70 font-mono block mt-0.5">
+                                {formatGravitySecondary(targetFg)}
+                              </span>
+                            )}
                           </div>
 
-                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
-                            <span className="text-[11px] text-cyan-400 uppercase font-bold block">Densidade Atual</span>
-                            <span className="text-sm font-black text-cyan-300 font-mono">
-                              {curGrav ? formatGravityDisplay(curGrav) : 'Sem medição'}
+                          <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80">
+                            <span className="text-[10px] text-slate-300 uppercase font-bold tracking-wider block mb-1">Densidade Atual</span>
+                            <span className="text-base font-black text-white font-mono block">
+                              {curGrav ? formatGravityPrimary(curGrav) : 'Sem medição'}
                             </span>
+                            {curGrav && (
+                              <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
+                                {formatGravitySecondary(curGrav)}
+                              </span>
+                            )}
                           </div>
 
-                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
-                            <span className="text-[11px] text-emerald-400 uppercase font-bold block">Teor Alcoólico (ABV)</span>
-                            <span className="text-base font-black text-emerald-400 font-mono">
+                          <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80">
+                            <span className="text-[10px] text-slate-300 uppercase font-bold tracking-wider block mb-1">Teor Alcoólico (ABV)</span>
+                            <span className="text-base font-black text-amber-400 font-mono block">
                               {curAbv ? `${curAbv}%` : '—'}
                             </span>
                             {targetAbv && (
-                              <span className="text-[10px] text-slate-400 block font-medium">Meta: {targetAbv}%</span>
+                              <span className="text-[10px] text-slate-400 block font-medium mt-0.5">Meta: {targetAbv}%</span>
                             )}
                           </div>
                         </div>
 
                         {att !== null && (
                           <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                            <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                            <span className="text-slate-400 font-bold flex items-center gap-1.5">
                               <Activity className="w-3.5 h-3.5 text-amber-400" /> Atenuação Atual:
                             </span>
-                            <span className="font-mono font-black text-emerald-400">{att}%</span>
+                            <span className="font-mono font-black text-amber-400">{att}%</span>
                           </div>
                         )}
                       </div>
@@ -1915,27 +1959,31 @@ export default function FabricaChaoDeFabricaPage() {
 
                     {/* PRÉVIA EM TEMPO REAL DO TEOR ALCOÓLICO (ABV) */}
                     {liveMeasurementPreview && (
-                      <div className="bg-emerald-950/40 border-2 border-emerald-500/60 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2 shadow-lg animate-in fade-in">
-                        <div className="flex items-center gap-2.5">
-                          <Sparkles className="w-5 h-5 text-emerald-400 flex-shrink-0 animate-pulse" />
+                      <div className="bg-slate-800/90 border border-amber-500/30 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md animate-in fade-in">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                            <Activity className="w-4 h-4 text-amber-400" />
+                          </div>
                           <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block">
-                              Prévia em Tempo Real:
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                              Resultado Calculado
                             </span>
-                            <span className="text-sm font-black text-white">
-                              Teor Alcoólico:{' '}
-                              <strong className="text-emerald-400 font-mono text-base">
-                                {liveMeasurementPreview.abv}% ABV
-                              </strong>
-                              <span className="text-slate-300 font-normal ml-2">
-                                | Atenuação: <strong className="text-white font-mono">{liveMeasurementPreview.att}%</strong>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-base font-black text-white font-mono">
+                                {liveMeasurementPreview.abv}% <span className="text-xs font-bold text-amber-400">ABV</span>
                               </span>
-                            </span>
+                              <span className="text-xs text-slate-400 font-medium">
+                                • {liveMeasurementPreview.att}% atenuação
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-1 rounded-xl border border-emerald-500/40">
-                          {liveMeasurementPreview.sg.toFixed(3)} SG / {liveMeasurementPreview.brix.toFixed(1)} °Bx
-                        </span>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block">Equivalência</span>
+                          <span className="text-xs font-mono font-bold text-slate-300 bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-700/80 inline-block">
+                            {liveMeasurementPreview.sg.toFixed(3)} SG / {liveMeasurementPreview.brix.toFixed(1)}°Bx
+                          </span>
+                        </div>
                       </div>
                     )}
 
@@ -1981,12 +2029,12 @@ export default function FabricaChaoDeFabricaPage() {
                           const origIndex = logs.length - 1 - rIdx;
                           const logSg = log.gravity;
                           const logAbv = log.abv ?? (og && logSg && og > logSg ? Math.round(calculateAbv(og, logSg) * 10) / 10 : null);
-                          const brixVal = log.rawInputBrix ? `${log.rawInputBrix.toFixed(1)} °Bx` : logSg ? `${(Math.round(sgToBrix(logSg) * 10) / 10).toFixed(1)} °Bx` : '—';
+                          const secVal = formatGravitySecondary(logSg);
 
                           return (
                             <div
                               key={log.id || origIndex}
-                              className="bg-slate-800/80 border border-slate-700 p-3 rounded-2xl flex items-center justify-between gap-3 text-xs"
+                              className="bg-slate-800/80 border border-slate-700/80 p-3 rounded-2xl flex items-center justify-between gap-3 text-xs"
                             >
                               <div className="space-y-0.5">
                                 <div className="flex items-center gap-2">
@@ -1999,13 +2047,16 @@ export default function FabricaChaoDeFabricaPage() {
                                     </span>
                                   )}
                                   {log.ph !== undefined && log.ph !== null && (
-                                    <span className="font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20">
+                                    <span className="font-bold text-slate-300 bg-slate-700/60 px-2 py-0.5 rounded-lg border border-slate-600">
                                       pH {log.ph}
                                     </span>
                                   )}
                                 </div>
-                                <div className="text-slate-300 font-mono text-[11px]">
-                                  {logSg ? `${logSg.toFixed(3)} SG` : '—'} ({brixVal})
+                                <div className="text-slate-300 font-mono text-xs flex items-center gap-1.5">
+                                  <span>{logSg ? formatGravityPrimary(logSg) : '—'}</span>
+                                  {secVal && (
+                                    <span className="text-slate-500 text-[11px]">({secVal})</span>
+                                  )}
                                 </div>
                               </div>
 
@@ -2013,7 +2064,7 @@ export default function FabricaChaoDeFabricaPage() {
                                 {logAbv !== null && logAbv !== undefined && (
                                   <div className="text-right">
                                     <span className="text-[10px] text-slate-400 uppercase font-bold block">ABV</span>
-                                    <span className="text-sm font-black text-emerald-400 font-mono">
+                                    <span className="text-sm font-black text-amber-400 font-mono">
                                       {logAbv}%
                                     </span>
                                   </div>
@@ -2191,9 +2242,9 @@ export default function FabricaChaoDeFabricaPage() {
                           {tasks.map((task, idx) => (
                             <div
                               key={idx}
-                              className={`w-full p-4 rounded-2xl border-2 flex flex-col gap-2 transition-all ${
+                              className={`w-full p-4 rounded-2xl border flex flex-col gap-2 transition-all ${
                                 task.completed
-                                  ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-200'
+                                  ? 'bg-slate-800/80 border-emerald-500/30 text-emerald-300'
                                   : 'bg-slate-800/90 border-slate-700 text-white'
                               }`}
                             >
@@ -2419,16 +2470,16 @@ export default function FabricaChaoDeFabricaPage() {
                     </span>
 
                     {[
-                      { key: 'FERMENTANDO', label: 'Fermentando', badgeColor: 'bg-amber-500 text-slate-950', desc: 'Fermentação ativa no tanque com controle de temperatura' },
-                      { key: 'MATURANDO', label: 'Maturando', badgeColor: 'bg-purple-500 text-white', desc: 'Cold crash, descanso diacetil ou maturação a frio' },
-                      { key: 'PRONTO_ENVASE', label: 'Pronto p/ Envase', badgeColor: 'bg-emerald-500 text-slate-950', desc: 'Cerveja finalizada, carbonatada e pronta para barril/lata' },
-                      { key: 'BRASSAGEM', label: 'Brassagem', badgeColor: 'bg-orange-500 text-white', desc: 'Lote recém brassado / transferindo para tanque' },
-                      { key: 'ENVASADO', label: 'Envasado', badgeColor: 'bg-blue-500 text-white', desc: 'Lote já envasado em barris / garrafas' },
-                      { key: 'HIGIENIZANDO', label: 'Higienizando / CIP', badgeColor: 'bg-cyan-500 text-slate-950', desc: 'Tanque em processo de lavagem ou sanitização' },
-                      { key: 'MANUTENCAO', label: 'Manutenção', badgeColor: 'bg-rose-500 text-white', desc: 'Válvula, vedação ou camisa em manutenção' },
-                      { key: 'LIVRE', label: 'Livre / Disponível', badgeColor: 'bg-slate-700 text-slate-200', desc: 'Tanque limpo e vazio pronto para nova brassagem' },
+                      { key: 'FERMENTANDO', label: 'Fermentando', badgeClass: 'bg-amber-500/15 text-amber-300 border border-amber-500/40', desc: 'Fermentação ativa no tanque com controle de temperatura' },
+                      { key: 'MATURANDO', label: 'Maturando', badgeClass: 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40', desc: 'Cold crash, descanso diacetil ou maturação a frio' },
+                      { key: 'PRONTO_ENVASE', label: 'Pronto p/ Envase', badgeClass: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40', desc: 'Cerveja finalizada, carbonatada e pronta para barril/lata' },
+                      { key: 'BRASSAGEM', label: 'Brassagem', badgeClass: 'bg-amber-600/15 text-amber-200 border border-amber-600/40', desc: 'Lote recém brassado / transferindo para tanque' },
+                      { key: 'ENVASADO', label: 'Envasado', badgeClass: 'bg-slate-700/50 text-slate-300 border border-slate-600', desc: 'Lote já envasado em barris / garrafas' },
+                      { key: 'HIGIENIZANDO', label: 'Higienizando / CIP', badgeClass: 'bg-sky-500/15 text-sky-300 border border-sky-500/40', desc: 'Tanque em processo de lavagem ou sanitização' },
+                      { key: 'MANUTENCAO', label: 'Manutenção', badgeClass: 'bg-rose-500/15 text-rose-300 border border-rose-500/40', desc: 'Válvula, vedação ou camisa em manutenção' },
+                      { key: 'LIVRE', label: 'Livre / Disponível', badgeClass: 'bg-slate-800 text-slate-400 border border-slate-700', desc: 'Tanque limpo e vazio pronto para nova brassagem' },
                       ...(statusSelectTank.activeBatch ? [
-                        { key: 'FINALIZADO', label: 'Finalizado (Liberar Tanque)', badgeColor: 'bg-slate-600 text-white', desc: 'Conclui este lote e libera o tanque como LIVRE' },
+                        { key: 'FINALIZADO', label: 'Finalizado (Liberar Tanque)', badgeClass: 'bg-slate-800 text-slate-400 border border-slate-700', desc: 'Conclui este lote e libera o tanque como LIVRE' },
                       ] : []),
                     ].map((st) => {
                       const isCurrent = (statusSelectTank.activeBatch?.status || statusSelectTank.status) === st.key;
@@ -2438,15 +2489,15 @@ export default function FabricaChaoDeFabricaPage() {
                           type="button"
                           disabled={isUpdatingStatus}
                           onClick={() => handleChangeTankStatus(statusSelectTank, st.key)}
-                          className={`w-full p-3.5 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 active:scale-98 ${
+                          className={`w-full p-3.5 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 active:scale-98 ${
                             isCurrent
-                              ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/30'
-                              : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700'
+                              ? 'bg-amber-500/10 border-amber-400/80 ring-1 ring-amber-400/30 shadow-md'
+                              : 'bg-slate-800/70 hover:bg-slate-800 border-slate-700/80'
                           }`}
                         >
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg ${st.badgeColor}`}>
+                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-lg ${st.badgeClass}`}>
                                 {st.label}
                               </span>
                               {isCurrent && (
