@@ -1220,7 +1220,7 @@ export default function FabricaChaoDeFabricaPage() {
 
         <button
           onClick={() => loadInitialData()}
-          className="p-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl active:scale-90 transition-all border-2 border-slate-600 shadow"
+          className="p-2.5 bg-slate-700 hover:bg-slate-650 text-white rounded-xl active:scale-90 transition-all border-2 border-slate-500 shadow-md"
           title="Atualizar dados"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
@@ -1265,13 +1265,13 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
                 </div>
 
-                <div className="flex bg-slate-800 p-1 rounded-xl border-2 border-slate-700">
+                <div className="flex bg-slate-700 p-1.5 rounded-xl border-2 border-slate-500 shadow-inner">
                   <button
                     onClick={() => setEnvaseSourceType('BATCH')}
                     className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
                       envaseSourceType === 'BATCH'
                         ? 'bg-amber-500 text-slate-950 shadow-md'
-                        : 'text-slate-300 hover:text-white'
+                        : 'text-slate-200 hover:text-white'
                     }`}
                   >
                     Por Lote / TQ
@@ -1281,7 +1281,7 @@ export default function FabricaChaoDeFabricaPage() {
                     className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
                       envaseSourceType === 'QUICK'
                         ? 'bg-amber-500 text-slate-950 shadow-md'
-                        : 'text-slate-300 hover:text-white'
+                        : 'text-slate-200 hover:text-white'
                     }`}
                   >
                     Avulso
@@ -1291,13 +1291,13 @@ export default function FabricaChaoDeFabricaPage() {
 
               {envaseSourceType === 'BATCH' ? (
                 <div>
-                  <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase tracking-wide">
+                  <label className="block text-xs font-black text-slate-100 mb-1.5 uppercase tracking-wide">
                     Tanque / Lote em Linha:
                   </label>
                   <select
                     value={selectedBatchId}
                     onChange={(e) => setSelectedBatchId(e.target.value)}
-                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
+                    className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
                   >
                     <option value="">-- Selecione o Chopp / Tanque --</option>
                     {batches
@@ -1312,7 +1312,7 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase tracking-wide">
+                  <label className="block text-xs font-black text-slate-100 mb-1.5 uppercase tracking-wide">
                     Nome da Cerveja / Chopp:
                   </label>
                   <input
@@ -1320,19 +1320,19 @@ export default function FabricaChaoDeFabricaPage() {
                     value={quickBeerName}
                     onChange={(e) => setQuickBeerName(e.target.value)}
                     placeholder="Ex: IPA Galaxy, Pilsen Extra..."
-                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none"
+                    className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner placeholder:text-slate-300"
                   />
                 </div>
               )}
 
-              <div className="pt-2 border-t-2 border-slate-800 flex items-center justify-between">
+              <div className="pt-2 border-t-2 border-slate-700 flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setIsPartialFill(!isPartialFill)}
                   className={`flex items-center gap-2 text-xs font-black px-3.5 py-2.5 rounded-xl border-2 transition-all ${
                     isPartialFill
                       ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md'
-                      : 'bg-slate-800 text-slate-300 border-slate-600'
+                      : 'bg-slate-700 hover:bg-slate-650 text-white border-2 border-slate-500 shadow'
                   }`}
                 >
                   <Sliders className="w-4 h-4" />
@@ -1346,7 +1346,7 @@ export default function FabricaChaoDeFabricaPage() {
                       type="number"
                       value={customLiters}
                       onChange={(e) => setCustomLiters(e.target.value)}
-                      className="w-20 bg-slate-800 border-2 border-amber-400 rounded-xl px-2 py-1.5 text-base font-black text-center text-amber-400 outline-none"
+                      className="w-20 bg-slate-700 border-2 border-amber-400 rounded-xl px-2 py-1.5 text-base font-black text-center text-amber-300 outline-none shadow-inner"
                     />
                   </div>
                 )}
@@ -1477,22 +1477,22 @@ export default function FabricaChaoDeFabricaPage() {
                     value={newKegCode}
                     onChange={(e) => setNewKegCode(e.target.value.toUpperCase())}
                     placeholder="Ex: BAR-5001"
-                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-lg font-black text-white outline-none tracking-wider font-mono"
+                    className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-lg font-black text-white outline-none tracking-wider font-mono shadow-inner placeholder:text-slate-300"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-200 mb-2 uppercase">Capacidade:</label>
+                  <label className="block text-xs font-black text-slate-100 mb-2 uppercase">Capacidade:</label>
                   <div className="grid grid-cols-3 gap-2.5">
                     {[20, 30, 50].map((cap) => (
                       <button
                         key={cap}
                         type="button"
                         onClick={() => setNewKegCapacity(cap)}
-                        className={`py-3.5 rounded-2xl font-black text-lg border-2 transition-all active:scale-95 ${
+                        className={`py-3.5 rounded-2xl font-black text-lg border-2 transition-all active:scale-95 shadow ${
                           newKegCapacity === cap
                             ? 'bg-amber-500 border-amber-300 text-slate-950 shadow-lg scale-105'
-                            : 'bg-slate-800 border-slate-600 text-slate-200'
+                            : 'bg-slate-700 hover:bg-slate-650 border-slate-500 text-white'
                         }`}
                       >
                         {cap}L
@@ -1529,23 +1529,23 @@ export default function FabricaChaoDeFabricaPage() {
               <div className="bg-slate-900 border-2 border-blue-500 rounded-3xl p-5 shadow-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-black uppercase px-2.5 py-1 rounded-md bg-blue-500 text-white">
+                    <span className="text-xs font-black uppercase px-2.5 py-1 rounded-md bg-blue-500 text-white shadow">
                       Barril Encontrado
                     </span>
                     <h3 className="font-black text-2xl text-white font-mono mt-1">{kegLookupResult.code}</h3>
                   </div>
-                  <span className="text-base font-black px-4 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-slate-700">
+                  <span className="text-base font-black px-4 py-1.5 rounded-xl bg-slate-700 text-amber-300 border-2 border-slate-500 shadow-md">
                     {kegLookupResult.capacity} Litros
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5 text-xs pt-2 border-t-2 border-slate-800">
-                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                    <span className="text-slate-300 block text-xs font-bold uppercase">Status:</span>
-                    <span className="font-black text-base text-amber-400">{kegLookupResult.status}</span>
+                <div className="grid grid-cols-2 gap-2.5 text-xs pt-2 border-t-2 border-slate-700">
+                  <div className="bg-slate-700 p-3.5 rounded-xl border-2 border-slate-500 shadow-md">
+                    <span className="text-slate-200 block text-xs font-black uppercase">Status:</span>
+                    <span className="font-black text-base text-amber-300">{kegLookupResult.status}</span>
                   </div>
-                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                    <span className="text-slate-300 block text-xs font-bold uppercase">Chopp Atual:</span>
+                  <div className="bg-slate-700 p-3.5 rounded-xl border-2 border-slate-500 shadow-md">
+                    <span className="text-slate-200 block text-xs font-black uppercase">Chopp Atual:</span>
                     <span className="font-black text-base text-white">
                       {kegLookupResult.currentBeerName || 'Vazio / Nenhum'}
                     </span>
@@ -1623,7 +1623,7 @@ export default function FabricaChaoDeFabricaPage() {
                               setStatusSelectTank(tank);
                             }}
                             className={`text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 ${
-                              isOccupied ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 border border-slate-700'
+                              isOccupied ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-700 text-white border-2 border-slate-500 font-bold'
                             }`}
                             title="Clique para mudar o status do tanque / lote"
                           >
@@ -1637,10 +1637,10 @@ export default function FabricaChaoDeFabricaPage() {
                           <button
                             type="button"
                             onClick={(e) => handleToggleTankAlert(tank, 'PURGA', e)}
-                            className={`py-2 px-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow ${
+                            className={`py-2 px-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md ${
                               purgaAlert
-                                ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md ring-2 ring-amber-400/40'
-                                : 'bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-600'
+                                ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400/40'
+                                : 'bg-slate-700 hover:bg-slate-600 text-white border-slate-500'
                             }`}
                           >
                             <Wind className="w-4 h-4" />
@@ -1650,10 +1650,10 @@ export default function FabricaChaoDeFabricaPage() {
                           <button
                             type="button"
                             onClick={(e) => handleToggleTankAlert(tank, 'CO2', e)}
-                            className={`py-2 px-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow ${
+                            className={`py-2 px-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md ${
                               co2Alert
-                                ? 'bg-sky-600 text-white border-sky-400 shadow-md ring-2 ring-sky-500/40'
-                                : 'bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-600'
+                                ? 'bg-sky-600 text-white border-sky-400 ring-2 ring-sky-500/40'
+                                : 'bg-slate-700 hover:bg-slate-600 text-white border-slate-500'
                             }`}
                           >
                             <Droplet className="w-4 h-4" />
@@ -1662,7 +1662,7 @@ export default function FabricaChaoDeFabricaPage() {
                         </div>
 
                         {isOccupied ? (
-                          <div className="space-y-2 pt-2 border-t-2 border-slate-800">
+                          <div className="space-y-2 pt-2 border-t-2 border-slate-700">
                             <div className="flex items-center justify-between">
                               <div className="font-black text-base text-amber-300 truncate max-w-[210px]">
                                 {beerName}
@@ -1671,36 +1671,36 @@ export default function FabricaChaoDeFabricaPage() {
                             </div>
 
                             {/* PAINEL DE DENSIDADES E METAS COM ALTO CONTRASTE */}
-                            <div className="grid grid-cols-3 gap-2 bg-slate-800 p-3 rounded-2xl border-2 border-slate-700 text-center shadow-inner">
+                            <div className="grid grid-cols-3 gap-2 bg-slate-700/90 p-3 rounded-2xl border-2 border-slate-500 text-center shadow-md">
                               <div>
-                                <span className="block text-xs uppercase font-black text-slate-200 tracking-wider">OG Inicial</span>
+                                <span className="block text-xs uppercase font-black text-slate-100 tracking-wider">OG Inicial</span>
                                 <span className="text-base font-black text-white font-mono block mt-0.5">
                                   {m.og ? formatGravityPrimary(m.og) : '—'}
                                 </span>
                                 {m.og && (
-                                  <span className="inline-block text-[11px] font-bold text-slate-200 bg-slate-700/90 px-1.5 py-0.5 rounded border border-slate-600 font-mono mt-1">
+                                  <span className="inline-block text-[11px] font-bold text-white bg-slate-600 px-2 py-0.5 rounded border border-slate-400 font-mono mt-1 shadow-sm">
                                     {formatGravitySecondary(m.og)}
                                   </span>
                                 )}
                               </div>
-                              <div className="border-x-2 border-slate-700 px-1">
-                                <span className="block text-xs uppercase font-black text-amber-400 tracking-wider">Meta FG</span>
+                              <div className="border-x-2 border-slate-500 px-1">
+                                <span className="block text-xs uppercase font-black text-amber-300 tracking-wider">Meta FG</span>
                                 <span className="text-base font-black text-amber-400 font-mono block mt-0.5">
                                   {m.targetFg ? formatGravityPrimary(m.targetFg) : '—'}
                                 </span>
                                 {m.targetFg && (
-                                  <span className="inline-block text-[11px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30 font-mono mt-1">
+                                  <span className="inline-block text-[11px] font-bold text-amber-200 bg-amber-500/30 px-2 py-0.5 rounded border border-amber-400/50 font-mono mt-1 shadow-sm">
                                     {formatGravitySecondary(m.targetFg)}
                                   </span>
                                 )}
                               </div>
                               <div>
-                                <span className="block text-xs uppercase font-black text-emerald-400 tracking-wider">ABV Atual</span>
+                                <span className="block text-xs uppercase font-black text-emerald-300 tracking-wider">ABV Atual</span>
                                 <span className="text-base font-black text-emerald-400 font-mono block mt-0.5">
                                   {m.currentAbv ? `${m.currentAbv}%` : '—'}
                                 </span>
                                 {m.targetAbv && (
-                                  <span className="inline-block text-[11px] font-bold text-slate-200 bg-slate-700/90 px-1.5 py-0.5 rounded border border-slate-600 mt-1">
+                                  <span className="inline-block text-[11px] font-bold text-white bg-slate-600 px-2 py-0.5 rounded border border-slate-400 mt-1 shadow-sm">
                                     Alvo: {m.targetAbv}%
                                   </span>
                                 )}
@@ -1712,12 +1712,12 @@ export default function FabricaChaoDeFabricaPage() {
                               <div className="space-y-1.5 pt-0.5">
                                 <div className="flex justify-between items-center text-xs font-bold text-white">
                                   <span className="flex items-center gap-1.5">
-                                    <span className="text-slate-300">Atual:</span>
+                                    <span className="text-slate-200">Atual:</span>
                                     <span className="font-mono font-black text-white text-sm">
                                       {m.currentGravity ? formatGravityPrimary(m.currentGravity) : '—'}
                                     </span>
                                     {m.currentGravity && (
-                                      <span className="text-[11px] text-slate-200 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 font-mono">
+                                      <span className="text-[11px] text-white bg-slate-700 px-2 py-0.5 rounded border border-slate-500 font-mono">
                                         {formatGravitySecondary(m.currentGravity)}
                                       </span>
                                     )}
@@ -1728,7 +1728,7 @@ export default function FabricaChaoDeFabricaPage() {
                                       : 'Meta FG Atingida 🎉'}
                                   </span>
                                 </div>
-                                <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden border-2 border-slate-700">
+                                <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden border-2 border-slate-500">
                                   <div
                                     className="bg-gradient-to-r from-amber-500 via-amber-400 to-emerald-400 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${m.progressPercent}%` }}
@@ -1776,14 +1776,14 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
 
                   {/* SINALIZADORES DE ALERTA NO DETALHE */}
-                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t-2 border-slate-800">
+                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t-2 border-slate-700">
                     <button
                       type="button"
                       onClick={() => handleToggleTankAlert(selectedTankForDetails, 'PURGA')}
-                      className={`py-3 rounded-2xl text-xs font-black border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow ${
+                      className={`py-3 rounded-2xl text-xs font-black border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md ${
                         hasPurgaAlert(selectedTankForDetails)
                           ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400/50'
-                          : 'bg-slate-800 text-slate-200 border-slate-600'
+                          : 'bg-slate-700 hover:bg-slate-600 text-white border-2 border-slate-500'
                       }`}
                     >
                       <Wind className="w-5 h-5" />
@@ -1793,10 +1793,10 @@ export default function FabricaChaoDeFabricaPage() {
                     <button
                       type="button"
                       onClick={() => handleToggleTankAlert(selectedTankForDetails, 'CO2')}
-                      className={`py-3 rounded-2xl text-xs font-black border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow ${
+                      className={`py-3 rounded-2xl text-xs font-black border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md ${
                         hasCo2Alert(selectedTankForDetails)
                           ? 'bg-sky-600 text-white border-sky-400 ring-2 ring-sky-500/50'
-                          : 'bg-slate-800 text-slate-200 border-slate-600'
+                          : 'bg-slate-700 hover:bg-slate-600 text-white border-2 border-slate-500'
                       }`}
                     >
                       <Droplet className="w-5 h-5" />
@@ -1814,7 +1814,7 @@ export default function FabricaChaoDeFabricaPage() {
                     const att = og && curGrav && og > curGrav ? Math.round(((og - curGrav) / (og - 1.0)) * 100) : null;
 
                     return (
-                      <div className="space-y-3 pt-2 border-t-2 border-slate-800">
+                      <div className="space-y-3 pt-2 border-t-2 border-slate-700">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
                             <Target className="w-4 h-4" /> Parâmetros & Metas do Lote
@@ -1822,7 +1822,7 @@ export default function FabricaChaoDeFabricaPage() {
                           <button
                             type="button"
                             onClick={() => openEditTargetsModal(batch)}
-                            className="flex items-center gap-1.5 text-xs font-black text-amber-400 bg-amber-500/15 hover:bg-amber-500/25 px-3 py-1.5 rounded-xl border border-amber-500/30 active:scale-95 transition-all shadow-sm"
+                            className="flex items-center gap-1.5 text-xs font-black text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 rounded-xl border border-amber-400 active:scale-95 transition-all shadow-sm"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                             Editar OG / Meta FG
@@ -1830,49 +1830,49 @@ export default function FabricaChaoDeFabricaPage() {
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                          <div className="bg-slate-800 p-3.5 rounded-2xl border-2 border-slate-600 shadow-md">
-                            <span className="text-xs text-slate-200 uppercase font-black tracking-wider block mb-1">OG Inicial</span>
+                          <div className="bg-slate-700/90 p-3.5 rounded-2xl border-2 border-slate-500 shadow-md">
+                            <span className="text-xs text-slate-100 uppercase font-black tracking-wider block mb-1">OG Inicial</span>
                             <span className="text-xl font-black text-white font-mono block">
                               {formatGravityPrimary(og)}
                             </span>
                             {og && (
-                              <span className="inline-block text-xs font-bold text-slate-200 bg-slate-700 px-2 py-0.5 rounded-lg font-mono mt-1.5 border border-slate-600">
+                              <span className="inline-block text-xs font-bold text-white bg-slate-600 px-2.5 py-0.5 rounded-lg font-mono mt-1.5 border border-slate-400 shadow-sm">
                                 {formatGravitySecondary(og)}
                               </span>
                             )}
                           </div>
 
-                          <div className="bg-slate-800 p-3.5 rounded-2xl border-2 border-amber-500/60 shadow-md">
+                          <div className="bg-slate-700/90 p-3.5 rounded-2xl border-2 border-amber-400 shadow-md">
                             <span className="text-xs text-amber-300 uppercase font-black tracking-wider block mb-1">Objetivo (Meta FG)</span>
-                            <span className="text-xl font-black text-amber-400 font-mono block">
+                            <span className="text-xl font-black text-amber-300 font-mono block">
                               {formatGravityPrimary(targetFg)}
                             </span>
                             {targetFg && (
-                              <span className="inline-block text-xs font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-lg font-mono mt-1.5 border border-amber-500/40">
+                              <span className="inline-block text-xs font-bold text-amber-200 bg-amber-500/30 px-2.5 py-0.5 rounded-lg font-mono mt-1.5 border border-amber-400/60 shadow-sm">
                                 {formatGravitySecondary(targetFg)}
                               </span>
                             )}
                           </div>
 
-                          <div className="bg-slate-800 p-3.5 rounded-2xl border-2 border-slate-600 shadow-md">
-                            <span className="text-xs text-slate-200 uppercase font-black tracking-wider block mb-1">Densidade Atual</span>
+                          <div className="bg-slate-700/90 p-3.5 rounded-2xl border-2 border-slate-500 shadow-md">
+                            <span className="text-xs text-slate-100 uppercase font-black tracking-wider block mb-1">Densidade Atual</span>
                             <span className="text-xl font-black text-white font-mono block">
                               {curGrav ? formatGravityPrimary(curGrav) : 'Sem medição'}
                             </span>
                             {curGrav && (
-                              <span className="inline-block text-xs font-bold text-slate-200 bg-slate-700 px-2 py-0.5 rounded-lg font-mono mt-1.5 border border-slate-600">
+                              <span className="inline-block text-xs font-bold text-white bg-slate-600 px-2.5 py-0.5 rounded-lg font-mono mt-1.5 border border-slate-400 shadow-sm">
                                 {formatGravitySecondary(curGrav)}
                               </span>
                             )}
                           </div>
 
-                          <div className="bg-slate-800 p-3.5 rounded-2xl border-2 border-emerald-500/60 shadow-md">
+                          <div className="bg-slate-700/90 p-3.5 rounded-2xl border-2 border-emerald-400 shadow-md">
                             <span className="text-xs text-emerald-300 uppercase font-black tracking-wider block mb-1">Teor Alcoólico</span>
                             <span className="text-xl font-black text-emerald-400 font-mono block">
                               {curAbv ? `${curAbv}% ABV` : '—'}
                             </span>
                             {targetAbv && (
-                              <span className="inline-block text-xs font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-lg font-mono mt-1.5 border border-emerald-500/40">
+                              <span className="inline-block text-xs font-bold text-emerald-200 bg-emerald-600/40 px-2.5 py-0.5 rounded-lg font-mono mt-1.5 border border-emerald-400/60 shadow-sm">
                                 Meta: {targetAbv}%
                               </span>
                             )}
@@ -1880,11 +1880,11 @@ export default function FabricaChaoDeFabricaPage() {
                         </div>
 
                         {att !== null && (
-                          <div className="bg-slate-800 p-3 rounded-2xl border-2 border-slate-700 flex items-center justify-between text-sm shadow">
-                            <span className="text-white font-bold flex items-center gap-2">
+                          <div className="bg-slate-700/90 p-3.5 rounded-2xl border-2 border-slate-500 flex items-center justify-between text-sm shadow-md">
+                            <span className="text-white font-black flex items-center gap-2">
                               <Activity className="w-4 h-4 text-amber-400" /> Atenuação Atual:
                             </span>
-                            <span className="font-mono font-black text-base text-amber-400 bg-slate-750 px-3 py-0.5 rounded-xl border border-slate-600">{att}%</span>
+                            <span className="font-mono font-black text-base text-amber-300 bg-slate-600 px-3.5 py-1 rounded-xl border border-slate-400 shadow-sm">{att}%</span>
                           </div>
                         )}
                       </div>
@@ -1900,12 +1900,12 @@ export default function FabricaChaoDeFabricaPage() {
                         <Activity className="w-5 h-5 text-amber-400" />
                         Registrar Medição do Dia
                       </h4>
-                      <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                      <div className="flex bg-slate-700 p-1.5 rounded-xl border-2 border-slate-500 shadow-inner">
                         <button
                           type="button"
                           onClick={() => handleMeasurementUnitChange('SG')}
-                          className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
-                            measurementUnit === 'SG' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-300'
+                          className={`px-3.5 py-1 text-xs font-black rounded-lg transition-all ${
+                            measurementUnit === 'SG' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
                           }`}
                         >
                           SG
@@ -1913,8 +1913,8 @@ export default function FabricaChaoDeFabricaPage() {
                         <button
                           type="button"
                           onClick={() => handleMeasurementUnitChange('BRIX')}
-                          className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
-                            measurementUnit === 'BRIX' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-300'
+                          className={`px-3.5 py-1 text-xs font-black rounded-lg transition-all ${
+                            measurementUnit === 'BRIX' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
                           }`}
                         >
                           Brix
@@ -1924,7 +1924,7 @@ export default function FabricaChaoDeFabricaPage() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-200 mb-1">
+                        <label className="block text-xs font-black text-slate-100 mb-1.5">
                           {measurementUnit === 'SG' ? 'Densidade (SG):' : 'Leitura Refratômetro (°Bx):'}
                         </label>
                         <input
@@ -1932,12 +1932,12 @@ export default function FabricaChaoDeFabricaPage() {
                           value={measurementGravityInput}
                           onChange={(e) => setMeasurementGravityInput(e.target.value)}
                           placeholder={measurementUnit === 'SG' ? '1.020' : '7.5'}
-                          className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                          className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300 placeholder:font-bold"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-200 mb-1">
+                        <label className="block text-xs font-black text-slate-100 mb-1.5">
                           Temperatura (°C):
                         </label>
                         <input
@@ -1945,46 +1945,46 @@ export default function FabricaChaoDeFabricaPage() {
                           value={measurementTemp}
                           onChange={(e) => setMeasurementTemp(e.target.value)}
                           placeholder="18.5"
-                          className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                          className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300 placeholder:font-bold"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1">pH (Opcional):</label>
+                      <label className="block text-xs font-black text-slate-100 mb-1.5">pH (Opcional):</label>
                       <input
                         type="text"
                         value={measurementPh}
                         onChange={(e) => setMeasurementPh(e.target.value)}
                         placeholder="Ex: 4.4"
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-sm font-bold text-white text-center outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300 placeholder:font-bold"
                       />
                     </div>
 
                     {/* PRÉVIA EM TEMPO REAL DO TEOR ALCOÓLICO (ABV) COM ALTO CONTRASTE */}
                     {liveMeasurementPreview && (
-                      <div className="bg-slate-800 border-2 border-amber-500/60 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg animate-in fade-in">
+                      <div className="bg-slate-700/95 border-2 border-amber-400 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-xl animate-in fade-in">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border-2 border-amber-500/40 flex items-center justify-center flex-shrink-0">
-                            <Activity className="w-5 h-5 text-amber-400" />
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/30 border-2 border-amber-400 flex items-center justify-center flex-shrink-0 shadow">
+                            <Activity className="w-5 h-5 text-amber-300" />
                           </div>
                           <div>
                             <span className="text-xs font-black uppercase tracking-wider text-amber-300 block">
                               Cálculo em Tempo Real
                             </span>
                             <div className="flex items-baseline gap-2 mt-0.5">
-                              <span className="text-xl font-black text-white font-mono">
-                                {liveMeasurementPreview.abv}% <span className="text-sm font-black text-amber-400">ABV</span>
+                              <span className="text-2xl font-black text-white font-mono">
+                                {liveMeasurementPreview.abv}% <span className="text-sm font-black text-amber-300">ABV</span>
                               </span>
-                              <span className="text-xs font-bold text-slate-200">
+                              <span className="text-xs font-black text-slate-100">
                                 • {liveMeasurementPreview.att}% atenuação
                               </span>
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className="text-xs text-slate-300 uppercase font-black block mb-1">Equivalência</span>
-                          <span className="text-xs font-mono font-bold text-white bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-600 inline-block shadow-sm">
+                          <span className="text-xs text-slate-200 uppercase font-black block mb-1">Equivalência</span>
+                          <span className="text-xs font-mono font-black text-white bg-slate-600 px-3 py-1.5 rounded-xl border border-slate-400 inline-block shadow-md">
                             {liveMeasurementPreview.sg.toFixed(3)} SG = {liveMeasurementPreview.brix.toFixed(1)}°Bx
                           </span>
                         </div>
@@ -2028,7 +2028,7 @@ export default function FabricaChaoDeFabricaPage() {
                         </span>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-2.5">
                         {logs.slice().reverse().map((log: any, rIdx: number) => {
                           const origIndex = logs.length - 1 - rIdx;
                           const logSg = log.gravity;
@@ -2038,28 +2038,28 @@ export default function FabricaChaoDeFabricaPage() {
                           return (
                             <div
                               key={log.id || origIndex}
-                              className="bg-slate-800 border-2 border-slate-700 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-sm"
+                              className="bg-slate-700/90 border-2 border-slate-500 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-md"
                             >
                               <div className="space-y-1.5">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-black text-white text-sm">
+                                  <span className="font-black text-white text-base">
                                     {formatDateShort(log.date)}
                                   </span>
                                   {log.tempCelsius !== undefined && (
-                                    <span className="font-black text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-lg border border-amber-500/40 text-xs">
+                                    <span className="font-black text-amber-200 bg-amber-500/30 px-2.5 py-0.5 rounded-lg border border-amber-400 text-xs shadow-sm">
                                       {log.tempCelsius}°C
                                     </span>
                                   )}
                                   {log.ph !== undefined && log.ph !== null && (
-                                    <span className="font-black text-slate-100 bg-slate-700 px-2.5 py-0.5 rounded-lg border border-slate-600 text-xs">
+                                    <span className="font-black text-white bg-slate-600 px-2.5 py-0.5 rounded-lg border border-slate-400 text-xs shadow-sm">
                                       pH {log.ph}
                                     </span>
                                   )}
                                 </div>
                                 <div className="text-white font-mono text-sm flex items-center gap-2">
-                                  <span className="font-black">{logSg ? formatGravityPrimary(logSg) : '—'}</span>
+                                  <span className="font-black text-base">{logSg ? formatGravityPrimary(logSg) : '—'}</span>
                                   {secVal && (
-                                    <span className="text-xs font-bold text-slate-200 bg-slate-700 px-2 py-0.5 rounded border border-slate-600">
+                                    <span className="text-xs font-black text-white bg-slate-600 px-2.5 py-0.5 rounded-lg border border-slate-400 shadow-sm">
                                       {secVal}
                                     </span>
                                   )}
@@ -2068,9 +2068,9 @@ export default function FabricaChaoDeFabricaPage() {
 
                               <div className="flex items-center gap-3">
                                 {logAbv !== null && logAbv !== undefined && (
-                                  <div className="text-right bg-slate-700/80 px-3 py-1.5 rounded-xl border border-slate-600">
+                                  <div className="text-right bg-slate-600 px-3.5 py-1.5 rounded-xl border-2 border-slate-400 shadow-sm">
                                     <span className="text-xs text-slate-200 uppercase font-black block">ABV</span>
-                                    <span className="text-base font-black text-amber-400 font-mono">
+                                    <span className="text-lg font-black text-amber-300 font-mono">
                                       {logAbv}%
                                     </span>
                                   </div>
@@ -2079,7 +2079,7 @@ export default function FabricaChaoDeFabricaPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteMeasurementLog(origIndex)}
-                                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
+                                  className="p-2.5 text-slate-300 hover:text-red-400 hover:bg-red-500/20 rounded-xl transition-colors border border-slate-500 hover:border-red-400"
                                   title="Remover esta medição"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -2113,13 +2113,15 @@ export default function FabricaChaoDeFabricaPage() {
 
                     {/* MODAL / FORMULÁRIO DE ADICIONAR TAREFA NO APP */}
                     {isAddTaskModalOpen && (
-                      <div className="bg-slate-800 border-2 border-amber-500/60 rounded-2xl p-4 space-y-3 animate-in fade-in">
+                      <div className="bg-slate-700 border-2 border-amber-400 rounded-2xl p-5 space-y-3.5 shadow-xl animate-in fade-in">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-black text-amber-300">➕ Criar Nova Tarefa</span>
+                          <span className="text-sm font-black text-white flex items-center gap-2">
+                            <Plus className="w-4 h-4 text-amber-400" /> Criar Nova Tarefa
+                          </span>
                           <button
                             type="button"
                             onClick={() => setIsAddTaskModalOpen(false)}
-                            className="text-slate-400 hover:text-white"
+                            className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-600"
                           >
                             <X className="w-5 h-5" />
                           </button>
@@ -2139,7 +2141,7 @@ export default function FabricaChaoDeFabricaPage() {
                               key={chip}
                               type="button"
                               onClick={() => setNewTaskTitle(chip)}
-                              className="px-2.5 py-1 text-xs font-bold bg-slate-900 text-slate-200 hover:text-amber-400 rounded-lg border border-slate-700 active:scale-95"
+                              className="px-3 py-1.5 text-xs font-black bg-slate-600 hover:bg-amber-500 hover:text-slate-950 text-white rounded-xl border border-slate-400 shadow-sm active:scale-95 transition-all"
                             >
                               {chip}
                             </button>
@@ -2147,7 +2149,7 @@ export default function FabricaChaoDeFabricaPage() {
                         </div>
 
                         <div>
-                          <label className="block text-xs font-bold text-slate-200 mb-1">
+                          <label className="block text-xs font-black text-white mb-1">
                             Título da Tarefa:
                           </label>
                           <input
@@ -2155,19 +2157,19 @@ export default function FabricaChaoDeFabricaPage() {
                             value={newTaskTitle}
                             onChange={(e) => setNewTaskTitle(e.target.value)}
                             placeholder="Ex: Fazer Dry Hopping de 2kg de Citra"
-                            className="w-full bg-slate-900 border-2 border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none focus:border-amber-400"
+                            className="w-full bg-slate-600 border-2 border-slate-400 focus:border-amber-400 rounded-xl px-3.5 py-3 text-sm font-black text-white outline-none shadow-inner placeholder:text-slate-300"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-bold text-slate-200 mb-1">
+                          <label className="block text-xs font-black text-white mb-1">
                             Data Prevista:
                           </label>
                           <input
                             type="date"
                             value={newTaskDueDate}
                             onChange={(e) => setNewTaskDueDate(e.target.value)}
-                            className="w-full bg-slate-900 border-2 border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white outline-none focus:border-amber-400"
+                            className="w-full bg-slate-600 border-2 border-slate-400 focus:border-amber-400 rounded-xl px-3.5 py-3 text-sm font-black text-white outline-none shadow-inner"
                           />
                         </div>
 
@@ -2175,7 +2177,7 @@ export default function FabricaChaoDeFabricaPage() {
                           type="button"
                           onClick={handleAddNewTask}
                           disabled={isSavingNewTask || !newTaskTitle.trim()}
-                          className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                          className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5"
                         >
                           <Check className="w-5 h-5" />
                           Salvar Tarefa no Lote
@@ -2185,40 +2187,40 @@ export default function FabricaChaoDeFabricaPage() {
 
                     {/* MODAL / INPUT PARA EDITAR DATA DE REALIZAÇÃO RETROATIVA */}
                     {editingTaskIndex !== null && (
-                      <div className="bg-slate-800 border-2 border-emerald-500 rounded-2xl p-4 space-y-3 animate-in fade-in">
+                      <div className="bg-slate-700 border-2 border-emerald-400 rounded-2xl p-5 space-y-3.5 shadow-xl animate-in fade-in">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-black text-emerald-300">
+                          <span className="text-sm font-black text-white">
                             ✏️ Alterar Data de Realização
                           </span>
                           <button
                             type="button"
                             onClick={() => setEditingTaskIndex(null)}
-                            className="text-slate-400 hover:text-white"
+                            className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-600"
                           >
                             <X className="w-5 h-5" />
                           </button>
                         </div>
-                        <p className="text-xs text-slate-300">
+                        <p className="text-xs text-slate-100 font-medium">
                           Se você já havia feito este trabalho e esqueceu de anotar no dia, selecione a data real abaixo:
                         </p>
                         <input
                           type="date"
                           value={editCompletionDate}
                           onChange={(e) => setEditCompletionDate(e.target.value)}
-                          className="w-full bg-slate-900 border-2 border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none focus:border-emerald-500"
+                          className="w-full bg-slate-600 border-2 border-slate-400 focus:border-emerald-400 rounded-xl px-3.5 py-3 text-sm font-black text-white outline-none shadow-inner"
                         />
                         <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={handleSaveTaskCompletionDate}
-                            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all shadow"
+                            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all shadow-md"
                           >
                             Confirmar Data
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingTaskIndex(null)}
-                            className="px-4 py-2.5 bg-slate-700 text-slate-200 font-bold text-xs rounded-xl"
+                            className="px-4 py-3 bg-slate-600 hover:bg-slate-500 text-white font-bold text-xs rounded-xl border border-slate-400"
                           >
                             Cancelar
                           </button>
@@ -2237,7 +2239,7 @@ export default function FabricaChaoDeFabricaPage() {
 
                       if (tasks.length === 0) {
                         return (
-                          <p className="text-xs font-bold text-slate-400 italic py-2">
+                          <p className="text-xs font-bold text-slate-300 italic py-2">
                             Nenhuma tarefa cadastrada. Toque em &quot;Nova Tarefa&quot; acima para adicionar.
                           </p>
                         );
@@ -2248,13 +2250,13 @@ export default function FabricaChaoDeFabricaPage() {
                           {tasks.map((task, idx) => (
                             <div
                               key={idx}
-                              className={`w-full p-4 rounded-2xl border flex flex-col gap-2 transition-all ${
+                              className={`w-full p-4 rounded-2xl border-2 flex flex-col gap-2.5 transition-all shadow-md ${
                                 task.completed
-                                  ? 'bg-slate-800/80 border-emerald-500/30 text-emerald-300'
-                                  : 'bg-slate-800/90 border-slate-700 text-white'
+                                  ? 'bg-slate-700/90 border-emerald-500 text-white'
+                                  : 'bg-slate-700 border-slate-500 text-white hover:border-amber-400'
                               }`}
                             >
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-center justify-between gap-3">
                                 <button
                                   type="button"
                                   onClick={() => handleToggleTankTask(idx)}
@@ -2263,24 +2265,24 @@ export default function FabricaChaoDeFabricaPage() {
                                   {task.completed ? (
                                     <CheckSquare className="w-6 h-6 text-emerald-400 flex-shrink-0" />
                                   ) : (
-                                    <Square className="w-6 h-6 text-slate-400 flex-shrink-0" />
+                                    <Square className="w-6 h-6 text-slate-300 flex-shrink-0" />
                                   )}
                                   <div>
                                     <div
                                       className={`font-black text-base ${
-                                        task.completed ? 'line-through text-slate-400' : 'text-white'
+                                        task.completed ? 'text-emerald-200 line-through' : 'text-white'
                                       }`}
                                     >
                                       {task.title}
                                     </div>
-                                    <div className="text-xs font-bold text-slate-300">
+                                    <div className="text-xs font-bold text-slate-200 mt-0.5">
                                       Previsto: {formatDateShort(task.dueDate)}
                                     </div>
                                   </div>
                                 </button>
 
                                 <span
-                                  className={`text-xs font-black uppercase px-2.5 py-1 rounded-md ${
+                                  className={`text-xs font-black uppercase px-3 py-1 rounded-lg shadow-sm ${
                                     task.completed
                                       ? 'bg-emerald-500 text-slate-950 font-black'
                                       : 'bg-amber-500 text-slate-950 font-black'
@@ -2291,10 +2293,10 @@ export default function FabricaChaoDeFabricaPage() {
                               </div>
 
                               {task.completed && (
-                                <div className="flex items-center justify-between pt-2 border-t border-slate-700 text-xs text-slate-300">
+                                <div className="flex items-center justify-between pt-2.5 border-t border-slate-500 text-xs text-slate-200">
                                   <span>
                                     Realizado em:{' '}
-                                    <strong className="text-emerald-400 font-mono">
+                                    <strong className="text-emerald-300 font-mono font-bold text-sm">
                                       {formatDateShort(task.completedAt || task.dueDate)}
                                     </strong>
                                   </span>
@@ -2304,7 +2306,7 @@ export default function FabricaChaoDeFabricaPage() {
                                       setEditingTaskIndex(idx);
                                       setEditCompletionDate(task.completedAt || getLocalDateString());
                                     }}
-                                    className="flex items-center gap-1.5 text-xs font-black text-amber-300 hover:text-white bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-600"
+                                    className="flex items-center gap-1.5 text-xs font-black text-amber-300 hover:text-white bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-xl border border-slate-400 shadow-sm transition-all"
                                   >
                                     <Calendar className="w-3.5 h-3.5" />
                                     Mudar Data
@@ -2344,14 +2346,14 @@ export default function FabricaChaoDeFabricaPage() {
                   </p>
 
                   {/* SELETOR DE UNIDADE NO MODAL COM ALTO CONTRASTE */}
-                  <div className="flex items-center justify-between bg-slate-800 p-3 rounded-2xl border-2 border-slate-700">
+                  <div className="flex items-center justify-between bg-slate-700 p-3 rounded-2xl border-2 border-slate-500 shadow-md">
                     <span className="text-xs font-black text-white">Unidade para edição:</span>
-                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-600">
+                    <div className="flex bg-slate-600 p-1 rounded-xl border border-slate-400 shadow-inner">
                       <button
                         type="button"
                         onClick={() => handleEditTargetsUnitChange('SG')}
                         className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
-                          editTargetsUnit === 'SG' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-200'
+                          editTargetsUnit === 'SG' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
                         }`}
                       >
                         SG (1.xxx)
@@ -2360,7 +2362,7 @@ export default function FabricaChaoDeFabricaPage() {
                         type="button"
                         onClick={() => handleEditTargetsUnitChange('BRIX')}
                         className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
-                          editTargetsUnit === 'BRIX' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-200'
+                          editTargetsUnit === 'BRIX' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
                         }`}
                       >
                         Brix (°Bx)
@@ -2378,7 +2380,7 @@ export default function FabricaChaoDeFabricaPage() {
                         value={editOgInput}
                         onChange={(e) => setEditOgInput(e.target.value)}
                         placeholder={editTargetsUnit === 'SG' ? '1.050' : '12.4'}
-                        className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center outline-none shadow-inner"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
 
@@ -2391,7 +2393,7 @@ export default function FabricaChaoDeFabricaPage() {
                         value={editTargetFgInput}
                         onChange={(e) => setEditTargetFgInput(e.target.value)}
                         placeholder={editTargetsUnit === 'SG' ? '1.010' : '2.6'}
-                        className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-amber-400 text-center outline-none shadow-inner"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-amber-300 text-center outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
                   </div>
@@ -2409,12 +2411,12 @@ export default function FabricaChaoDeFabricaPage() {
                       const expAbv = Math.round(calculateAbv(ogNum, fgNum) * 10) / 10;
                       const expAtt = Math.round(((ogNum - fgNum) / (ogNum - 1.0)) * 100);
                       return (
-                        <div className="bg-slate-800 border-2 border-amber-500/60 rounded-2xl p-3.5 text-center space-y-1 shadow">
+                        <div className="bg-slate-700 border-2 border-amber-400 rounded-2xl p-4 text-center space-y-1 shadow-md">
                           <span className="text-xs font-black text-amber-300 block uppercase tracking-wider">
                             Previsão com estas metas:
                           </span>
                           <span className="text-sm font-black text-white">
-                            ABV Alvo: <strong className="text-amber-400 text-base font-mono">{expAbv}%</strong> | Atenuação Alvo: <strong className="text-white font-mono">{expAtt}%</strong>
+                            ABV Alvo: <strong className="text-amber-300 text-lg font-mono">{expAbv}%</strong> | Atenuação Alvo: <strong className="text-white text-lg font-mono">{expAtt}%</strong>
                           </span>
                         </div>
                       );
@@ -2426,7 +2428,7 @@ export default function FabricaChaoDeFabricaPage() {
                     <button
                       type="button"
                       onClick={() => setIsEditingTargetsOpen(false)}
-                      className="flex-1 py-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-sm rounded-2xl border border-slate-700 transition-all"
+                      className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-black text-sm rounded-2xl border-2 border-slate-500 transition-all shadow"
                     >
                       Cancelar
                     </button>
@@ -2447,7 +2449,7 @@ export default function FabricaChaoDeFabricaPage() {
             {/* MODAL: MUDAR STATUS DO TANQUE / LOTE */}
             {statusSelectTank && (
               <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+                <div className="bg-slate-900 border-2 border-amber-400 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-black text-lg text-white flex items-center gap-2">
@@ -2495,10 +2497,10 @@ export default function FabricaChaoDeFabricaPage() {
                           type="button"
                           disabled={isUpdatingStatus}
                           onClick={() => handleChangeTankStatus(statusSelectTank, st.key)}
-                          className={`w-full p-3.5 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 active:scale-98 ${
+                          className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 active:scale-98 shadow-md ${
                             isCurrent
-                              ? 'bg-slate-800 border-amber-400 ring-2 ring-amber-400/40 shadow-lg'
-                              : 'bg-slate-800 hover:bg-slate-750 border-slate-600'
+                              ? 'bg-slate-700 border-amber-400 ring-2 ring-amber-400/50 shadow-xl'
+                              : 'bg-slate-700 hover:bg-slate-650 border-slate-500 hover:border-slate-400'
                           }`}
                         >
                           <div>
@@ -2507,12 +2509,12 @@ export default function FabricaChaoDeFabricaPage() {
                                 {st.label}
                               </span>
                               {isCurrent && (
-                                <span className="text-xs font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">✓ Atual</span>
+                                <span className="text-xs font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-400">✓ Atual</span>
                               )}
                             </div>
-                            <span className="text-xs text-slate-200 font-medium block mt-1.5">{st.desc}</span>
+                            <span className="text-xs text-slate-200 font-bold block mt-1.5">{st.desc}</span>
                           </div>
-                          <ChevronRight className="w-5 h-5 text-slate-400" />
+                          <ChevronRight className="w-5 h-5 text-slate-300" />
                         </button>
                       );
                     })}
@@ -2521,7 +2523,7 @@ export default function FabricaChaoDeFabricaPage() {
                   <button
                     type="button"
                     onClick={() => setStatusSelectTank(null)}
-                    className="w-full py-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-sm rounded-2xl border border-slate-700 transition-all"
+                    className="w-full py-3.5 bg-slate-700 hover:bg-slate-600 text-white font-black text-sm rounded-2xl border-2 border-slate-500 transition-all shadow-md"
                   >
                     Fechar
                   </button>
@@ -2584,12 +2586,12 @@ export default function FabricaChaoDeFabricaPage() {
                   Brassagem do Dia
                 </h2>
 
-                <div className="flex bg-slate-800 p-1 rounded-xl border-2 border-slate-700">
+                <div className="flex bg-slate-700 p-1.5 rounded-xl border-2 border-slate-500 shadow-inner">
                   <button
                     type="button"
                     onClick={() => setBrewMode('ACTIVE')}
                     className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
-                      brewMode === 'ACTIVE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-300'
+                      brewMode === 'ACTIVE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
                     }`}
                   >
                     Em Andamento
@@ -2598,7 +2600,7 @@ export default function FabricaChaoDeFabricaPage() {
                     type="button"
                     onClick={() => setBrewMode('NEW_RECIPE')}
                     className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
-                      brewMode === 'NEW_RECIPE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-300'
+                      brewMode === 'NEW_RECIPE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
                     }`}
                   >
                     + De Receita
@@ -2622,7 +2624,7 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase">
+                    <label className="block text-xs font-black text-slate-100 mb-1.5 uppercase">
                       Selecione a Brassagem Ativa:
                     </label>
                     <select
@@ -2639,7 +2641,7 @@ export default function FabricaChaoDeFabricaPage() {
                           if (found.tempMash) setBrewTempMashInput(String(found.tempMash));
                         }
                       }}
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
                     >
                       <option value="">-- Escolha o Lote --</option>
                       {activeBrewBatches.map((b) => (
@@ -2653,13 +2655,13 @@ export default function FabricaChaoDeFabricaPage() {
               ) : (
                 <div className="space-y-3.5">
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase">
+                    <label className="block text-xs font-black text-slate-100 mb-1.5 uppercase">
                       Escolha uma Receita do Catálogo:
                     </label>
                     <select
                       value={selectedRecipeId}
                       onChange={(e) => handleSelectRecipeForBrew(e.target.value)}
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
                     >
                       <option value="">-- Selecionar Receita --</option>
                       {recipes.map((r) => (
@@ -2671,9 +2673,9 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
 
                   {selectedRecipeObj && (
-                    <div className="bg-slate-800 p-3.5 rounded-2xl border-2 border-slate-700 text-xs space-y-1.5">
+                    <div className="bg-slate-700/90 p-4 rounded-2xl border-2 border-slate-500 text-xs space-y-1.5 shadow-md">
                       <div className="font-black text-base text-amber-300">{selectedRecipeObj.name}</div>
-                      <div className="text-slate-300 font-bold">
+                      <div className="text-slate-200 font-bold">
                         Estilo: {selectedRecipeObj.style} • Rendimento:{' '}
                         {selectedRecipeObj.batchYieldLiters || 500}L
                       </div>
@@ -2687,7 +2689,7 @@ export default function FabricaChaoDeFabricaPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1 uppercase">
+                      <label className="block text-xs font-black text-slate-100 mb-1 uppercase">
                         Número do Lote:
                       </label>
                       <input
@@ -2695,18 +2697,18 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewBatchNumber}
                         onChange={(e) => setBrewBatchNumber(e.target.value.toUpperCase())}
                         placeholder="Ex: IPA-2601"
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1 uppercase">
+                      <label className="block text-xs font-black text-slate-100 mb-1 uppercase">
                         Tanque Destino:
                       </label>
                       <select
                         value={brewTargetTankId}
                         onChange={(e) => setBrewTargetTankId(e.target.value)}
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-bold text-white outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-bold text-white outline-none shadow-inner"
                       >
                         <option value="">Sem tanque (Panela)</option>
                         {tanks.map((t) => (
@@ -2722,14 +2724,14 @@ export default function FabricaChaoDeFabricaPage() {
 
               {/* FORMULÁRIO DE MEDIÇÕES DA BRASSAGEM COM ALTA LEGIBILIDADE */}
               {(selectedBrewBatch || (brewMode === 'NEW_RECIPE' && selectedRecipeId)) && (
-                <div className="pt-3 border-t-2 border-slate-800 space-y-3.5">
+                <div className="pt-3 border-t-2 border-slate-700 space-y-3.5">
                   <h4 className="font-black text-xs uppercase tracking-wider text-amber-400">
                     🔬 Medições & Parâmetros da Brassagem
                   </h4>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                      <label className="block text-xs font-black text-slate-100 mb-1">
                         OG Medida (Pós-Fervura):
                       </label>
                       <input
@@ -2737,12 +2739,12 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewOgInput}
                         onChange={(e) => setBrewOgInput(e.target.value)}
                         placeholder="1.054"
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center font-mono outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                      <label className="block text-xs font-black text-slate-100 mb-1">
                         Volume no Fermentador (L):
                       </label>
                       <input
@@ -2750,14 +2752,14 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewVolumeInput}
                         onChange={(e) => setBrewVolumeInput(e.target.value)}
                         placeholder="520"
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center font-mono outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                      <label className="block text-xs font-black text-slate-100 mb-1">
                         pH Mostura:
                       </label>
                       <input
@@ -2765,12 +2767,12 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewPhMashInput}
                         onChange={(e) => setBrewPhMashInput(e.target.value)}
                         placeholder="5.3"
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                      <label className="block text-xs font-black text-slate-100 mb-1">
                         pH Fervura:
                       </label>
                       <input
@@ -2778,12 +2780,12 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewPhBoilInput}
                         onChange={(e) => setBrewPhBoilInput(e.target.value)}
                         placeholder="5.1"
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                      <label className="block text-xs font-black text-slate-100 mb-1">
                         Temp Mostura (°C):
                       </label>
                       <input
@@ -2791,13 +2793,13 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewTempMashInput}
                         onChange={(e) => setBrewTempMashInput(e.target.value)}
                         placeholder="66.5"
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none"
+                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">
+                    <label className="block text-xs font-black text-slate-100 mb-1">
                       Anotações da Brassagem:
                     </label>
                     <input
@@ -2805,7 +2807,7 @@ export default function FabricaChaoDeFabricaPage() {
                       value={brewNotesInput}
                       onChange={(e) => setBrewNotesInput(e.target.value)}
                       placeholder="Ex: Whirlpool a 80°C, mosto límpido..."
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-sm text-white outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-sm text-white outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
 
@@ -2814,7 +2816,7 @@ export default function FabricaChaoDeFabricaPage() {
                       type="button"
                       onClick={() => handleSaveBreweryData(false)}
                       disabled={isSavingBrew}
-                      className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white font-black text-sm rounded-2xl border-2 border-slate-600 transition-all active:scale-95 shadow"
+                      className="flex-1 py-4 bg-slate-700 hover:bg-slate-650 text-white font-black text-sm rounded-2xl border-2 border-slate-500 transition-all active:scale-95 shadow-md"
                     >
                       Salvar Medições
                     </button>
@@ -2902,18 +2904,18 @@ export default function FabricaChaoDeFabricaPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">OG Inicial (SG):</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">OG Inicial (SG):</label>
                     <input
                       type="text"
                       value={calcOgSg}
                       onChange={(e) => setCalcOgSg(e.target.value)}
                       placeholder="1.054"
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3.5 text-lg font-black text-white text-center outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3.5 text-xl font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">
+                    <label className="block text-xs font-black text-amber-300 mb-1">
                       Brix Lido no Refratômetro:
                     </label>
                     <input
@@ -2921,23 +2923,23 @@ export default function FabricaChaoDeFabricaPage() {
                       value={calcCurrentBrix}
                       onChange={(e) => setCalcCurrentBrix(e.target.value)}
                       placeholder="6.5"
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3.5 text-lg font-black text-amber-400 text-center outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3.5 text-xl font-black text-amber-300 text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
                 </div>
 
                 {refractometerResults && (
                   <div className="pt-2 grid grid-cols-2 gap-3">
-                    <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center shadow">
-                      <span className="text-xs font-black uppercase text-slate-300 block">FG Real Corrigida</span>
+                    <div className="bg-slate-700 border-2 border-slate-500 p-4 rounded-2xl text-center shadow-md">
+                      <span className="text-xs font-black uppercase text-slate-200 block mb-1">FG Real Corrigida</span>
                       <span className="font-black text-3xl text-emerald-400 font-mono">
                         {refractometerResults.fgSg.toFixed(3)}
                       </span>
                     </div>
 
-                    <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center shadow">
-                      <span className="text-xs font-black uppercase text-slate-300 block">Teor Alcoólico</span>
-                      <span className="font-black text-3xl text-amber-400 font-mono">
+                    <div className="bg-slate-700 border-2 border-amber-400 p-4 rounded-2xl text-center shadow-md">
+                      <span className="text-xs font-black uppercase text-amber-300 block mb-1">Teor Alcoólico</span>
+                      <span className="font-black text-3xl text-amber-300 font-mono">
                         {refractometerResults.abv.toFixed(1)}% ABV
                       </span>
                     </div>
@@ -2955,47 +2957,47 @@ export default function FabricaChaoDeFabricaPage() {
 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">Leitura SG:</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">Leitura SG:</label>
                     <input
                       type="text"
                       value={calcHydroSg}
                       onChange={(e) => setCalcHydroSg(e.target.value)}
                       placeholder="1.050"
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-3 text-base font-black text-white text-center outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-3 text-lg font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">Temp Amostra (°C):</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">Temp Amostra (°C):</label>
                     <input
                       type="text"
                       value={calcHydroTemp}
                       onChange={(e) => setCalcHydroTemp(e.target.value)}
                       placeholder="28"
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-3 text-base font-black text-amber-400 text-center outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-3 text-lg font-black text-amber-300 text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">Calibragem (°C):</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">Calibragem (°C):</label>
                     <input
                       type="text"
                       value={calcCalibTemp}
                       onChange={(e) => setCalcCalibTemp(e.target.value)}
                       placeholder="20"
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-3 text-base font-black text-white text-center outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-3 text-lg font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
                 </div>
 
-                <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center space-y-1 shadow">
-                  <span className="text-xs font-black uppercase text-slate-300 block">
+                <div className="bg-slate-700 border-2 border-slate-500 p-4 rounded-2xl text-center space-y-1 shadow-md">
+                  <span className="text-xs font-black uppercase text-slate-200 block">
                     Densidade Corrigida a {calcCalibTemp}°C
                   </span>
                   <span className="font-black text-3xl text-emerald-400 font-mono">
                     {hydrometerResults.correctedSg.toFixed(3)} SG
                   </span>
-                  <div className="text-xs font-bold text-slate-300">
+                  <div className="text-xs font-bold text-slate-200">
                     Ajuste térmico:{' '}
                     {hydrometerResults.diffPoints > 0
                       ? `+${hydrometerResults.diffPoints}`
@@ -3014,7 +3016,7 @@ export default function FabricaChaoDeFabricaPage() {
                 </h3>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase">
+                  <label className="block text-xs font-black text-slate-100 mb-1.5 uppercase">
                     Valor em Graus Brix (°Bx) / Plato:
                   </label>
                   <input
@@ -3022,12 +3024,12 @@ export default function FabricaChaoDeFabricaPage() {
                     value={calcRawBrix}
                     onChange={(e) => setCalcRawBrix(e.target.value)}
                     placeholder="13.0"
-                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-2xl font-black text-amber-400 text-center outline-none"
+                    className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-2xl font-black text-amber-300 text-center outline-none shadow-inner placeholder:text-slate-300"
                   />
                 </div>
 
-                <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center shadow">
-                  <span className="text-xs font-black uppercase text-slate-300 block">Gravidade Específica (SG)</span>
+                <div className="bg-slate-700 border-2 border-slate-500 p-4 rounded-2xl text-center shadow-md">
+                  <span className="text-xs font-black uppercase text-slate-200 block mb-1">Gravidade Específica (SG)</span>
                   <span className="font-black text-4xl text-emerald-400 font-mono">
                     {brixToSgResult.sg.toFixed(3)}
                   </span>
@@ -3044,35 +3046,35 @@ export default function FabricaChaoDeFabricaPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">OG (Densidade Inicial):</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">OG (Densidade Inicial):</label>
                     <input
                       type="text"
                       value={calcAbvOg}
                       onChange={(e) => setCalcAbvOg(e.target.value)}
                       placeholder="1.054"
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1">FG (Densidade Final):</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">FG (Densidade Final):</label>
                     <input
                       type="text"
                       value={calcAbvFg}
                       onChange={(e) => setCalcAbvFg(e.target.value)}
                       placeholder="1.012"
-                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                   </div>
                 </div>
 
-                <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center space-y-1 shadow">
-                  <span className="text-xs font-black uppercase text-slate-300 block">Teor Alcoólico Estimado</span>
-                  <span className="font-black text-4xl text-amber-400 font-mono">
+                <div className="bg-slate-700 border-2 border-amber-400 p-4 rounded-2xl text-center space-y-1 shadow-md">
+                  <span className="text-xs font-black uppercase text-amber-300 block">Teor Alcoólico Estimado</span>
+                  <span className="font-black text-4xl text-amber-300 font-mono">
                     {abvDirectResult.abv.toFixed(2)}%
                   </span>
-                  <div className="text-xs font-bold text-slate-300">
-                    Atenuação Aparente: <strong className="text-white">{abvDirectResult.attenuation}%</strong>
+                  <div className="text-xs font-bold text-slate-200">
+                    Atenuação Aparente: <strong className="text-white font-mono">{abvDirectResult.attenuation}%</strong>
                   </div>
                 </div>
               </div>
