@@ -13,6 +13,8 @@ import {
   UserCheck,
   Tag,
   Crown,
+  Smartphone,
+  Calculator,
 } from 'lucide-react';
 import { getSessionFromCookies } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -28,11 +30,13 @@ export default function MobileMenuPage() {
     ...(isSuperAdmin
       ? [{ label: 'Portal Master (Proprietário)', href: '/master', icon: Crown, color: 'text-amber-950 bg-amber-400 font-black' }]
       : []),
+    { label: 'Chão de Fábrica (Tablet / App)', href: '/fabrica', icon: Smartphone, color: 'text-amber-950 bg-amber-400 font-black' },
     { label: 'Painel Principal', href: '/', icon: LayoutDashboard, color: 'text-amber-600 bg-amber-50' },
     { label: 'Controle de Barris', href: '/barris', icon: Cylinder, color: 'text-amber-600 bg-amber-50' },
     { label: 'Scanner de Campo (Câmera)', href: '/scanner', icon: QrCode, color: 'text-amber-600 bg-amber-500 text-white font-bold' },
     { label: 'Equipamentos & Chopeiras', href: '/equipamentos', icon: Wrench, color: 'text-blue-600 bg-blue-50' },
     { label: 'Produção & Tanques (MAPA)', href: '/producao', icon: Flame, color: 'text-amber-600 bg-amber-50 font-bold' },
+    { label: 'Calculadora Cervejeira', href: '/calculadora', icon: Calculator, color: 'text-amber-600 bg-amber-50 font-bold' },
     { label: 'Estoque de Insumos', href: '/estoque', icon: Package, color: 'text-emerald-600 bg-emerald-50' },
     { label: 'Pedidos & Vendas', href: '/pedidos', icon: ShoppingCart, color: 'text-indigo-600 bg-indigo-50' },
     { label: 'Tabelas de Preço', href: '/precos', icon: Tag, color: 'text-amber-600 bg-amber-50 font-bold' },
