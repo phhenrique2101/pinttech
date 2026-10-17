@@ -39,11 +39,10 @@ import {
   Smartphone,
   Eye,
   Calendar,
-  Edit2,
   Wind,
-  CheckCircle,
-  TrendingDown,
   Target,
+  AlertCircle,
+  Bell,
 } from 'lucide-react';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import { playFeedback } from '@/lib/sound';
@@ -339,7 +338,7 @@ export default function FabricaChaoDeFabricaPage() {
   };
 
   // -------------------------------------------------------------
-  // 3. MÓDULO DE TANQUES & ADEGA (COM PURGA, CO2, OG, TARGET FG E TAREFAS)
+  // 3. MÓDULO DE TANQUES & ADEGA (ALERTAS DE PURGA E CO2, OG, META FG E TAREFAS)
   // -------------------------------------------------------------
   const [selectedTankForDetails, setSelectedTankForDetails] = useState<any | null>(null);
   const [measurementGravityInput, setMeasurementGravityInput] = useState<string>('1.020');
@@ -358,18 +357,18 @@ export default function FabricaChaoDeFabricaPage() {
   const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
   const [editCompletionDate, setEditCompletionDate] = useState<string>(getLocalDateString());
 
-  // Utilitários para Purga e CO2 armazenados no campo notes do Tanque
-  const isTankPurged = (tank: any) => Boolean(tank.notes?.includes('[PURGA:OK]'));
-  const isTankCo2 = (tank: any) => Boolean(tank.notes?.includes('[CO2:OK]'));
+  // Utilitários para ALERTAS de Purga e Bater CO2 armazenados no campo notes do Tanque
+  const hasPurgaAlert = (tank: any) => Boolean(tank.notes?.includes('[ALERTA_PURGA]'));
+  const hasCo2Alert = (tank: any) => Boolean(tank.notes?.includes('[ALERTA_CO2]'));
 
-  const handleToggleTankFlag = async (tank: any, flag: 'PURGA' | 'CO2', e?: React.MouseEvent) => {
+  const handleToggleTankAlert = async (tank: any, flag: 'PURGA' | 'CO2', e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const currentNotes = tank.notes || '';
-    const token = `[${flag}:OK]`;
+    const token = flag === 'PURGA' ? '[ALERTA_PURGA]' : '[ALERTA_CO2]';
     const isSet = currentNotes.includes(token);
     const newNotes = isSet ? currentNotes.replace(token, '').trim() : `${currentNotes} ${token}`.trim();
 
-    playFeedback('click');
+    playFeedback(isSet ? 'click' : 'error');
 
     // Atualização otimista imediata na UI
     setTanks((prev) => prev.map((t) => (t.id === tank.id ? { ...t, notes: newNotes } : t)));
@@ -386,12 +385,12 @@ export default function FabricaChaoDeFabricaPage() {
       showBanner(
         flag === 'PURGA'
           ? isSet
-            ? `Tanque ${tank.name}: Purga desmarcada`
-            : `💨 Tanque ${tank.name}: PURGA marcada com sucesso!`
+            ? `✅ Alerta de Purga removido do Tanque ${tank.name}`
+            : `⚠️ ALERTA: Tanque ${tank.name} sinalizado para FAZER PURGA!`
           : isSet
-          ? `Tanque ${tank.name}: CO2 desmarcado`
-          : `🫧 Tanque ${tank.name}: Pressurização CO2 marcada com sucesso!`,
-        'info'
+          ? `✅ Alerta de CO2 removido do Tanque ${tank.name}`
+          : `⚠️ ALERTA: Tanque ${tank.name} sinalizado para BATER CO2!`,
+        isSet ? 'info' : 'error'
       );
     } catch {
       showBanner('Erro ao salvar alteração no tanque', 'error');
@@ -404,7 +403,6 @@ export default function FabricaChaoDeFabricaPage() {
         (b) => b.tankId === tank.id && b.status !== 'FINALIZADO' && b.status !== 'CANCELADO'
       );
 
-      // Calcular dados de fermentação (OG, Meta FG, Densidade Atual, ABV e Atenuação)
       const og = activeBatch?.measuredOg || activeBatch?.recipe?.og || null;
       const targetFg = activeBatch?.recipe?.fg || null;
 
@@ -421,13 +419,11 @@ export default function FabricaChaoDeFabricaPage() {
         }
       } catch {}
 
-      // ABV em tempo real
       let currentAbv = activeBatch?.measuredAbv || null;
       if (og && currentGravity && og > currentGravity) {
         currentAbv = Math.round(calculateAbv(og, currentGravity) * 10) / 10;
       }
 
-      // Progresso da atenuação em direção à FG Alvo
       let progressPercent = 0;
       let pointsRemaining = 0;
       if (og && targetFg && currentGravity && og > targetFg) {
@@ -669,7 +665,6 @@ export default function FabricaChaoDeFabricaPage() {
   const [selectedBrewBatch, setSelectedBrewBatch] = useState<any | null>(null);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
 
-  // Medições detalhadas da brassagem
   const [brewBatchNumber, setBrewBatchNumber] = useState<string>('');
   const [brewTargetTankId, setBrewTargetTankId] = useState<string>('');
   const [brewOgInput, setBrewOgInput] = useState<string>('1.054');
@@ -714,7 +709,6 @@ export default function FabricaChaoDeFabricaPage() {
     [recipes, selectedRecipeId]
   );
 
-  // Quando escolhe uma receita para brassar, preenche os parâmetros padrão
   const handleSelectRecipeForBrew = (recId: string) => {
     setSelectedRecipeId(recId);
     const rec = recipes.find((r) => r.id === recId);
@@ -722,13 +716,11 @@ export default function FabricaChaoDeFabricaPage() {
       if (rec.og) setBrewOgInput(String(rec.og));
       if (rec.targetPhMash) setBrewPhMashInput(String(rec.targetPhMash));
       if (rec.batchYieldLiters) setBrewVolumeInput(String(rec.batchYieldLiters));
-      // Sugerir número de lote
       const year = new Date().getFullYear().toString().slice(-2);
       setBrewBatchNumber(`${rec.name.slice(0, 3).toUpperCase()}-${year}${String(batches.length + 1).padStart(2, '0')}`);
     }
   };
 
-  // Salvar ou iniciar brassagem
   const handleSaveBreweryData = async (moveToFermentation: boolean = false) => {
     setIsSavingBrew(true);
     try {
@@ -772,7 +764,6 @@ export default function FabricaChaoDeFabricaPage() {
           showBanner('Erro ao salvar dados da brassagem', 'error');
         }
       } else {
-        // Criar Nova Brassagem a partir da Receita Selecionada
         if (!selectedRecipeId) {
           showBanner('Selecione a receita desejada', 'error');
           return;
@@ -877,50 +868,48 @@ export default function FabricaChaoDeFabricaPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-28 select-none">
       {/* ------------------------------------------------------------- */}
-      {/* CABEÇALHO COMPACTO DO CHÃO DE FÁBRICA */}
+      {/* CABEÇALHO DE ALTO CONTRASTE DO CHÃO DE FÁBRICA */}
       {/* ------------------------------------------------------------- */}
-      <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
+      <header className="sticky top-0 z-40 bg-slate-900 border-b-2 border-slate-700 px-4 py-3 flex items-center justify-between shadow-xl">
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="p-2 -ml-1 text-slate-400 hover:text-white active:scale-95 transition-transform rounded-xl hover:bg-slate-800"
+            className="p-2 -ml-1 text-slate-300 hover:text-white active:scale-95 transition-transform rounded-xl hover:bg-slate-800 border border-slate-700"
             title="Voltar ao Sistema Completo"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <h1 className="font-black text-base tracking-wide text-white flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-emerald-400 ring-4 ring-emerald-500/20 animate-pulse" />
+              <h1 className="font-black text-lg tracking-wide text-white flex items-center gap-1.5">
                 PintTech <span className="text-amber-400">Fábrica</span>
               </h1>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium">
-              {sessionUser?.name ? `Operador: ${sessionUser.name}` : 'Modo Tablet / Chão de Fábrica'}
+            <p className="text-xs text-slate-300 font-bold">
+              {sessionUser?.name ? `Operador: ${sessionUser.name}` : 'Painel de Produção & Chão de Fábrica'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => loadInitialData()}
-            className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl active:scale-90 transition-all border border-slate-700"
-            title="Atualizar dados"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
-          </button>
-        </div>
+        <button
+          onClick={() => loadInitialData()}
+          className="p-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl active:scale-90 transition-all border-2 border-slate-600 shadow"
+          title="Atualizar dados"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
+        </button>
       </header>
 
       {/* BANNER DE FEEDBACK SONORO / VISUAL */}
       {banner && (
         <div
-          className={`sticky top-[57px] z-50 px-4 py-3 text-center font-bold text-sm shadow-xl transition-all flex items-center justify-center gap-2 ${
+          className={`sticky top-[61px] z-50 px-4 py-3.5 text-center font-black text-sm shadow-2xl transition-all flex items-center justify-center gap-2.5 ${
             banner.type === 'success'
-              ? 'bg-emerald-600 text-white border-b-2 border-emerald-400'
+              ? 'bg-emerald-600 text-white border-b-4 border-emerald-400'
               : banner.type === 'error'
-              ? 'bg-rose-600 text-white border-b-2 border-rose-400'
-              : 'bg-amber-600 text-slate-950 border-b-2 border-amber-300'
+              ? 'bg-rose-600 text-white border-b-4 border-rose-400'
+              : 'bg-amber-500 text-slate-950 border-b-4 border-amber-300'
           }`}
         >
           {banner.type === 'success' && <CheckCircle2 className="w-5 h-5 flex-shrink-0" />}
@@ -930,39 +919,43 @@ export default function FabricaChaoDeFabricaPage() {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* CONTEÚDO PRINCIPAL: 5 MÓDULOS */}
+      {/* CONTEÚDO PRINCIPAL: 5 MÓDULOS DE ALTA VISIBILIDADE */}
       {/* ------------------------------------------------------------- */}
-      <main className="max-w-2xl mx-auto p-4 space-y-4">
+      <main className="max-w-3xl mx-auto p-4 space-y-5">
         {/* ========================================================= */}
         {/* 1. MÓDULO ENVASE */}
         {/* ========================================================= */}
         {activeTab === 'ENVASE' && (
           <div className="space-y-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
+            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black">
-                    <Package className="w-5 h-5" />
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-lg">
+                    <Package className="w-6 h-6" />
                   </div>
                   <div>
-                    <h2 className="font-extrabold text-base text-white">Linha de Envase</h2>
-                    <p className="text-xs text-slate-400">De onde está saindo o chopp?</p>
+                    <h2 className="font-black text-lg text-white">Linha de Envase</h2>
+                    <p className="text-xs text-slate-300 font-bold">Selecione o chopp que está sendo envasado</p>
                   </div>
                 </div>
 
-                <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                <div className="flex bg-slate-800 p-1 rounded-xl border-2 border-slate-700">
                   <button
                     onClick={() => setEnvaseSourceType('BATCH')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      envaseSourceType === 'BATCH' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400'
+                    className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                      envaseSourceType === 'BATCH'
+                        ? 'bg-amber-500 text-slate-950 shadow-md'
+                        : 'text-slate-300 hover:text-white'
                     }`}
                   >
                     Por Lote / TQ
                   </button>
                   <button
                     onClick={() => setEnvaseSourceType('QUICK')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      envaseSourceType === 'QUICK' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400'
+                    className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                      envaseSourceType === 'QUICK'
+                        ? 'bg-amber-500 text-slate-950 shadow-md'
+                        : 'text-slate-300 hover:text-white'
                     }`}
                   >
                     Avulso
@@ -972,15 +965,15 @@ export default function FabricaChaoDeFabricaPage() {
 
               {envaseSourceType === 'BATCH' ? (
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    Selecione o Lote / Tanque Ativo:
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase tracking-wide">
+                    Tanque / Lote em Linha:
                   </label>
                   <select
                     value={selectedBatchId}
                     onChange={(e) => setSelectedBatchId(e.target.value)}
-                    className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-sm font-bold text-white outline-none"
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
                   >
-                    <option value="">-- Escolha o Tanque / Chopp --</option>
+                    <option value="">-- Selecione o Chopp / Tanque --</option>
                     {batches
                       .filter((b) => b.status !== 'FINALIZADO' && b.status !== 'CANCELADO')
                       .map((b) => (
@@ -993,25 +986,27 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Nome da Cerveja / Chopp:</label>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase tracking-wide">
+                    Nome da Cerveja / Chopp:
+                  </label>
                   <input
                     type="text"
                     value={quickBeerName}
                     onChange={(e) => setQuickBeerName(e.target.value)}
-                    placeholder="Ex: IPA Galaxy, Pilsen Especial..."
-                    className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-sm font-bold text-white outline-none"
+                    placeholder="Ex: IPA Galaxy, Pilsen Extra..."
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none"
                   />
                 </div>
               )}
 
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+              <div className="pt-2 border-t-2 border-slate-800 flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setIsPartialFill(!isPartialFill)}
-                  className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${
+                  className={`flex items-center gap-2 text-xs font-black px-3.5 py-2.5 rounded-xl border-2 transition-all ${
                     isPartialFill
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                      ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md'
+                      : 'bg-slate-800 text-slate-300 border-slate-600'
                   }`}
                 >
                   <Sliders className="w-4 h-4" />
@@ -1019,26 +1014,26 @@ export default function FabricaChaoDeFabricaPage() {
                 </button>
 
                 {isPartialFill && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-slate-400 font-bold">Litros:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-amber-300 font-black">Litros:</span>
                     <input
                       type="number"
                       value={customLiters}
                       onChange={(e) => setCustomLiters(e.target.value)}
-                      className="w-16 bg-slate-800 border border-amber-500 rounded-xl px-2 py-1.5 text-sm font-black text-center text-amber-400 outline-none"
+                      className="w-20 bg-slate-800 border-2 border-amber-400 rounded-xl px-2 py-1.5 text-base font-black text-center text-amber-400 outline-none"
                     />
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
-              <h3 className="font-extrabold text-sm text-slate-200 flex items-center gap-2">
-                <QrCode className="w-4 h-4 text-amber-400" />
+            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
+              <h3 className="font-black text-base text-white flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-amber-400" />
                 Bipar Barril para Envasar
               </h3>
-              <p className="text-xs text-slate-400">
-                Aponte a câmera para o código do barril. Ao bipar, ele é envasado instantaneamente.
+              <p className="text-xs text-slate-300">
+                Aponte a câmera para o código do barril. Ao bipar, ele é envasado instantaneamente com confirmação sonora.
               </p>
 
               <BarcodeScanner
@@ -1050,34 +1045,34 @@ export default function FabricaChaoDeFabricaPage() {
             </div>
 
             {envaseSessionLogs.length > 0 && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
+              <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">
+                  <h3 className="font-black text-xs uppercase tracking-wider text-amber-400">
                     Envasados nesta Sessão ({envaseSessionLogs.length})
                   </h3>
                   <button
                     onClick={() => setEnvaseSessionLogs([])}
-                    className="text-[11px] text-slate-500 hover:text-slate-300"
+                    className="text-xs font-bold text-slate-400 hover:text-white"
                   >
                     Limpar lista
                   </button>
                 </div>
 
-                <div className="divide-y divide-slate-800 max-h-56 overflow-y-auto pr-1">
+                <div className="divide-y-2 divide-slate-800 max-h-56 overflow-y-auto pr-1">
                   {envaseSessionLogs.map((log, idx) => (
                     <div key={idx} className="py-2.5 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-xs">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm shadow">
                           ✓
                         </div>
                         <div>
-                          <div className="font-black text-sm text-white">{log.code}</div>
-                          <div className="text-xs text-slate-400">
+                          <div className="font-black text-base text-white font-mono">{log.code}</div>
+                          <div className="text-xs font-bold text-slate-300">
                             {log.beerName} ({log.liters}L)
                           </div>
                         </div>
                       </div>
-                      <span className="text-[11px] font-mono text-slate-500">{log.time}</span>
+                      <span className="text-xs font-mono font-bold text-slate-400">{log.time}</span>
                     </div>
                   ))}
                 </div>
@@ -1091,64 +1086,64 @@ export default function FabricaChaoDeFabricaPage() {
         {/* ========================================================= */}
         {activeTab === 'BARRIS' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setKegSubMode('WASH')}
-                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
+                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
                   kegSubMode === 'WASH'
-                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-emerald-600 border-emerald-400 text-white font-black'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
                 }`}
               >
                 <div className="text-2xl">🧼</div>
-                <span className="font-extrabold text-xs text-center">Higienizar / Lavar</span>
+                <span className="text-sm text-center">Higienizar / Lavar</span>
               </button>
 
               <button
                 onClick={() => setKegSubMode('REGISTER')}
-                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
+                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
                   kegSubMode === 'REGISTER'
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-amber-500 border-amber-300 text-slate-950 font-black'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
                 }`}
               >
                 <div className="text-2xl">➕</div>
-                <span className="font-extrabold text-xs text-center">Cadastrar Novo</span>
+                <span className="text-sm text-center">Cadastrar Novo</span>
               </button>
 
               <button
                 onClick={() => setKegSubMode('LOOKUP')}
-                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
+                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
                   kegSubMode === 'LOOKUP'
-                    ? 'bg-blue-500/20 border-blue-500 text-blue-400 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-blue-600 border-blue-400 text-white font-black'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
                 }`}
               >
                 <div className="text-2xl">🔍</div>
-                <span className="font-extrabold text-xs text-center">Consultar Barril</span>
+                <span className="text-sm text-center">Consultar Barril</span>
               </button>
 
               <button
                 onClick={() => setKegSubMode('MAINTENANCE')}
-                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
+                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
                   kegSubMode === 'MAINTENANCE'
-                    ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-rose-600 border-rose-400 text-white font-black'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
                 }`}
               >
                 <div className="text-2xl">🛠️</div>
-                <span className="font-extrabold text-xs text-center">Manutenção</span>
+                <span className="text-sm text-center">Manutenção</span>
               </button>
             </div>
 
             {kegSubMode === 'REGISTER' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
-                <h3 className="font-extrabold text-sm text-amber-400 flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Cadastrar Novo Barril no Acervo
+              <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
+                <h3 className="font-black text-base text-amber-400 flex items-center gap-2">
+                  <Plus className="w-5 h-5" /> Cadastrar Novo Barril no Acervo
                 </h3>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase">
                     Código do Barril (Bipe ou digite):
                   </label>
                   <input
@@ -1156,22 +1151,22 @@ export default function FabricaChaoDeFabricaPage() {
                     value={newKegCode}
                     onChange={(e) => setNewKegCode(e.target.value.toUpperCase())}
                     placeholder="Ex: BAR-5001"
-                    className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-base font-black text-white outline-none tracking-wider font-mono"
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-lg font-black text-white outline-none tracking-wider font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-2">Capacidade:</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <label className="block text-xs font-bold text-slate-200 mb-2 uppercase">Capacidade:</label>
+                  <div className="grid grid-cols-3 gap-2.5">
                     {[20, 30, 50].map((cap) => (
                       <button
                         key={cap}
                         type="button"
                         onClick={() => setNewKegCapacity(cap)}
-                        className={`py-3.5 rounded-2xl font-black text-base border-2 transition-all active:scale-95 ${
+                        className={`py-3.5 rounded-2xl font-black text-lg border-2 transition-all active:scale-95 ${
                           newKegCapacity === cap
-                            ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg scale-105'
-                            : 'bg-slate-800 border-slate-700 text-slate-300'
+                            ? 'bg-amber-500 border-amber-300 text-slate-950 shadow-lg scale-105'
+                            : 'bg-slate-800 border-slate-600 text-slate-200'
                         }`}
                       >
                         {cap}L
@@ -1184,7 +1179,7 @@ export default function FabricaChaoDeFabricaPage() {
                   type="button"
                   onClick={handleCreateNewKeg}
                   disabled={isRegisteringKeg || !newKegCode.trim()}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-base rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                   <Check className="w-5 h-5" />
                   Confirmar Cadastro
@@ -1192,9 +1187,9 @@ export default function FabricaChaoDeFabricaPage() {
               </div>
             )}
 
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
-              <h3 className="font-extrabold text-sm text-slate-200 flex items-center gap-2">
-                <QrCode className="w-4 h-4 text-amber-400" />
+            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
+              <h3 className="font-black text-base text-white flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-amber-400" />
                 {kegSubMode === 'WASH' && 'Bipar Barril para HIGIENIZAR'}
                 {kegSubMode === 'REGISTER' && 'Bipar Código para Preencher'}
                 {kegSubMode === 'MAINTENANCE' && 'Bipar Barril com DEFEITO'}
@@ -1205,27 +1200,27 @@ export default function FabricaChaoDeFabricaPage() {
             </div>
 
             {kegSubMode === 'LOOKUP' && kegLookupResult && (
-              <div className="bg-slate-900 border-2 border-blue-500/50 rounded-3xl p-5 shadow-xl space-y-3">
+              <div className="bg-slate-900 border-2 border-blue-500 rounded-3xl p-5 shadow-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                    <span className="text-xs font-black uppercase px-2.5 py-1 rounded-md bg-blue-500 text-white">
                       Barril Encontrado
                     </span>
-                    <h3 className="font-black text-xl text-white font-mono mt-1">{kegLookupResult.code}</h3>
+                    <h3 className="font-black text-2xl text-white font-mono mt-1">{kegLookupResult.code}</h3>
                   </div>
-                  <span className="text-sm font-black px-3 py-1 rounded-xl bg-slate-800 text-slate-200">
+                  <span className="text-base font-black px-4 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-slate-700">
                     {kegLookupResult.capacity} Litros
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">
-                  <div className="bg-slate-800/60 p-2.5 rounded-xl">
-                    <span className="text-slate-400 block text-[10px]">Status:</span>
-                    <span className="font-bold text-amber-400">{kegLookupResult.status}</span>
+                <div className="grid grid-cols-2 gap-2.5 text-xs pt-2 border-t-2 border-slate-800">
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <span className="text-slate-300 block text-xs font-bold uppercase">Status:</span>
+                    <span className="font-black text-base text-amber-400">{kegLookupResult.status}</span>
                   </div>
-                  <div className="bg-slate-800/60 p-2.5 rounded-xl">
-                    <span className="text-slate-400 block text-[10px]">Chopp Atual:</span>
-                    <span className="font-bold text-white">
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <span className="text-slate-300 block text-xs font-bold uppercase">Chopp Atual:</span>
+                    <span className="font-black text-base text-white">
                       {kegLookupResult.currentBeerName || 'Vazio / Nenhum'}
                     </span>
                   </div>
@@ -1236,132 +1231,150 @@ export default function FabricaChaoDeFabricaPage() {
         )}
 
         {/* ========================================================= */}
-        {/* 3. MÓDULO TANQUES & ADEGA (COM PURGA, CO2, OG, META FG E TAREFAS) */}
+        {/* 3. MÓDULO TANQUES & ADEGA (ALERTAS VISUAIS DE PURGA E CO2) */}
         {/* ========================================================= */}
         {activeTab === 'TANQUES' && (
           <div className="space-y-4">
             {!selectedTankForDetails ? (
               <>
                 <div className="flex items-center justify-between">
-                  <h2 className="font-extrabold text-base text-white flex items-center gap-2">
+                  <h2 className="font-black text-lg text-white flex items-center gap-2">
                     <Cylinder className="w-5 h-5 text-amber-400" />
                     Tanques & Adega
                   </h2>
-                  <span className="text-xs font-bold text-slate-400">Toque para ver lote e medir</span>
+                  <span className="text-xs font-bold text-slate-300">Toque no card para ver detalhes</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {activeTanksList.map((tank) => {
                     const isOccupied = Boolean(tank.activeBatch);
                     const beerName = tank.activeBatch?.recipe?.name;
                     const batchNumber = tank.activeBatch?.batchNumber;
                     const status = tank.activeBatch?.status || tank.status;
                     const m = tank.metrics;
-                    const purged = isTankPurged(tank);
-                    const co2Set = isTankCo2(tank);
+                    const purgaAlert = hasPurgaAlert(tank);
+                    const co2Alert = hasCo2Alert(tank);
 
                     return (
                       <div
                         key={tank.id}
                         onClick={() => setSelectedTankForDetails(tank)}
-                        className={`p-5 rounded-3xl border-2 text-left transition-all active:scale-95 shadow-lg space-y-3 cursor-pointer ${
-                          isOccupied
-                            ? 'bg-slate-900 border-amber-500/40 hover:border-amber-400'
-                            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 opacity-80'
+                        className={`p-5 rounded-3xl border-2 text-left transition-all active:scale-95 shadow-xl space-y-3 cursor-pointer ${
+                          purgaAlert || co2Alert
+                            ? 'bg-slate-900 border-amber-400 ring-2 ring-amber-500/30'
+                            : isOccupied
+                            ? 'bg-slate-900 border-amber-500/60 hover:border-amber-400'
+                            : 'bg-slate-900/80 border-slate-700 hover:border-slate-600'
                         }`}
                       >
+                        {/* ALERTAS PISCANTES DE OPERAÇÃO: FAZER PURGA OU BATER CO2 */}
+                        {(purgaAlert || co2Alert) && (
+                          <div className="flex flex-wrap gap-2 pb-1">
+                            {purgaAlert && (
+                              <span className="px-3 py-1 rounded-xl bg-amber-500 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md">
+                                <AlertCircle className="w-4 h-4 text-slate-950" />
+                                ⚠️ ALERTA: FAZER PURGA
+                              </span>
+                            )}
+                            {co2Alert && (
+                              <span className="px-3 py-1 rounded-xl bg-cyan-500 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md">
+                                <AlertCircle className="w-4 h-4 text-slate-950" />
+                                ⚠️ ALERTA: BATER CO2
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="font-black text-lg text-white">{tank.name}</span>
-                            <span className="text-[11px] font-bold text-slate-400">({tank.capacityLiters}L)</span>
+                            <span className="font-black text-xl text-white">{tank.name}</span>
+                            <span className="text-xs font-bold text-slate-300">({tank.capacityLiters}L)</span>
                           </div>
                           <span
-                            className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full ${
-                              isOccupied
-                                ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                                : 'bg-slate-800 text-slate-400'
+                            className={`text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm ${
+                              isOccupied ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 border border-slate-700'
                             }`}
                           >
                             {status}
                           </span>
                         </div>
 
-                        {/* CAIXAS DE SELEÇÃO: PURGA E CO2 DIRETO NA LISTA DE TANQUES */}
-                        <div className="flex items-center gap-2 pt-0.5">
+                        {/* BOTÕES DE TOQUE PARA SINALIZAR / ALERTAR PURGA E CO2 */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={(e) => handleToggleTankFlag(tank, 'PURGA', e)}
-                            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-extrabold border flex items-center justify-center gap-1.5 transition-all ${
-                              purged
-                                ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400 shadow-sm'
-                                : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-300'
+                            onClick={(e) => handleToggleTankAlert(tank, 'PURGA', e)}
+                            className={`py-2 px-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow ${
+                              purgaAlert
+                                ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md ring-2 ring-amber-400/40'
+                                : 'bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-600'
                             }`}
                           >
-                            <Wind className="w-3.5 h-3.5" />
-                            {purged ? '✓ Purgado' : 'Purga'}
+                            <Wind className="w-4 h-4" />
+                            {purgaAlert ? '⚠️ FAZER PURGA' : 'Sinalizar Purga'}
                           </button>
 
                           <button
                             type="button"
-                            onClick={(e) => handleToggleTankFlag(tank, 'CO2', e)}
-                            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-extrabold border flex items-center justify-center gap-1.5 transition-all ${
-                              co2Set
-                                ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-400 shadow-sm'
-                                : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-300'
+                            onClick={(e) => handleToggleTankAlert(tank, 'CO2', e)}
+                            className={`py-2 px-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow ${
+                              co2Alert
+                                ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-md ring-2 ring-cyan-400/40'
+                                : 'bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-600'
                             }`}
                           >
-                            <Droplet className="w-3.5 h-3.5" />
-                            {co2Set ? '✓ Com CO2' : 'CO2'}
+                            <Droplet className="w-4 h-4" />
+                            {co2Alert ? '⚠️ BATER CO2' : 'Sinalizar CO2'}
                           </button>
                         </div>
 
                         {isOccupied ? (
-                          <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                          <div className="space-y-2 pt-2 border-t-2 border-slate-800">
                             <div className="flex items-center justify-between">
-                              <div className="font-black text-sm text-amber-300 truncate max-w-[200px]">
+                              <div className="font-black text-base text-amber-300 truncate max-w-[210px]">
                                 {beerName}
                               </div>
-                              <span className="text-[11px] font-mono text-slate-400">#{batchNumber}</span>
+                              <span className="text-xs font-mono font-bold text-slate-300">#{batchNumber}</span>
                             </div>
 
-                            {/* PAINEL DE DENSIDADES: OG INICIAL, OBJETIVO FG E TEOR ALCOÓLICO */}
-                            <div className="grid grid-cols-3 gap-1.5 bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800/80 text-center">
+                            {/* PAINEL DE DENSIDADES E METAS COM ALTO CONTRASTE */}
+                            <div className="grid grid-cols-3 gap-2 bg-slate-950 p-3 rounded-2xl border-2 border-slate-800 text-center">
                               <div>
-                                <span className="block text-[9px] uppercase font-bold text-slate-400">OG Inicial</span>
-                                <span className="text-xs font-black text-white font-mono">
+                                <span className="block text-[11px] uppercase font-bold text-slate-300">OG Inicial</span>
+                                <span className="text-sm font-black text-white font-mono">
                                   {m.og ? m.og.toFixed(3) : '—'}
                                 </span>
                               </div>
-                              <div className="border-x border-slate-800">
-                                <span className="block text-[9px] uppercase font-bold text-amber-400">Meta FG</span>
-                                <span className="text-xs font-black text-amber-400 font-mono">
+                              <div className="border-x-2 border-slate-800">
+                                <span className="block text-[11px] uppercase font-bold text-amber-400">Meta FG</span>
+                                <span className="text-sm font-black text-amber-400 font-mono">
                                   {m.targetFg ? m.targetFg.toFixed(3) : '—'}
                                 </span>
                               </div>
                               <div>
-                                <span className="block text-[9px] uppercase font-bold text-emerald-400">ABV Atual</span>
-                                <span className="text-xs font-black text-emerald-400 font-mono">
+                                <span className="block text-[11px] uppercase font-bold text-emerald-400">ABV Atual</span>
+                                <span className="text-sm font-black text-emerald-400 font-mono">
                                   {m.currentAbv ? `${m.currentAbv}%` : '—'}
                                 </span>
                               </div>
                             </div>
 
-                            {/* BARRA DE PROGRESSO DE ATENUAÇÃO ATÉ A META FG */}
+                            {/* BARRA DE PROGRESSO VISUAL DA FERMENTAÇÃO */}
                             {m.targetFg && m.og && (
-                              <div className="space-y-1">
-                                <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                              <div className="space-y-1 pt-0.5">
+                                <div className="flex justify-between text-xs font-bold text-slate-200">
                                   <span>
                                     {m.currentGravity ? `Atual: ${m.currentGravity.toFixed(3)} SG` : 'Sem medição'}
                                   </span>
-                                  <span className="text-amber-400">
+                                  <span className="text-amber-300 font-black">
                                     {m.pointsRemaining > 0
                                       ? `Faltam ${m.pointsRemaining} pts p/ FG`
-                                      : 'Meta Atingida! 🎉'}
+                                      : 'Meta FG Atingida! 🎉'}
                                   </span>
                                 </div>
-                                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700">
                                   <div
-                                    className="bg-gradient-to-r from-amber-500 to-emerald-400 h-2 rounded-full transition-all duration-500"
+                                    className="bg-gradient-to-r from-amber-500 via-amber-400 to-emerald-400 h-2.5 rounded-full transition-all duration-500"
                                     style={{ width: `${m.progressPercent}%` }}
                                   />
                                 </div>
@@ -1369,7 +1382,7 @@ export default function FabricaChaoDeFabricaPage() {
                             )}
                           </div>
                         ) : (
-                          <div className="text-xs text-slate-500 py-1">Tanque Livre / Disponível</div>
+                          <div className="text-xs font-bold text-slate-400 py-1">Tanque Livre / Disponível</div>
                         )}
                       </div>
                     );
@@ -1377,71 +1390,73 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               </>
             ) : (
-              /* DETALHES DO TANQUE SELECIONADO: TAREFAS, NOVA TAREFA, EDITAR DATA E MEDIÇÕES */
+              /* DETALHES DO TANQUE SELECIONADO: ALERTAS, TAREFAS E MEDIÇÕES */
               <div className="space-y-4">
                 <button
                   onClick={() => setSelectedTankForDetails(null)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300"
+                  className="flex items-center gap-2 text-sm font-black text-amber-400 hover:text-amber-300"
                 >
                   <ArrowLeft className="w-4 h-4" /> Voltar para lista de tanques
                 </button>
 
                 {/* Resumo do Tanque */}
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
+                <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-black text-xl text-white">{selectedTankForDetails.name}</h3>
-                      <p className="text-xs text-slate-400">Capacidade: {selectedTankForDetails.capacityLiters}L</p>
+                      <h3 className="font-black text-2xl text-white">{selectedTankForDetails.name}</h3>
+                      <p className="text-xs font-bold text-slate-300">
+                        Capacidade: {selectedTankForDetails.capacityLiters}L
+                      </p>
                     </div>
-                    <span className="text-xs font-bold px-3 py-1 rounded-xl bg-amber-500/20 text-amber-400">
+                    <span className="text-xs font-black px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950">
                       {selectedTankForDetails.activeBatch?.status || selectedTankForDetails.status}
                     </span>
                   </div>
 
-                  {/* Ações Rápidas de Purga e CO2 */}
-                  <div className="flex gap-2 pt-2 border-t border-slate-800">
+                  {/* SINALIZADORES DE ALERTA NO DETALHE */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t-2 border-slate-800">
                     <button
                       type="button"
-                      onClick={() => handleToggleTankFlag(selectedTankForDetails, 'PURGA')}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-black border flex items-center justify-center gap-2 transition-all ${
-                        isTankPurged(selectedTankForDetails)
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                      onClick={() => handleToggleTankAlert(selectedTankForDetails, 'PURGA')}
+                      className={`py-3 rounded-2xl text-xs font-black border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow ${
+                        hasPurgaAlert(selectedTankForDetails)
+                          ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400/50'
+                          : 'bg-slate-800 text-slate-200 border-slate-600'
                       }`}
                     >
-                      <Wind className="w-4 h-4" />
-                      {isTankPurged(selectedTankForDetails) ? 'Purga Realizada (OK)' : 'Marcar Purga'}
+                      <Wind className="w-5 h-5" />
+                      {hasPurgaAlert(selectedTankForDetails) ? '⚠️ ALERTA: FAZER PURGA ATIVO' : 'Sinalizar Alerta de Purga'}
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => handleToggleTankFlag(selectedTankForDetails, 'CO2')}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-black border flex items-center justify-center gap-2 transition-all ${
-                        isTankCo2(selectedTankForDetails)
-                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400'
-                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                      onClick={() => handleToggleTankAlert(selectedTankForDetails, 'CO2')}
+                      className={`py-3 rounded-2xl text-xs font-black border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow ${
+                        hasCo2Alert(selectedTankForDetails)
+                          ? 'bg-cyan-500 text-slate-950 border-cyan-300 ring-2 ring-cyan-400/50'
+                          : 'bg-slate-800 text-slate-200 border-slate-600'
                       }`}
                     >
-                      <Droplet className="w-4 h-4" />
-                      {isTankCo2(selectedTankForDetails) ? 'Pressurizado CO2 (OK)' : 'Marcar Pressurização CO2'}
+                      <Droplet className="w-5 h-5" />
+                      {hasCo2Alert(selectedTankForDetails) ? '⚠️ ALERTA: BATER CO2 ATIVO' : 'Sinalizar Alerta de CO2'}
                     </button>
                   </div>
 
                   {selectedTankForDetails.activeBatch && (
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">
-                      <div className="bg-slate-800/60 p-3 rounded-2xl">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold block">OG Inicial</span>
-                        <span className="text-sm font-black text-white font-mono">
+                    <div className="grid grid-cols-2 gap-2.5 text-xs pt-2 border-t-2 border-slate-800">
+                      <div className="bg-slate-800 p-3 rounded-2xl border border-slate-700">
+                        <span className="text-xs text-slate-300 uppercase font-bold block">OG Inicial</span>
+                        <span className="text-base font-black text-white font-mono">
                           {selectedTankForDetails.activeBatch.measuredOg?.toFixed(3) ||
                             selectedTankForDetails.activeBatch.recipe?.og?.toFixed(3) ||
                             '—'}
                         </span>
                       </div>
-                      <div className="bg-slate-800/60 p-3 rounded-2xl">
-                        <span className="text-[10px] text-amber-400 uppercase font-bold block">
-                          Objetivo FG (Meta)
+                      <div className="bg-slate-800 p-3 rounded-2xl border border-slate-700">
+                        <span className="text-xs text-amber-400 uppercase font-bold block">
+                          Objetivo FG (Meta da Receita)
                         </span>
-                        <span className="text-sm font-black text-amber-400 font-mono">
+                        <span className="text-base font-black text-amber-400 font-mono">
                           {selectedTankForDetails.activeBatch.recipe?.fg?.toFixed(3) || '—'}
                         </span>
                       </div>
@@ -1449,20 +1464,20 @@ export default function FabricaChaoDeFabricaPage() {
                   )}
                 </div>
 
-                {/* FORMULÁRIO DE MEDIÇÃO DO DIA */}
+                {/* FORMULÁRIO DE MEDIÇÃO DIÁRIA */}
                 {selectedTankForDetails.activeBatch && (
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
+                  <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-amber-400" />
+                      <h4 className="font-black text-base text-white flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-amber-400" />
                         Registrar Medição do Dia
                       </h4>
-                      <div className="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                      <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
                         <button
                           type="button"
                           onClick={() => setMeasurementUnit('SG')}
-                          className={`px-2 py-1 text-[11px] font-bold rounded ${
-                            measurementUnit === 'SG' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'
+                          className={`px-3 py-1 text-xs font-black rounded-lg ${
+                            measurementUnit === 'SG' ? 'bg-amber-500 text-slate-950' : 'text-slate-300'
                           }`}
                         >
                           SG
@@ -1470,8 +1485,8 @@ export default function FabricaChaoDeFabricaPage() {
                         <button
                           type="button"
                           onClick={() => setMeasurementUnit('BRIX')}
-                          className={`px-2 py-1 text-[11px] font-bold rounded ${
-                            measurementUnit === 'BRIX' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'
+                          className={`px-3 py-1 text-xs font-black rounded-lg ${
+                            measurementUnit === 'BRIX' ? 'bg-amber-500 text-slate-950' : 'text-slate-300'
                           }`}
                         >
                           Brix
@@ -1481,7 +1496,7 @@ export default function FabricaChaoDeFabricaPage() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        <label className="block text-xs font-bold text-slate-200 mb-1">
                           {measurementUnit === 'SG' ? 'Densidade (SG):' : 'Leitura Refratômetro (°Bx):'}
                         </label>
                         <input
@@ -1489,12 +1504,12 @@ export default function FabricaChaoDeFabricaPage() {
                           value={measurementGravityInput}
                           onChange={(e) => setMeasurementGravityInput(e.target.value)}
                           placeholder={measurementUnit === 'SG' ? '1.020' : '7.5'}
-                          className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-sm font-black text-white text-center outline-none"
+                          className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        <label className="block text-xs font-bold text-slate-200 mb-1">
                           Temperatura (°C):
                         </label>
                         <input
@@ -1502,19 +1517,19 @@ export default function FabricaChaoDeFabricaPage() {
                           value={measurementTemp}
                           onChange={(e) => setMeasurementTemp(e.target.value)}
                           placeholder="18.5"
-                          className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-sm font-black text-white text-center outline-none"
+                          className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">pH (Opcional):</label>
+                      <label className="block text-xs font-bold text-slate-200 mb-1">pH (Opcional):</label>
                       <input
                         type="text"
                         value={measurementPh}
                         onChange={(e) => setMeasurementPh(e.target.value)}
                         placeholder="Ex: 4.4"
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-2.5 text-sm font-bold text-white text-center outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-sm font-bold text-white text-center outline-none"
                       />
                     </div>
 
@@ -1522,7 +1537,7 @@ export default function FabricaChaoDeFabricaPage() {
                       type="button"
                       onClick={handleSaveTankMeasurement}
                       disabled={isSavingMeasurement}
-                      className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                      className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
                     >
                       <Check className="w-5 h-5" />
                       Salvar Medição de Hoje
@@ -1530,18 +1545,18 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
                 )}
 
-                {/* TAREFAS DE ADEGA DO LOTE + BOTÃO DE ADICIONAR NOVA TAREFA */}
+                {/* TAREFAS DE ADEGA + BOTÃO DE NOVA TAREFA */}
                 {selectedTankForDetails.activeBatch && (
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
+                  <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
-                        <CheckSquare className="w-4 h-4 text-amber-400" />
+                      <h4 className="font-black text-base text-white flex items-center gap-2">
+                        <CheckSquare className="w-5 h-5 text-amber-400" />
                         Tarefas de Adega para este Lote
                       </h4>
                       <button
                         type="button"
                         onClick={() => setIsAddTaskModalOpen(!isAddTaskModalOpen)}
-                        className="flex items-center gap-1 text-xs font-black text-amber-400 bg-amber-500/20 px-3 py-1.5 rounded-xl border border-amber-500/30 active:scale-95 transition-all"
+                        className="flex items-center gap-1.5 text-xs font-black text-amber-400 bg-amber-500/20 px-3.5 py-2 rounded-xl border border-amber-500/40 active:scale-95 transition-all"
                       >
                         <Plus className="w-4 h-4" />
                         Nova Tarefa
@@ -1550,33 +1565,33 @@ export default function FabricaChaoDeFabricaPage() {
 
                     {/* MODAL / FORMULÁRIO DE ADICIONAR TAREFA NO APP */}
                     {isAddTaskModalOpen && (
-                      <div className="bg-slate-800/90 border border-amber-500/40 rounded-2xl p-4 space-y-3 animate-in fade-in">
+                      <div className="bg-slate-800 border-2 border-amber-500/60 rounded-2xl p-4 space-y-3 animate-in fade-in">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-amber-300">➕ Criar Tarefa de Adega</span>
+                          <span className="text-sm font-black text-amber-300">➕ Criar Nova Tarefa</span>
                           <button
                             type="button"
                             onClick={() => setIsAddTaskModalOpen(false)}
                             className="text-slate-400 hover:text-white"
                           >
-                            <X className="w-4 h-4" />
+                            <X className="w-5 h-5" />
                           </button>
                         </div>
 
-                        {/* Atalhos rápidos de título de tarefa */}
+                        {/* Atalhos rápidos */}
                         <div className="flex flex-wrap gap-1.5">
                           {[
                             'Dry Hopping',
                             'Purga de Levedura',
                             'Cold Crash (0°C)',
                             'Clarificação / Gelatina',
-                            'Pressurizar com CO2',
+                            'Bater CO2 / Pressurizar',
                             'Medição de Densidade',
                           ].map((chip) => (
                             <button
                               key={chip}
                               type="button"
                               onClick={() => setNewTaskTitle(chip)}
-                              className="px-2.5 py-1 text-[11px] font-bold bg-slate-900 text-slate-300 hover:text-amber-400 rounded-lg border border-slate-700 active:scale-95"
+                              className="px-2.5 py-1 text-xs font-bold bg-slate-900 text-slate-200 hover:text-amber-400 rounded-lg border border-slate-700 active:scale-95"
                             >
                               {chip}
                             </button>
@@ -1584,7 +1599,7 @@ export default function FabricaChaoDeFabricaPage() {
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                          <label className="block text-xs font-bold text-slate-200 mb-1">
                             Título da Tarefa:
                           </label>
                           <input
@@ -1592,19 +1607,19 @@ export default function FabricaChaoDeFabricaPage() {
                             value={newTaskTitle}
                             onChange={(e) => setNewTaskTitle(e.target.value)}
                             placeholder="Ex: Fazer Dry Hopping de 2kg de Citra"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-bold text-white outline-none focus:border-amber-500"
+                            className="w-full bg-slate-900 border-2 border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none focus:border-amber-400"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                          <label className="block text-xs font-bold text-slate-200 mb-1">
                             Data Prevista:
                           </label>
                           <input
                             type="date"
                             value={newTaskDueDate}
                             onChange={(e) => setNewTaskDueDate(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-amber-500"
+                            className="w-full bg-slate-900 border-2 border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white outline-none focus:border-amber-400"
                           />
                         </div>
 
@@ -1612,9 +1627,9 @@ export default function FabricaChaoDeFabricaPage() {
                           type="button"
                           onClick={handleAddNewTask}
                           disabled={isSavingNewTask || !newTaskTitle.trim()}
-                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                          className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-1.5"
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="w-5 h-5" />
                           Salvar Tarefa no Lote
                         </button>
                       </div>
@@ -1622,40 +1637,40 @@ export default function FabricaChaoDeFabricaPage() {
 
                     {/* MODAL / INPUT PARA EDITAR DATA DE REALIZAÇÃO RETROATIVA */}
                     {editingTaskIndex !== null && (
-                      <div className="bg-slate-800 border-2 border-emerald-500/50 rounded-2xl p-4 space-y-3 animate-in fade-in">
+                      <div className="bg-slate-800 border-2 border-emerald-500 rounded-2xl p-4 space-y-3 animate-in fade-in">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-emerald-300">
-                            ✏️ Editar Data de Realização
+                          <span className="text-sm font-black text-emerald-300">
+                            ✏️ Alterar Data de Realização
                           </span>
                           <button
                             type="button"
                             onClick={() => setEditingTaskIndex(null)}
                             className="text-slate-400 hover:text-white"
                           >
-                            <X className="w-4 h-4" />
+                            <X className="w-5 h-5" />
                           </button>
                         </div>
-                        <p className="text-[11px] text-slate-400">
-                          Se você realizou esta tarefa em outro dia e esqueceu de anotar, escolha a data exata abaixo:
+                        <p className="text-xs text-slate-300">
+                          Se você já havia feito este trabalho e esqueceu de anotar no dia, selecione a data real abaixo:
                         </p>
                         <input
                           type="date"
                           value={editCompletionDate}
                           onChange={(e) => setEditCompletionDate(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-emerald-500"
+                          className="w-full bg-slate-900 border-2 border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none focus:border-emerald-500"
                         />
                         <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={handleSaveTaskCompletionDate}
-                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all"
+                            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all shadow"
                           >
                             Confirmar Data
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingTaskIndex(null)}
-                            className="px-3 py-2 bg-slate-700 text-slate-300 font-bold text-xs rounded-xl"
+                            className="px-4 py-2.5 bg-slate-700 text-slate-200 font-bold text-xs rounded-xl"
                           >
                             Cancelar
                           </button>
@@ -1674,21 +1689,21 @@ export default function FabricaChaoDeFabricaPage() {
 
                       if (tasks.length === 0) {
                         return (
-                          <p className="text-xs text-slate-500 italic py-2">
+                          <p className="text-xs font-bold text-slate-400 italic py-2">
                             Nenhuma tarefa cadastrada. Toque em &quot;Nova Tarefa&quot; acima para adicionar.
                           </p>
                         );
                       }
 
                       return (
-                        <div className="space-y-2">
+                        <div className="space-y-2.5">
                           {tasks.map((task, idx) => (
                             <div
                               key={idx}
-                              className={`w-full p-3.5 rounded-2xl border flex flex-col gap-2 transition-all ${
+                              className={`w-full p-4 rounded-2xl border-2 flex flex-col gap-2 transition-all ${
                                 task.completed
-                                  ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300'
-                                  : 'bg-slate-800 border-slate-700 text-white'
+                                  ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-200'
+                                  : 'bg-slate-800/90 border-slate-700 text-white'
                               }`}
                             >
                               <div className="flex items-center justify-between">
@@ -1698,41 +1713,40 @@ export default function FabricaChaoDeFabricaPage() {
                                   className="flex items-center gap-3 text-left flex-1"
                                 >
                                   {task.completed ? (
-                                    <CheckSquare className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                                    <CheckSquare className="w-6 h-6 text-emerald-400 flex-shrink-0" />
                                   ) : (
-                                    <Square className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                                    <Square className="w-6 h-6 text-slate-400 flex-shrink-0" />
                                   )}
                                   <div>
                                     <div
-                                      className={`font-bold text-sm ${
+                                      className={`font-black text-base ${
                                         task.completed ? 'line-through text-slate-400' : 'text-white'
                                       }`}
                                     >
                                       {task.title}
                                     </div>
-                                    <div className="text-[11px] text-slate-400">
+                                    <div className="text-xs font-bold text-slate-300">
                                       Previsto: {formatDateShort(task.dueDate)}
                                     </div>
                                   </div>
                                 </button>
 
                                 <span
-                                  className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                                  className={`text-xs font-black uppercase px-2.5 py-1 rounded-md ${
                                     task.completed
-                                      ? 'bg-emerald-500/20 text-emerald-300'
-                                      : 'bg-amber-500/20 text-amber-300'
+                                      ? 'bg-emerald-500 text-slate-950 font-black'
+                                      : 'bg-amber-500 text-slate-950 font-black'
                                   }`}
                                 >
                                   {task.completed ? 'Feito' : 'Pendente'}
                                 </span>
                               </div>
 
-                              {/* DATA DE REALIZAÇÃO + BOTÃO DE EDITAR DATA */}
                               {task.completed && (
-                                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-700 text-xs text-slate-300">
                                   <span>
                                     Realizado em:{' '}
-                                    <strong className="text-emerald-400">
+                                    <strong className="text-emerald-400 font-mono">
                                       {formatDateShort(task.completedAt || task.dueDate)}
                                     </strong>
                                   </span>
@@ -1742,9 +1756,9 @@ export default function FabricaChaoDeFabricaPage() {
                                       setEditingTaskIndex(idx);
                                       setEditCompletionDate(task.completedAt || getLocalDateString());
                                     }}
-                                    className="flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700"
+                                    className="flex items-center gap-1.5 text-xs font-black text-amber-300 hover:text-white bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-600"
                                   >
-                                    <Calendar className="w-3 h-3" />
+                                    <Calendar className="w-3.5 h-3.5" />
                                     Mudar Data
                                   </button>
                                 </div>
@@ -1767,9 +1781,9 @@ export default function FabricaChaoDeFabricaPage() {
         {activeTab === 'BRASSAGEM' && (
           <div className="space-y-4">
             {/* Cronômetro Rápido da Panela */}
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
+            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                   <Clock className="w-4 h-4" /> Cronômetro de Fervura / Mostura
                 </span>
                 <button
@@ -1778,7 +1792,7 @@ export default function FabricaChaoDeFabricaPage() {
                     setIsTimerRunning(false);
                     setTimerSeconds(0);
                   }}
-                  className="text-xs text-slate-400 hover:text-white"
+                  className="text-xs font-bold text-slate-400 hover:text-white"
                 >
                   Zerar
                 </button>
@@ -1794,32 +1808,32 @@ export default function FabricaChaoDeFabricaPage() {
                 <button
                   type="button"
                   onClick={() => setIsTimerRunning(!isTimerRunning)}
-                  className={`flex-1 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${
+                  className={`flex-1 py-3.5 rounded-2xl font-black text-base flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${
                     isTimerRunning
                       ? 'bg-rose-600 hover:bg-rose-500 text-white'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                   }`}
                 >
-                  {isTimerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  {isTimerRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                   {isTimerRunning ? 'Pausar' : 'Iniciar Contagem'}
                 </button>
               </div>
             </div>
 
             {/* SELEÇÃO: EM ANDAMENTO VS INICIAR DE RECEITA DO SISTEMA */}
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
+            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-extrabold text-base text-white flex items-center gap-2">
+                <h2 className="font-black text-lg text-white flex items-center gap-2">
                   <Flame className="w-5 h-5 text-amber-500" />
                   Brassagem do Dia
                 </h2>
 
-                <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                <div className="flex bg-slate-800 p-1 rounded-xl border-2 border-slate-700">
                   <button
                     type="button"
                     onClick={() => setBrewMode('ACTIVE')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      brewMode === 'ACTIVE' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400'
+                    className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                      brewMode === 'ACTIVE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-300'
                     }`}
                   >
                     Em Andamento
@@ -1827,8 +1841,8 @@ export default function FabricaChaoDeFabricaPage() {
                   <button
                     type="button"
                     onClick={() => setBrewMode('NEW_RECIPE')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      brewMode === 'NEW_RECIPE' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400'
+                    className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                      brewMode === 'NEW_RECIPE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-300'
                     }`}
                   >
                     + De Receita
@@ -1836,24 +1850,23 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               </div>
 
-              {/* OPÇÃO 1: BRASSAGEM EM ANDAMENTO */}
               {brewMode === 'ACTIVE' ? (
                 activeBrewBatches.length === 0 ? (
-                  <div className="text-center py-4 space-y-2">
-                    <p className="text-xs text-slate-400">
+                  <div className="text-center py-5 space-y-2.5">
+                    <p className="text-sm font-bold text-slate-300">
                       Nenhuma brassagem marcada como &apos;BRASSAGEM&apos; ativa.
                     </p>
                     <button
                       type="button"
                       onClick={() => setBrewMode('NEW_RECIPE')}
-                      className="px-4 py-2 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl"
+                      className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-xl shadow-md"
                     >
                       Iniciar Brassagem a partir de Receita
                     </button>
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase">
                       Selecione a Brassagem Ativa:
                     </label>
                     <select
@@ -1870,7 +1883,7 @@ export default function FabricaChaoDeFabricaPage() {
                           if (found.tempMash) setBrewTempMashInput(String(found.tempMash));
                         }
                       }}
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-sm font-bold text-white outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none"
                     >
                       <option value="">-- Escolha o Lote --</option>
                       {activeBrewBatches.map((b) => (
@@ -1882,16 +1895,15 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
                 )
               ) : (
-                /* OPÇÃO 2: ESCOLHER RECEITA DISPONÍVEL NO SISTEMA */
-                <div className="space-y-3">
+                <div className="space-y-3.5">
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase">
                       Escolha uma Receita do Catálogo:
                     </label>
                     <select
                       value={selectedRecipeId}
                       onChange={(e) => handleSelectRecipeForBrew(e.target.value)}
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-sm font-bold text-white outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none"
                     >
                       <option value="">-- Selecionar Receita --</option>
                       {recipes.map((r) => (
@@ -1903,13 +1915,13 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
 
                   {selectedRecipeObj && (
-                    <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 text-xs space-y-1">
-                      <div className="font-black text-amber-300">{selectedRecipeObj.name}</div>
-                      <div className="text-slate-400">
+                    <div className="bg-slate-800 p-3.5 rounded-2xl border-2 border-slate-700 text-xs space-y-1.5">
+                      <div className="font-black text-base text-amber-300">{selectedRecipeObj.name}</div>
+                      <div className="text-slate-300 font-bold">
                         Estilo: {selectedRecipeObj.style} • Rendimento:{' '}
                         {selectedRecipeObj.batchYieldLiters || 500}L
                       </div>
-                      <div className="flex gap-4 pt-1 font-mono text-[11px] text-slate-300">
+                      <div className="flex gap-4 pt-1 font-mono text-xs text-white font-bold">
                         <span>OG Alvo: {selectedRecipeObj.og || '—'}</span>
                         <span>FG Alvo: {selectedRecipeObj.fg || '—'}</span>
                         <span>pH Mostura: {selectedRecipeObj.targetPhMash || '5.3'}</span>
@@ -1919,7 +1931,7 @@ export default function FabricaChaoDeFabricaPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      <label className="block text-xs font-bold text-slate-200 mb-1 uppercase">
                         Número do Lote:
                       </label>
                       <input
@@ -1927,18 +1939,18 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewBatchNumber}
                         onChange={(e) => setBrewBatchNumber(e.target.value.toUpperCase())}
                         placeholder="Ex: IPA-2601"
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-sm font-black text-white text-center font-mono outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      <label className="block text-xs font-bold text-slate-200 mb-1 uppercase">
                         Tanque Destino:
                       </label>
                       <select
                         value={brewTargetTankId}
                         onChange={(e) => setBrewTargetTankId(e.target.value)}
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-xs font-bold text-white outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-bold text-white outline-none"
                       >
                         <option value="">Sem tanque (Panela)</option>
                         {tanks.map((t) => (
@@ -1952,16 +1964,16 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               )}
 
-              {/* FORMULÁRIO DE MEDIÇÕES DA BRASSAGEM: OG, PH MOSTURA, PH FERVIURA, TEMP */}
+              {/* FORMULÁRIO DE MEDIÇÕES DA BRASSAGEM COM ALTA LEGIBILIDADE */}
               {(selectedBrewBatch || (brewMode === 'NEW_RECIPE' && selectedRecipeId)) && (
-                <div className="pt-3 border-t border-slate-800 space-y-3">
-                  <h4 className="font-extrabold text-xs uppercase tracking-wider text-amber-400">
+                <div className="pt-3 border-t-2 border-slate-800 space-y-3.5">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-amber-400">
                     🔬 Medições & Parâmetros da Brassagem
                   </h4>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      <label className="block text-xs font-bold text-slate-200 mb-1">
                         OG Medida (Pós-Fervura):
                       </label>
                       <input
@@ -1969,12 +1981,12 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewOgInput}
                         onChange={(e) => setBrewOgInput(e.target.value)}
                         placeholder="1.054"
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center font-mono outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      <label className="block text-xs font-bold text-slate-200 mb-1">
                         Volume no Fermentador (L):
                       </label>
                       <input
@@ -1982,40 +1994,40 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewVolumeInput}
                         onChange={(e) => setBrewVolumeInput(e.target.value)}
                         placeholder="520"
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center font-mono outline-none"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-300 mb-1">
-                        pH da Mostura:
+                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                        pH Mostura:
                       </label>
                       <input
                         type="text"
                         value={brewPhMashInput}
                         onChange={(e) => setBrewPhMashInput(e.target.value)}
                         placeholder="5.3"
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-2.5 text-sm font-black text-white text-center outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-300 mb-1">
-                        pH Fervura/Whirl:
+                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                        pH Fervura:
                       </label>
                       <input
                         type="text"
                         value={brewPhBoilInput}
                         onChange={(e) => setBrewPhBoilInput(e.target.value)}
                         placeholder="5.1"
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-2.5 text-sm font-black text-white text-center outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-300 mb-1">
+                      <label className="block text-xs font-bold text-slate-200 mb-1">
                         Temp Mostura (°C):
                       </label>
                       <input
@@ -2023,30 +2035,30 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewTempMashInput}
                         onChange={(e) => setBrewTempMashInput(e.target.value)}
                         placeholder="66.5"
-                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-2.5 text-sm font-black text-white text-center outline-none"
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                      Anotações da Brassagem (Opcional):
+                    <label className="block text-xs font-bold text-slate-200 mb-1">
+                      Anotações da Brassagem:
                     </label>
                     <input
                       type="text"
                       value={brewNotesInput}
                       onChange={(e) => setBrewNotesInput(e.target.value)}
-                      placeholder="Ex: Whirlpool a 80°C, 15 min de repouso..."
-                      className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-3 py-2.5 text-xs text-white outline-none focus:border-amber-500"
+                      placeholder="Ex: Whirlpool a 80°C, mosto límpido..."
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-sm text-white outline-none"
                     />
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                  <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
                     <button
                       type="button"
                       onClick={() => handleSaveBreweryData(false)}
                       disabled={isSavingBrew}
-                      className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-2xl border border-slate-700 transition-all active:scale-95"
+                      className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white font-black text-sm rounded-2xl border-2 border-slate-600 transition-all active:scale-95 shadow"
                     >
                       Salvar Medições
                     </button>
@@ -2055,9 +2067,9 @@ export default function FabricaChaoDeFabricaPage() {
                       type="button"
                       onClick={() => handleSaveBreweryData(true)}
                       disabled={isSavingBrew}
-                      className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
                     >
-                      <Check className="w-4 h-4" />
+                      <Check className="w-5 h-5" />
                       Enviar para Fermentador
                     </button>
                   </div>
@@ -2072,14 +2084,14 @@ export default function FabricaChaoDeFabricaPage() {
         {/* ========================================================= */}
         {activeTab === 'CALCULADORA' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
                 type="button"
                 onClick={() => setCalcTab('REFRACTOMETER')}
-                className={`py-3 px-2 rounded-2xl font-bold text-xs transition-all active:scale-95 border ${
+                className={`py-3.5 px-2 rounded-2xl font-black text-xs transition-all active:scale-95 border-2 shadow ${
                   calcTab === 'REFRACTOMETER'
-                    ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-amber-500 border-amber-300 text-slate-950 scale-105'
+                    : 'bg-slate-900 border-slate-700 text-slate-200'
                 }`}
               >
                 Refratômetro
@@ -2088,10 +2100,10 @@ export default function FabricaChaoDeFabricaPage() {
               <button
                 type="button"
                 onClick={() => setCalcTab('HYDROMETER')}
-                className={`py-3 px-2 rounded-2xl font-bold text-xs transition-all active:scale-95 border ${
+                className={`py-3.5 px-2 rounded-2xl font-black text-xs transition-all active:scale-95 border-2 shadow ${
                   calcTab === 'HYDROMETER'
-                    ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-amber-500 border-amber-300 text-slate-950 scale-105'
+                    : 'bg-slate-900 border-slate-700 text-slate-200'
                 }`}
               >
                 Densímetro / Temp
@@ -2100,10 +2112,10 @@ export default function FabricaChaoDeFabricaPage() {
               <button
                 type="button"
                 onClick={() => setCalcTab('BRIX_SG')}
-                className={`py-3 px-2 rounded-2xl font-bold text-xs transition-all active:scale-95 border ${
+                className={`py-3.5 px-2 rounded-2xl font-black text-xs transition-all active:scale-95 border-2 shadow ${
                   calcTab === 'BRIX_SG'
-                    ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-amber-500 border-amber-300 text-slate-950 scale-105'
+                    : 'bg-slate-900 border-slate-700 text-slate-200'
                 }`}
               >
                 Brix ↔ SG
@@ -2112,10 +2124,10 @@ export default function FabricaChaoDeFabricaPage() {
               <button
                 type="button"
                 onClick={() => setCalcTab('ABV')}
-                className={`py-3 px-2 rounded-2xl font-bold text-xs transition-all active:scale-95 border ${
+                className={`py-3.5 px-2 rounded-2xl font-black text-xs transition-all active:scale-95 border-2 shadow ${
                   calcTab === 'ABV'
-                    ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg'
-                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                    ? 'bg-amber-500 border-amber-300 text-slate-950 scale-105'
+                    : 'bg-slate-900 border-slate-700 text-slate-200'
                 }`}
               >
                 Cálculo de ABV
@@ -2123,29 +2135,29 @@ export default function FabricaChaoDeFabricaPage() {
             </div>
 
             {calcTab === 'REFRACTOMETER' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
-                <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                  <Calculator className="w-4 h-4 text-amber-400" />
+              <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
+                <h3 className="font-black text-base text-white flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-amber-400" />
                   Correção de Refratômetro na Fermentação
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs font-bold text-slate-300">
                   O álcool altera a refração da luz. Esta ferramenta calcula a densidade e teor alcoólico reais.
                 </p>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">OG Inicial (SG):</label>
+                    <label className="block text-xs font-bold text-slate-200 mb-1">OG Inicial (SG):</label>
                     <input
                       type="text"
                       value={calcOgSg}
                       onChange={(e) => setCalcOgSg(e.target.value)}
                       placeholder="1.054"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3.5 text-lg font-black text-white text-center outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    <label className="block text-xs font-bold text-slate-200 mb-1">
                       Brix Lido no Refratômetro:
                     </label>
                     <input
@@ -2153,23 +2165,23 @@ export default function FabricaChaoDeFabricaPage() {
                       value={calcCurrentBrix}
                       onChange={(e) => setCalcCurrentBrix(e.target.value)}
                       placeholder="6.5"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-amber-400 text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3.5 text-lg font-black text-amber-400 text-center outline-none"
                     />
                   </div>
                 </div>
 
                 {refractometerResults && (
-                  <div className="pt-2 grid grid-cols-2 gap-2.5">
-                    <div className="bg-slate-800/80 border border-slate-700 p-4 rounded-2xl text-center">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">FG Real Corrigida</span>
-                      <span className="font-black text-2xl text-emerald-400 font-mono">
+                  <div className="pt-2 grid grid-cols-2 gap-3">
+                    <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center shadow">
+                      <span className="text-xs font-black uppercase text-slate-300 block">FG Real Corrigida</span>
+                      <span className="font-black text-3xl text-emerald-400 font-mono">
                         {refractometerResults.fgSg.toFixed(3)}
                       </span>
                     </div>
 
-                    <div className="bg-slate-800/80 border border-slate-700 p-4 rounded-2xl text-center">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Teor Alcoólico</span>
-                      <span className="font-black text-2xl text-amber-400 font-mono">
+                    <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center shadow">
+                      <span className="text-xs font-black uppercase text-slate-300 block">Teor Alcoólico</span>
+                      <span className="font-black text-3xl text-amber-400 font-mono">
                         {refractometerResults.abv.toFixed(1)}% ABV
                       </span>
                     </div>
@@ -2179,55 +2191,55 @@ export default function FabricaChaoDeFabricaPage() {
             )}
 
             {calcTab === 'HYDROMETER' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
-                <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                  <Thermometer className="w-4 h-4 text-blue-400" />
+              <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
+                <h3 className="font-black text-base text-white flex items-center gap-2">
+                  <Thermometer className="w-5 h-5 text-blue-400" />
                   Correção de Densímetro por Temperatura
                 </h3>
 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 mb-1">Leitura SG:</label>
+                    <label className="block text-xs font-bold text-slate-200 mb-1">Leitura SG:</label>
                     <input
                       type="text"
                       value={calcHydroSg}
                       onChange={(e) => setCalcHydroSg(e.target.value)}
                       placeholder="1.050"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-3 text-sm font-black text-white text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-3 text-base font-black text-white text-center outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 mb-1">Temp Amostra (°C):</label>
+                    <label className="block text-xs font-bold text-slate-200 mb-1">Temp Amostra (°C):</label>
                     <input
                       type="text"
                       value={calcHydroTemp}
                       onChange={(e) => setCalcHydroTemp(e.target.value)}
                       placeholder="28"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-3 text-sm font-black text-amber-400 text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-3 text-base font-black text-amber-400 text-center outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 mb-1">Calibragem (°C):</label>
+                    <label className="block text-xs font-bold text-slate-200 mb-1">Calibragem (°C):</label>
                     <input
                       type="text"
                       value={calcCalibTemp}
                       onChange={(e) => setCalcCalibTemp(e.target.value)}
                       placeholder="20"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-3 text-sm font-black text-white text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-2 py-3 text-base font-black text-white text-center outline-none"
                     />
                   </div>
                 </div>
 
-                <div className="bg-slate-800/80 border border-slate-700 p-4 rounded-2xl text-center space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center space-y-1 shadow">
+                  <span className="text-xs font-black uppercase text-slate-300 block">
                     Densidade Corrigida a {calcCalibTemp}°C
                   </span>
                   <span className="font-black text-3xl text-emerald-400 font-mono">
                     {hydrometerResults.correctedSg.toFixed(3)} SG
                   </span>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs font-bold text-slate-300">
                     Ajuste térmico:{' '}
                     {hydrometerResults.diffPoints > 0
                       ? `+${hydrometerResults.diffPoints}`
@@ -2239,14 +2251,14 @@ export default function FabricaChaoDeFabricaPage() {
             )}
 
             {calcTab === 'BRIX_SG' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
-                <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                  <Calculator className="w-4 h-4 text-amber-400" />
+              <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
+                <h3 className="font-black text-base text-white flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-amber-400" />
                   Conversor Rápido Brix ↔ Densidade (SG)
                 </h3>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 uppercase">
                     Valor em Graus Brix (°Bx) / Plato:
                   </label>
                   <input
@@ -2254,13 +2266,13 @@ export default function FabricaChaoDeFabricaPage() {
                     value={calcRawBrix}
                     onChange={(e) => setCalcRawBrix(e.target.value)}
                     placeholder="13.0"
-                    className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-xl font-black text-amber-400 text-center outline-none"
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-2xl font-black text-amber-400 text-center outline-none"
                   />
                 </div>
 
-                <div className="bg-slate-800/80 border border-slate-700 p-4 rounded-2xl text-center">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Gravidade Específica (SG)</span>
-                  <span className="font-black text-3xl text-emerald-400 font-mono">
+                <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center shadow">
+                  <span className="text-xs font-black uppercase text-slate-300 block">Gravidade Específica (SG)</span>
+                  <span className="font-black text-4xl text-emerald-400 font-mono">
                     {brixToSgResult.sg.toFixed(3)}
                   </span>
                 </div>
@@ -2268,42 +2280,42 @@ export default function FabricaChaoDeFabricaPage() {
             )}
 
             {calcTab === 'ABV' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
-                <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                  <Beer className="w-4 h-4 text-amber-400" />
+              <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
+                <h3 className="font-black text-base text-white flex items-center gap-2">
+                  <Beer className="w-5 h-5 text-amber-400" />
                   Cálculo Direto de Teor Alcoólico (ABV)
                 </h3>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">OG (Densidade Inicial):</label>
+                    <label className="block text-xs font-bold text-slate-200 mb-1">OG (Densidade Inicial):</label>
                     <input
                       type="text"
                       value={calcAbvOg}
                       onChange={(e) => setCalcAbvOg(e.target.value)}
                       placeholder="1.054"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">FG (Densidade Final):</label>
+                    <label className="block text-xs font-bold text-slate-200 mb-1">FG (Densidade Final):</label>
                     <input
                       type="text"
                       value={calcAbvFg}
                       onChange={(e) => setCalcAbvFg(e.target.value)}
                       placeholder="1.012"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
                     />
                   </div>
                 </div>
 
-                <div className="bg-slate-800/80 border border-slate-700 p-4 rounded-2xl text-center space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Teor Alcoólico Estimado</span>
+                <div className="bg-slate-800 border-2 border-slate-700 p-4 rounded-2xl text-center space-y-1 shadow">
+                  <span className="text-xs font-black uppercase text-slate-300 block">Teor Alcoólico Estimado</span>
                   <span className="font-black text-4xl text-amber-400 font-mono">
                     {abvDirectResult.abv.toFixed(2)}%
                   </span>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs font-bold text-slate-300">
                     Atenuação Aparente: <strong className="text-white">{abvDirectResult.attenuation}%</strong>
                   </div>
                 </div>
@@ -2314,11 +2326,11 @@ export default function FabricaChaoDeFabricaPage() {
       </main>
 
       {/* BARRA INFERIOR DE NAVEGAÇÃO TOUCH GIGANTE (FINGER-FRIENDLY) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-2 py-2 flex items-center justify-around shadow-2xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t-2 border-slate-700 px-2 py-2 flex items-center justify-around shadow-2xl">
         <button
           onClick={() => setActiveTab('ENVASE')}
           className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl transition-all active:scale-95 ${
-            activeTab === 'ENVASE' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            activeTab === 'ENVASE' ? 'text-amber-400 font-black' : 'text-slate-300 hover:text-white'
           }`}
         >
           <div
@@ -2328,13 +2340,13 @@ export default function FabricaChaoDeFabricaPage() {
           >
             <Package className="w-5 h-5" />
           </div>
-          <span className="text-[11px] tracking-tight">Envases</span>
+          <span className="text-xs font-bold tracking-tight">Envases</span>
         </button>
 
         <button
           onClick={() => setActiveTab('BARRIS')}
           className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl transition-all active:scale-95 ${
-            activeTab === 'BARRIS' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            activeTab === 'BARRIS' ? 'text-amber-400 font-black' : 'text-slate-300 hover:text-white'
           }`}
         >
           <div
@@ -2344,13 +2356,13 @@ export default function FabricaChaoDeFabricaPage() {
           >
             <Cylinder className="w-5 h-5" />
           </div>
-          <span className="text-[11px] tracking-tight">Barris</span>
+          <span className="text-xs font-bold tracking-tight">Barris</span>
         </button>
 
         <button
           onClick={() => setActiveTab('TANQUES')}
           className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl transition-all active:scale-95 ${
-            activeTab === 'TANQUES' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            activeTab === 'TANQUES' ? 'text-amber-400 font-black' : 'text-slate-300 hover:text-white'
           }`}
         >
           <div
@@ -2360,13 +2372,13 @@ export default function FabricaChaoDeFabricaPage() {
           >
             <Activity className="w-5 h-5" />
           </div>
-          <span className="text-[11px] tracking-tight">Tanques</span>
+          <span className="text-xs font-bold tracking-tight">Tanques</span>
         </button>
 
         <button
           onClick={() => setActiveTab('BRASSAGEM')}
           className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl transition-all active:scale-95 ${
-            activeTab === 'BRASSAGEM' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            activeTab === 'BRASSAGEM' ? 'text-amber-400 font-black' : 'text-slate-300 hover:text-white'
           }`}
         >
           <div
@@ -2376,13 +2388,13 @@ export default function FabricaChaoDeFabricaPage() {
           >
             <Flame className="w-5 h-5" />
           </div>
-          <span className="text-[11px] tracking-tight">Brassagem</span>
+          <span className="text-xs font-bold tracking-tight">Brassagem</span>
         </button>
 
         <button
           onClick={() => setActiveTab('CALCULADORA')}
           className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl transition-all active:scale-95 ${
-            activeTab === 'CALCULADORA' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            activeTab === 'CALCULADORA' ? 'text-amber-400 font-black' : 'text-slate-300 hover:text-white'
           }`}
         >
           <div
@@ -2392,7 +2404,7 @@ export default function FabricaChaoDeFabricaPage() {
           >
             <Calculator className="w-5 h-5" />
           </div>
-          <span className="text-[11px] tracking-tight">Calculadora</span>
+          <span className="text-xs font-bold tracking-tight">Calculadora</span>
         </button>
       </nav>
     </div>
