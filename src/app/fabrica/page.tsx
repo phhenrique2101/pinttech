@@ -38,6 +38,12 @@ import {
   ArrowLeft,
   Smartphone,
   Eye,
+  Calendar,
+  Edit2,
+  Wind,
+  CheckCircle,
+  TrendingDown,
+  Target,
 } from 'lucide-react';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import { playFeedback } from '@/lib/sound';
@@ -59,20 +65,22 @@ export default function FabricaChaoDeFabricaPage() {
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState<any[]>([]);
   const [tanks, setTanks] = useState<any[]>([]);
+  const [recipes, setRecipes] = useState<any[]>([]);
   const [sessionUser, setSessionUser] = useState<any>(null);
 
-  // Status feedback bar
+  // Status feedback banner
   const [banner, setBanner] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // -------------------------------------------------------------
-  // CARREGAR DADOS ESSENCIAIS (BATCHES, TANKS, USER)
+  // CARREGAR DADOS ESSENCIAIS (BATCHES, TANKS, RECIPES, USER)
   // -------------------------------------------------------------
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [batchesRes, tanksRes, userRes] = await Promise.all([
+      const [batchesRes, tanksRes, recipesRes, userRes] = await Promise.all([
         fetch('/api/batches'),
         fetch('/api/tanks'),
+        fetch('/api/recipes'),
         fetch('/api/auth/me'),
       ]);
 
@@ -83,6 +91,10 @@ export default function FabricaChaoDeFabricaPage() {
       if (tanksRes.ok) {
         const data = await tanksRes.json();
         setTanks(Array.isArray(data) ? data : []);
+      }
+      if (recipesRes.ok) {
+        const data = await recipesRes.json();
+        setRecipes(Array.isArray(data) ? data : []);
       }
       if (userRes.ok) {
         const data = await userRes.json();
@@ -124,7 +136,7 @@ export default function FabricaChaoDeFabricaPage() {
   >([]);
   const [isProcessingEnvase, setIsProcessingEnvase] = useState(false);
 
-  // Auto-selecionar o primeiro lote em tanque para facilitar a vida do operador
+  // Auto-selecionar o primeiro lote em tanque
   useEffect(() => {
     if (!selectedBatchId && batches.length > 0) {
       const active = batches.find((b) => b.tankId && b.status !== 'FINALIZADO' && b.status !== 'CANCELADO');
@@ -139,8 +151,7 @@ export default function FabricaChaoDeFabricaPage() {
 
   const handleScanForEnvase = async (scannedCode: string) => {
     const code = scannedCode.trim().toUpperCase();
-    if (!code) return;
-    if (isProcessingEnvase) return;
+    if (!code || isProcessingEnvase) return;
 
     if (envaseSourceType === 'BATCH' && !selectedBatchId) {
       showBanner('Por favor, selecione qual tanque / lote está envasando acima!', 'error');
@@ -243,7 +254,6 @@ export default function FabricaChaoDeFabricaPage() {
           showBanner(data.error || `Erro ao higienizar barril ${code}`, 'error');
         }
       } else if (kegSubMode === 'MAINTENANCE') {
-        // Enviar para manutenção
         const res = await fetch('/api/kegs/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -329,7 +339,7 @@ export default function FabricaChaoDeFabricaPage() {
   };
 
   // -------------------------------------------------------------
-  // 3. MÓDULO DE TANQUES & ADEGA
+  // 3. MÓDULO DE TANQUES & ADEGA (COM PURGA, CO2, OG, TARGET FG E TAREFAS)
   // -------------------------------------------------------------
   const [selectedTankForDetails, setSelectedTankForDetails] = useState<any | null>(null);
   const [measurementGravityInput, setMeasurementGravityInput] = useState<string>('1.020');
@@ -338,13 +348,108 @@ export default function FabricaChaoDeFabricaPage() {
   const [measurementPh, setMeasurementPh] = useState<string>('');
   const [isSavingMeasurement, setIsSavingMeasurement] = useState(false);
 
+  // Estados para Adicionar Nova Tarefa de Adega
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState(getLocalDateString());
+  const [isSavingNewTask, setIsSavingNewTask] = useState(false);
+
+  // Estado para Edição de Data de Realização de Tarefa
+  const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
+  const [editCompletionDate, setEditCompletionDate] = useState<string>(getLocalDateString());
+
+  // Utilitários para Purga e CO2 armazenados no campo notes do Tanque
+  const isTankPurged = (tank: any) => Boolean(tank.notes?.includes('[PURGA:OK]'));
+  const isTankCo2 = (tank: any) => Boolean(tank.notes?.includes('[CO2:OK]'));
+
+  const handleToggleTankFlag = async (tank: any, flag: 'PURGA' | 'CO2', e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const currentNotes = tank.notes || '';
+    const token = `[${flag}:OK]`;
+    const isSet = currentNotes.includes(token);
+    const newNotes = isSet ? currentNotes.replace(token, '').trim() : `${currentNotes} ${token}`.trim();
+
+    playFeedback('click');
+
+    // Atualização otimista imediata na UI
+    setTanks((prev) => prev.map((t) => (t.id === tank.id ? { ...t, notes: newNotes } : t)));
+    if (selectedTankForDetails?.id === tank.id) {
+      setSelectedTankForDetails((prev: any) => (prev ? { ...prev, notes: newNotes } : null));
+    }
+
+    try {
+      await fetch(`/api/tanks/${tank.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: newNotes }),
+      });
+      showBanner(
+        flag === 'PURGA'
+          ? isSet
+            ? `Tanque ${tank.name}: Purga desmarcada`
+            : `💨 Tanque ${tank.name}: PURGA marcada com sucesso!`
+          : isSet
+          ? `Tanque ${tank.name}: CO2 desmarcado`
+          : `🫧 Tanque ${tank.name}: Pressurização CO2 marcada com sucesso!`,
+        'info'
+      );
+    } catch {
+      showBanner('Erro ao salvar alteração no tanque', 'error');
+    }
+  };
+
   const activeTanksList = useMemo(() => {
     return tanks.map((tank) => {
-      // Procurar lote ativo vinculado ao tanque
       const activeBatch = batches.find(
         (b) => b.tankId === tank.id && b.status !== 'FINALIZADO' && b.status !== 'CANCELADO'
       );
-      return { ...tank, activeBatch };
+
+      // Calcular dados de fermentação (OG, Meta FG, Densidade Atual, ABV e Atenuação)
+      const og = activeBatch?.measuredOg || activeBatch?.recipe?.og || null;
+      const targetFg = activeBatch?.recipe?.fg || null;
+
+      let currentGravity = activeBatch?.measuredFg || null;
+      let lastLogTemp: number | null = null;
+      try {
+        if (activeBatch?.fermentationLogsJson) {
+          const logs = JSON.parse(activeBatch.fermentationLogsJson);
+          if (Array.isArray(logs) && logs.length > 0) {
+            const last = logs[logs.length - 1];
+            if (last.gravity) currentGravity = last.gravity;
+            if (last.tempCelsius !== undefined) lastLogTemp = last.tempCelsius;
+          }
+        }
+      } catch {}
+
+      // ABV em tempo real
+      let currentAbv = activeBatch?.measuredAbv || null;
+      if (og && currentGravity && og > currentGravity) {
+        currentAbv = Math.round(calculateAbv(og, currentGravity) * 10) / 10;
+      }
+
+      // Progresso da atenuação em direção à FG Alvo
+      let progressPercent = 0;
+      let pointsRemaining = 0;
+      if (og && targetFg && currentGravity && og > targetFg) {
+        const totalDrop = og - targetFg;
+        const currentDrop = og - currentGravity;
+        progressPercent = Math.min(100, Math.max(0, Math.round((currentDrop / totalDrop) * 100)));
+        pointsRemaining = Math.max(0, Math.round((currentGravity - targetFg) * 1000));
+      }
+
+      return {
+        ...tank,
+        activeBatch,
+        metrics: {
+          og,
+          targetFg,
+          currentGravity,
+          currentAbv,
+          progressPercent,
+          pointsRemaining,
+          lastLogTemp,
+        },
+      };
     });
   }, [tanks, batches]);
 
@@ -365,7 +470,6 @@ export default function FabricaChaoDeFabricaPage() {
         const pBrix = parseFloat(measurementGravityInput.replace(',', '.'));
         if (!isNaN(pBrix) && pBrix > 0) {
           rawBrix = pBrix;
-          // Se tiver OG da receita/lote, corrige a refração com álcool
           const baseOg = batch.measuredOg || batch.recipe?.og || 1.050;
           const corrected = correctRefractometerBrix(baseOg, pBrix);
           finalSg = corrected.fgSg;
@@ -378,12 +482,10 @@ export default function FabricaChaoDeFabricaPage() {
       const tempC = parseFloat(measurementTemp.replace(',', '.')) || 18;
       const phVal = measurementPh ? parseFloat(measurementPh.replace(',', '.')) : undefined;
 
-      // Calcular atenuação e ABV estimado
       const og = batch.measuredOg || batch.recipe?.og || 1.050;
       const abv = calculateAbv(og, finalSg);
       const attenuation = Math.round(((og - finalSg) / (og - 1.0)) * 100);
 
-      // Carregar logs anteriores
       let logs: any[] = [];
       try {
         if (batch.fermentationLogsJson) logs = JSON.parse(batch.fermentationLogsJson);
@@ -417,7 +519,6 @@ export default function FabricaChaoDeFabricaPage() {
       if (res.ok) {
         showBanner(`📈 Medição gravada: ${finalSg.toFixed(3)} SG @ ${tempC}°C (ABV: ${abv.toFixed(1)}%)`, 'success');
         await loadInitialData();
-        // Atualizar estado local do tanque selecionado
         setSelectedTankForDetails((prev: any) => ({
           ...prev,
           activeBatch: {
@@ -437,7 +538,7 @@ export default function FabricaChaoDeFabricaPage() {
     }
   };
 
-  // Alternar checkbox de tarefa de adega
+  // Concluir ou reabrir tarefa de adega
   const handleToggleTankTask = async (taskIndex: number) => {
     if (!selectedTankForDetails?.activeBatch?.id) return;
     const batch = selectedTankForDetails.activeBatch;
@@ -448,22 +549,21 @@ export default function FabricaChaoDeFabricaPage() {
     } catch {}
 
     if (!tasks[taskIndex]) return;
-    tasks[taskIndex].completed = !tasks[taskIndex].completed;
-    tasks[taskIndex].completedAt = tasks[taskIndex].completed ? new Date().toISOString() : null;
+    const willBeCompleted = !tasks[taskIndex].completed;
+    tasks[taskIndex].completed = willBeCompleted;
+    tasks[taskIndex].completedAt = willBeCompleted ? getLocalDateString() : null;
 
     try {
       playFeedback('click');
       const res = await fetch(`/api/batches/${batch.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tankTasksJson: JSON.stringify(tasks),
-        }),
+        body: JSON.stringify({ tankTasksJson: JSON.stringify(tasks) }),
       });
       if (res.ok) {
         showBanner(
-          tasks[taskIndex].completed
-            ? `✔️ Tarefa "${tasks[taskIndex].title}" concluída!`
+          willBeCompleted
+            ? `✔️ Tarefa "${tasks[taskIndex].title}" marcada como feita hoje!`
             : `Tarefa "${tasks[taskIndex].title}" reaberta`,
           'info'
         );
@@ -478,16 +578,109 @@ export default function FabricaChaoDeFabricaPage() {
     }
   };
 
+  // Salvar data retroativa de realização da tarefa
+  const handleSaveTaskCompletionDate = async () => {
+    if (editingTaskIndex === null || !selectedTankForDetails?.activeBatch?.id) return;
+    const batch = selectedTankForDetails.activeBatch;
+
+    let tasks: any[] = [];
+    try {
+      if (batch.tankTasksJson) tasks = JSON.parse(batch.tankTasksJson);
+    } catch {}
+
+    if (!tasks[editingTaskIndex]) return;
+    tasks[editingTaskIndex].completed = true;
+    tasks[editingTaskIndex].completedAt = editCompletionDate;
+
+    try {
+      playFeedback('click');
+      const res = await fetch(`/api/batches/${batch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankTasksJson: JSON.stringify(tasks) }),
+      });
+      if (res.ok) {
+        showBanner(`📅 Data de realização atualizada para: ${formatDateShort(editCompletionDate)}`, 'success');
+        await loadInitialData();
+        setSelectedTankForDetails((prev: any) => ({
+          ...prev,
+          activeBatch: { ...prev.activeBatch, tankTasksJson: JSON.stringify(tasks) },
+        }));
+        setEditingTaskIndex(null);
+      }
+    } catch {
+      showBanner('Erro ao salvar data da tarefa', 'error');
+    }
+  };
+
+  // Adicionar Nova Tarefa de Adega no Tanque
+  const handleAddNewTask = async () => {
+    if (!newTaskTitle.trim() || !selectedTankForDetails?.activeBatch?.id) {
+      showBanner('Informe o título da tarefa', 'error');
+      return;
+    }
+    const batch = selectedTankForDetails.activeBatch;
+    setIsSavingNewTask(true);
+
+    try {
+      let tasks: any[] = [];
+      try {
+        if (batch.tankTasksJson) tasks = JSON.parse(batch.tankTasksJson);
+      } catch {}
+
+      const newTask = {
+        id: `task_${Date.now()}`,
+        title: newTaskTitle.trim(),
+        dueDate: newTaskDueDate || getLocalDateString(),
+        completed: false,
+      };
+
+      const updatedTasks = [...tasks, newTask];
+
+      const res = await fetch(`/api/batches/${batch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankTasksJson: JSON.stringify(updatedTasks) }),
+      });
+
+      if (res.ok) {
+        showBanner(`✨ Tarefa "${newTask.title}" adicionada com sucesso!`, 'success');
+        setNewTaskTitle('');
+        setIsAddTaskModalOpen(false);
+        await loadInitialData();
+        setSelectedTankForDetails((prev: any) => ({
+          ...prev,
+          activeBatch: { ...prev.activeBatch, tankTasksJson: JSON.stringify(updatedTasks) },
+        }));
+      } else {
+        showBanner('Erro ao cadastrar tarefa', 'error');
+      }
+    } catch {
+      showBanner('Falha de rede ao salvar tarefa', 'error');
+    } finally {
+      setIsSavingNewTask(false);
+    }
+  };
+
   // -------------------------------------------------------------
-  // 4. MÓDULO DE BRASSAGEM DO DIA
+  // 4. MÓDULO DE BRASSAGEM (ESCOLHA DE RECEITA, MEDIÇÕES DE PH, OG, ETC)
   // -------------------------------------------------------------
+  const [brewMode, setBrewMode] = useState<'ACTIVE' | 'NEW_RECIPE'>('ACTIVE');
   const [selectedBrewBatch, setSelectedBrewBatch] = useState<any | null>(null);
-  const [brewOgInput, setBrewOgInput] = useState<string>('1.050');
-  const [brewVolumeInput, setBrewVolumeInput] = useState<string>('500');
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
+
+  // Medições detalhadas da brassagem
+  const [brewBatchNumber, setBrewBatchNumber] = useState<string>('');
+  const [brewTargetTankId, setBrewTargetTankId] = useState<string>('');
+  const [brewOgInput, setBrewOgInput] = useState<string>('1.054');
+  const [brewPhMashInput, setBrewPhMashInput] = useState<string>('5.3');
+  const [brewPhBoilInput, setBrewPhBoilInput] = useState<string>('5.1');
   const [brewTempMashInput, setBrewTempMashInput] = useState<string>('66');
+  const [brewVolumeInput, setBrewVolumeInput] = useState<string>('500');
+  const [brewNotesInput, setBrewNotesInput] = useState<string>('');
   const [isSavingBrew, setIsSavingBrew] = useState<boolean>(false);
 
-  // Cronômetro simples do chão de fábrica para fervura / whirlpool
+  // Cronômetro da panela
   const [timerSeconds, setTimerSeconds] = useState<number>(0);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const timerIntervalRef = useRef<any>(null);
@@ -516,38 +709,115 @@ export default function FabricaChaoDeFabricaPage() {
     [batches]
   );
 
-  const handleSaveBrewData = async () => {
-    if (!selectedBrewBatch?.id) {
-      showBanner('Selecione uma brassagem para registrar os dados', 'error');
-      return;
+  const selectedRecipeObj = useMemo(
+    () => recipes.find((r) => r.id === selectedRecipeId) || null,
+    [recipes, selectedRecipeId]
+  );
+
+  // Quando escolhe uma receita para brassar, preenche os parâmetros padrão
+  const handleSelectRecipeForBrew = (recId: string) => {
+    setSelectedRecipeId(recId);
+    const rec = recipes.find((r) => r.id === recId);
+    if (rec) {
+      if (rec.og) setBrewOgInput(String(rec.og));
+      if (rec.targetPhMash) setBrewPhMashInput(String(rec.targetPhMash));
+      if (rec.batchYieldLiters) setBrewVolumeInput(String(rec.batchYieldLiters));
+      // Sugerir número de lote
+      const year = new Date().getFullYear().toString().slice(-2);
+      setBrewBatchNumber(`${rec.name.slice(0, 3).toUpperCase()}-${year}${String(batches.length + 1).padStart(2, '0')}`);
     }
+  };
+
+  // Salvar ou iniciar brassagem
+  const handleSaveBreweryData = async (moveToFermentation: boolean = false) => {
     setIsSavingBrew(true);
     try {
       const parsedOg = parseBreweryGravity(brewOgInput) || 1.050;
       const parsedVol = parseFloat(brewVolumeInput.replace(',', '.')) || 0;
       const parsedTemp = parseFloat(brewTempMashInput.replace(',', '.')) || 66;
+      const parsedPhMash = brewPhMashInput ? parseFloat(brewPhMashInput.replace(',', '.')) : undefined;
+      const parsedPhBoil = brewPhBoilInput ? parseFloat(brewPhBoilInput.replace(',', '.')) : undefined;
 
-      const res = await fetch(`/api/batches/${selectedBrewBatch.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          measuredOg: parsedOg,
-          volumeProducedLiters: parsedVol > 0 ? parsedVol : undefined,
-          tempMash: parsedTemp,
-          status: 'FERMENTANDO',
-          fermentationStartDate: new Date(),
-        }),
-      });
+      if (brewMode === 'ACTIVE') {
+        if (!selectedBrewBatch?.id) {
+          showBanner('Selecione uma brassagem em andamento', 'error');
+          return;
+        }
 
-      if (res.ok) {
-        showBanner(`🔥 Dados da brassagem gravados! Lote transferido para FERMENTAÇÃO.`, 'success');
-        await loadInitialData();
-        setSelectedBrewBatch(null);
+        const res = await fetch(`/api/batches/${selectedBrewBatch.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            measuredOg: parsedOg,
+            volumeProducedLiters: parsedVol > 0 ? parsedVol : undefined,
+            tempMash: parsedTemp,
+            phMash: parsedPhMash,
+            phBoil: parsedPhBoil,
+            status: moveToFermentation ? 'FERMENTANDO' : selectedBrewBatch.status,
+            fermentationStartDate: moveToFermentation ? new Date() : undefined,
+            notes: brewNotesInput ? brewNotesInput.trim() : undefined,
+          }),
+        });
+
+        if (res.ok) {
+          showBanner(
+            moveToFermentation
+              ? `🔥 Brassagem concluída! Chopp transferido para FERMENTAÇÃO.`
+              : `✅ Medições da brassagem salvas com sucesso!`,
+            'success'
+          );
+          await loadInitialData();
+          if (moveToFermentation) setSelectedBrewBatch(null);
+        } else {
+          showBanner('Erro ao salvar dados da brassagem', 'error');
+        }
       } else {
-        showBanner('Erro ao salvar dados da brassagem', 'error');
+        // Criar Nova Brassagem a partir da Receita Selecionada
+        if (!selectedRecipeId) {
+          showBanner('Selecione a receita desejada', 'error');
+          return;
+        }
+        if (!brewBatchNumber.trim()) {
+          showBanner('Informe o número do lote (Ex: IPA-2601)', 'error');
+          return;
+        }
+
+        const res = await fetch('/api/batches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipeId: selectedRecipeId,
+            batchNumber: brewBatchNumber.trim().toUpperCase(),
+            tankId: brewTargetTankId || undefined,
+            volumePlannedLiters: parsedVol > 0 ? parsedVol : selectedRecipeObj?.batchYieldLiters || 500,
+            volumeProducedLiters: parsedVol > 0 ? parsedVol : undefined,
+            measuredOg: parsedOg,
+            tempMash: parsedTemp,
+            phMash: parsedPhMash,
+            phBoil: parsedPhBoil,
+            status: moveToFermentation ? 'FERMENTANDO' : 'BRASSAGEM',
+            notes: brewNotesInput ? brewNotesInput.trim() : undefined,
+          }),
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showBanner(
+            moveToFermentation
+              ? `🔥 Nova brassagem criada e enviada para FERMENTAÇÃO!`
+              : `🍺 Nova brassagem iniciada com sucesso (Lote #${brewBatchNumber})!`,
+            'success'
+          );
+          await loadInitialData();
+          setBrewMode('ACTIVE');
+          setSelectedRecipeId('');
+          setBrewBatchNumber('');
+        } else {
+          showBanner(data.error || 'Erro ao iniciar brassagem da receita', 'error');
+        }
       }
     } catch {
-      showBanner('Falha de rede ao salvar brassagem', 'error');
+      showBanner('Falha de rede ao processar brassagem', 'error');
     } finally {
       setIsSavingBrew(false);
     }
@@ -559,20 +829,13 @@ export default function FabricaChaoDeFabricaPage() {
   const [calcTab, setCalcTab] = useState<'REFRACTOMETER' | 'HYDROMETER' | 'BRIX_SG' | 'ABV'>('REFRACTOMETER');
   const [calcOgSg, setCalcOgSg] = useState<string>('1.054');
   const [calcCurrentBrix, setCalcCurrentBrix] = useState<string>('6.5');
-
-  // Correção por temperatura do densímetro
   const [calcHydroSg, setCalcHydroSg] = useState<string>('1.050');
   const [calcHydroTemp, setCalcHydroTemp] = useState<string>('28');
   const [calcCalibTemp, setCalcCalibTemp] = useState<string>('20');
-
-  // Conversão direta Brix / SG
   const [calcRawBrix, setCalcRawBrix] = useState<string>('13.0');
-
-  // ABV direto
   const [calcAbvOg, setCalcAbvOg] = useState<string>('1.054');
   const [calcAbvFg, setCalcAbvFg] = useState<string>('1.012');
 
-  // Cálculos reativos
   const refractometerResults = useMemo(() => {
     const og = parseBreweryGravity(calcOgSg) || 1.050;
     const brix = parseFloat(calcCurrentBrix.replace(',', '.')) || 0;
@@ -600,10 +863,7 @@ export default function FabricaChaoDeFabricaPage() {
   const brixToSgResult = useMemo(() => {
     const brix = parseFloat(calcRawBrix.replace(',', '.')) || 0;
     const sg = brixToSg(brix);
-    return {
-      sg: Math.round(sg * 1000) / 1000,
-      plato: brix,
-    };
+    return { sg: Math.round(sg * 1000) / 1000, plato: brix };
   }, [calcRawBrix]);
 
   const abvDirectResult = useMemo(() => {
@@ -678,7 +938,6 @@ export default function FabricaChaoDeFabricaPage() {
         {/* ========================================================= */}
         {activeTab === 'ENVASE' && (
           <div className="space-y-4">
-            {/* Escolha do Tanque / Lote de Origem */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -745,7 +1004,6 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               )}
 
-              {/* Botão de Barril Parcial / Volume específico */}
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
                 <button
                   type="button"
@@ -774,7 +1032,6 @@ export default function FabricaChaoDeFabricaPage() {
               </div>
             </div>
 
-            {/* Scanner da Câmera para Bipar Barris */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
               <h3 className="font-extrabold text-sm text-slate-200 flex items-center gap-2">
                 <QrCode className="w-4 h-4 text-amber-400" />
@@ -792,7 +1049,6 @@ export default function FabricaChaoDeFabricaPage() {
               />
             </div>
 
-            {/* Lista dos Envasados nesta sessão */}
             {envaseSessionLogs.length > 0 && (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
                 <div className="flex items-center justify-between">
@@ -835,7 +1091,6 @@ export default function FabricaChaoDeFabricaPage() {
         {/* ========================================================= */}
         {activeTab === 'BARRIS' && (
           <div className="space-y-4">
-            {/* Seletor de Ação Rápida */}
             <div className="grid grid-cols-2 gap-2.5">
               <button
                 onClick={() => setKegSubMode('WASH')}
@@ -886,7 +1141,6 @@ export default function FabricaChaoDeFabricaPage() {
               </button>
             </div>
 
-            {/* SE MODO: CADASTRAR NOVO */}
             {kegSubMode === 'REGISTER' && (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
                 <h3 className="font-extrabold text-sm text-amber-400 flex items-center gap-2">
@@ -938,7 +1192,6 @@ export default function FabricaChaoDeFabricaPage() {
               </div>
             )}
 
-            {/* CÂMERA DO BARRIL */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
               <h3 className="font-extrabold text-sm text-slate-200 flex items-center gap-2">
                 <QrCode className="w-4 h-4 text-amber-400" />
@@ -948,14 +1201,9 @@ export default function FabricaChaoDeFabricaPage() {
                 {kegSubMode === 'LOOKUP' && 'Bipar Barril para CONSULTAR'}
               </h3>
 
-              <BarcodeScanner
-                onScan={handleScanForBarris}
-                title="Leitor de Barris"
-                defaultCollapsed={false}
-              />
+              <BarcodeScanner onScan={handleScanForBarris} title="Leitor de Barris" defaultCollapsed={false} />
             </div>
 
-            {/* RESULTADO DA CONSULTA DE BARRIL */}
             {kegSubMode === 'LOOKUP' && kegLookupResult && (
               <div className="bg-slate-900 border-2 border-blue-500/50 rounded-3xl p-5 shadow-xl space-y-3">
                 <div className="flex items-center justify-between">
@@ -984,31 +1232,11 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               </div>
             )}
-
-            {/* HISTÓRICO DE AÇÕES DE BARRIS */}
-            {kegSessionActions.length > 0 && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
-                <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">
-                  Ações Recentes de Barris
-                </h3>
-                <div className="divide-y divide-slate-800 max-h-48 overflow-y-auto">
-                  {kegSessionActions.map((item, idx) => (
-                    <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-black text-white font-mono">{item.code}</span>
-                        <span className="text-slate-400 block text-[11px]">{item.action}</span>
-                      </div>
-                      <span className="text-slate-500 font-mono text-[10px]">{item.time}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* 3. MÓDULO TANQUES & ADEGA */}
+        {/* 3. MÓDULO TANQUES & ADEGA (COM PURGA, CO2, OG, META FG E TAREFAS) */}
         {/* ========================================================= */}
         {activeTab === 'TANQUES' && (
           <div className="space-y-4">
@@ -1019,9 +1247,7 @@ export default function FabricaChaoDeFabricaPage() {
                     <Cylinder className="w-5 h-5 text-amber-400" />
                     Tanques & Adega
                   </h2>
-                  <span className="text-xs font-bold text-slate-400">
-                    Toque no tanque para ver tarefas e medir
-                  </span>
+                  <span className="text-xs font-bold text-slate-400">Toque para ver lote e medir</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1030,23 +1256,29 @@ export default function FabricaChaoDeFabricaPage() {
                     const beerName = tank.activeBatch?.recipe?.name;
                     const batchNumber = tank.activeBatch?.batchNumber;
                     const status = tank.activeBatch?.status || tank.status;
+                    const m = tank.metrics;
+                    const purged = isTankPurged(tank);
+                    const co2Set = isTankCo2(tank);
 
                     return (
-                      <button
+                      <div
                         key={tank.id}
                         onClick={() => setSelectedTankForDetails(tank)}
-                        className={`p-5 rounded-3xl border-2 text-left transition-all active:scale-95 shadow-lg space-y-3 ${
+                        className={`p-5 rounded-3xl border-2 text-left transition-all active:scale-95 shadow-lg space-y-3 cursor-pointer ${
                           isOccupied
                             ? 'bg-slate-900 border-amber-500/40 hover:border-amber-400'
                             : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 opacity-80'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-black text-base text-white">{tank.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-lg text-white">{tank.name}</span>
+                            <span className="text-[11px] font-bold text-slate-400">({tank.capacityLiters}L)</span>
+                          </div>
                           <span
-                            className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                            className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full ${
                               isOccupied
-                                ? 'bg-amber-500 text-slate-950 font-black'
+                                ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
                                 : 'bg-slate-800 text-slate-400'
                             }`}
                           >
@@ -1054,34 +1286,98 @@ export default function FabricaChaoDeFabricaPage() {
                           </span>
                         </div>
 
+                        {/* CAIXAS DE SELEÇÃO: PURGA E CO2 DIRETO NA LISTA DE TANQUES */}
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleTankFlag(tank, 'PURGA', e)}
+                            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-extrabold border flex items-center justify-center gap-1.5 transition-all ${
+                              purged
+                                ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400 shadow-sm'
+                                : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-300'
+                            }`}
+                          >
+                            <Wind className="w-3.5 h-3.5" />
+                            {purged ? '✓ Purgado' : 'Purga'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleTankFlag(tank, 'CO2', e)}
+                            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-extrabold border flex items-center justify-center gap-1.5 transition-all ${
+                              co2Set
+                                ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-400 shadow-sm'
+                                : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-300'
+                            }`}
+                          >
+                            <Droplet className="w-3.5 h-3.5" />
+                            {co2Set ? '✓ Com CO2' : 'CO2'}
+                          </button>
+                        </div>
+
                         {isOccupied ? (
-                          <div className="space-y-1">
-                            <div className="font-black text-sm text-amber-300">{beerName}</div>
-                            <div className="text-xs text-slate-400">Lote #{batchNumber}</div>
-                            {tank.activeBatch?.tempFermentation && (
-                              <div className="flex items-center gap-1.5 text-xs text-slate-300 pt-1">
-                                <Thermometer className="w-3.5 h-3.5 text-blue-400" />
-                                {tank.activeBatch.tempFermentation}°C
+                          <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                            <div className="flex items-center justify-between">
+                              <div className="font-black text-sm text-amber-300 truncate max-w-[200px]">
+                                {beerName}
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-400">#{batchNumber}</span>
+                            </div>
+
+                            {/* PAINEL DE DENSIDADES: OG INICIAL, OBJETIVO FG E TEOR ALCOÓLICO */}
+                            <div className="grid grid-cols-3 gap-1.5 bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800/80 text-center">
+                              <div>
+                                <span className="block text-[9px] uppercase font-bold text-slate-400">OG Inicial</span>
+                                <span className="text-xs font-black text-white font-mono">
+                                  {m.og ? m.og.toFixed(3) : '—'}
+                                </span>
+                              </div>
+                              <div className="border-x border-slate-800">
+                                <span className="block text-[9px] uppercase font-bold text-amber-400">Meta FG</span>
+                                <span className="text-xs font-black text-amber-400 font-mono">
+                                  {m.targetFg ? m.targetFg.toFixed(3) : '—'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] uppercase font-bold text-emerald-400">ABV Atual</span>
+                                <span className="text-xs font-black text-emerald-400 font-mono">
+                                  {m.currentAbv ? `${m.currentAbv}%` : '—'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* BARRA DE PROGRESSO DE ATENUAÇÃO ATÉ A META FG */}
+                            {m.targetFg && m.og && (
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                                  <span>
+                                    {m.currentGravity ? `Atual: ${m.currentGravity.toFixed(3)} SG` : 'Sem medição'}
+                                  </span>
+                                  <span className="text-amber-400">
+                                    {m.pointsRemaining > 0
+                                      ? `Faltam ${m.pointsRemaining} pts p/ FG`
+                                      : 'Meta Atingida! 🎉'}
+                                  </span>
+                                </div>
+                                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                  <div
+                                    className="bg-gradient-to-r from-amber-500 to-emerald-400 h-2 rounded-full transition-all duration-500"
+                                    style={{ width: `${m.progressPercent}%` }}
+                                  />
+                                </div>
                               </div>
                             )}
                           </div>
                         ) : (
                           <div className="text-xs text-slate-500 py-1">Tanque Livre / Disponível</div>
                         )}
-
-                        <div className="text-[11px] font-bold text-amber-400 flex items-center justify-between pt-1 border-t border-slate-800">
-                          <span>{tank.capacityLiters}L</span>
-                          <span className="flex items-center gap-1">
-                            Abrir <ChevronRight className="w-3.5 h-3.5" />
-                          </span>
-                        </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
               </>
             ) : (
-              /* DETALHES DO TANQUE SELECIONADO: TAREFAS & MEDIÇÃO */
+              /* DETALHES DO TANQUE SELECIONADO: TAREFAS, NOVA TAREFA, EDITAR DATA E MEDIÇÕES */
               <div className="space-y-4">
                 <button
                   onClick={() => setSelectedTankForDetails(null)}
@@ -1090,31 +1386,70 @@ export default function FabricaChaoDeFabricaPage() {
                   <ArrowLeft className="w-4 h-4" /> Voltar para lista de tanques
                 </button>
 
-                {/* Card de Resumo do Tanque */}
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-2">
+                {/* Resumo do Tanque */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-black text-lg text-white">{selectedTankForDetails.name}</h3>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-400">
+                    <div>
+                      <h3 className="font-black text-xl text-white">{selectedTankForDetails.name}</h3>
+                      <p className="text-xs text-slate-400">Capacidade: {selectedTankForDetails.capacityLiters}L</p>
+                    </div>
+                    <span className="text-xs font-bold px-3 py-1 rounded-xl bg-amber-500/20 text-amber-400">
                       {selectedTankForDetails.activeBatch?.status || selectedTankForDetails.status}
                     </span>
                   </div>
 
-                  {selectedTankForDetails.activeBatch ? (
-                    <div className="text-sm">
-                      <div className="font-extrabold text-amber-300">
-                        {selectedTankForDetails.activeBatch.recipe?.name}
+                  {/* Ações Rápidas de Purga e CO2 */}
+                  <div className="flex gap-2 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTankFlag(selectedTankForDetails, 'PURGA')}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-black border flex items-center justify-center gap-2 transition-all ${
+                        isTankPurged(selectedTankForDetails)
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      <Wind className="w-4 h-4" />
+                      {isTankPurged(selectedTankForDetails) ? 'Purga Realizada (OK)' : 'Marcar Purga'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTankFlag(selectedTankForDetails, 'CO2')}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-black border flex items-center justify-center gap-2 transition-all ${
+                        isTankCo2(selectedTankForDetails)
+                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400'
+                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      <Droplet className="w-4 h-4" />
+                      {isTankCo2(selectedTankForDetails) ? 'Pressurizado CO2 (OK)' : 'Marcar Pressurização CO2'}
+                    </button>
+                  </div>
+
+                  {selectedTankForDetails.activeBatch && (
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">
+                      <div className="bg-slate-800/60 p-3 rounded-2xl">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">OG Inicial</span>
+                        <span className="text-sm font-black text-white font-mono">
+                          {selectedTankForDetails.activeBatch.measuredOg?.toFixed(3) ||
+                            selectedTankForDetails.activeBatch.recipe?.og?.toFixed(3) ||
+                            '—'}
+                        </span>
                       </div>
-                      <div className="text-xs text-slate-400">
-                        Lote #{selectedTankForDetails.activeBatch.batchNumber} • Início:{' '}
-                        {formatDateShort(selectedTankForDetails.activeBatch.brewDate)}
+                      <div className="bg-slate-800/60 p-3 rounded-2xl">
+                        <span className="text-[10px] text-amber-400 uppercase font-bold block">
+                          Objetivo FG (Meta)
+                        </span>
+                        <span className="text-sm font-black text-amber-400 font-mono">
+                          {selectedTankForDetails.activeBatch.recipe?.fg?.toFixed(3) || '—'}
+                        </span>
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-xs text-slate-400">Nenhum lote ativo fermentando neste tanque.</p>
                   )}
                 </div>
 
-                {/* FORMULÁRIO DE MEDIÇÃO DIÁRIA */}
+                {/* FORMULÁRIO DE MEDIÇÃO DO DIA */}
                 {selectedTankForDetails.activeBatch && (
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
                     <div className="flex items-center justify-between">
@@ -1195,14 +1530,140 @@ export default function FabricaChaoDeFabricaPage() {
                   </div>
                 )}
 
-                {/* TAREFAS DE ADEGA DO LOTE */}
+                {/* TAREFAS DE ADEGA DO LOTE + BOTÃO DE ADICIONAR NOVA TAREFA */}
                 {selectedTankForDetails.activeBatch && (
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
-                    <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
-                      <CheckSquare className="w-4 h-4 text-amber-400" />
-                      Tarefas de Adega para este Lote
-                    </h4>
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                        <CheckSquare className="w-4 h-4 text-amber-400" />
+                        Tarefas de Adega para este Lote
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddTaskModalOpen(!isAddTaskModalOpen)}
+                        className="flex items-center gap-1 text-xs font-black text-amber-400 bg-amber-500/20 px-3 py-1.5 rounded-xl border border-amber-500/30 active:scale-95 transition-all"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Nova Tarefa
+                      </button>
+                    </div>
 
+                    {/* MODAL / FORMULÁRIO DE ADICIONAR TAREFA NO APP */}
+                    {isAddTaskModalOpen && (
+                      <div className="bg-slate-800/90 border border-amber-500/40 rounded-2xl p-4 space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-amber-300">➕ Criar Tarefa de Adega</span>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddTaskModalOpen(false)}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Atalhos rápidos de título de tarefa */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            'Dry Hopping',
+                            'Purga de Levedura',
+                            'Cold Crash (0°C)',
+                            'Clarificação / Gelatina',
+                            'Pressurizar com CO2',
+                            'Medição de Densidade',
+                          ].map((chip) => (
+                            <button
+                              key={chip}
+                              type="button"
+                              onClick={() => setNewTaskTitle(chip)}
+                              className="px-2.5 py-1 text-[11px] font-bold bg-slate-900 text-slate-300 hover:text-amber-400 rounded-lg border border-slate-700 active:scale-95"
+                            >
+                              {chip}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                            Título da Tarefa:
+                          </label>
+                          <input
+                            type="text"
+                            value={newTaskTitle}
+                            onChange={(e) => setNewTaskTitle(e.target.value)}
+                            placeholder="Ex: Fazer Dry Hopping de 2kg de Citra"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-bold text-white outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                            Data Prevista:
+                          </label>
+                          <input
+                            type="date"
+                            value={newTaskDueDate}
+                            onChange={(e) => setNewTaskDueDate(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddNewTask}
+                          disabled={isSavingNewTask || !newTaskTitle.trim()}
+                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                        >
+                          <Check className="w-4 h-4" />
+                          Salvar Tarefa no Lote
+                        </button>
+                      </div>
+                    )}
+
+                    {/* MODAL / INPUT PARA EDITAR DATA DE REALIZAÇÃO RETROATIVA */}
+                    {editingTaskIndex !== null && (
+                      <div className="bg-slate-800 border-2 border-emerald-500/50 rounded-2xl p-4 space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-emerald-300">
+                            ✏️ Editar Data de Realização
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTaskIndex(null)}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          Se você realizou esta tarefa em outro dia e esqueceu de anotar, escolha a data exata abaixo:
+                        </p>
+                        <input
+                          type="date"
+                          value={editCompletionDate}
+                          onChange={(e) => setEditCompletionDate(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-emerald-500"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSaveTaskCompletionDate}
+                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all"
+                          >
+                            Confirmar Data
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTaskIndex(null)}
+                            className="px-3 py-2 bg-slate-700 text-slate-300 font-bold text-xs rounded-xl"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* LISTA DAS TAREFAS */}
                     {(() => {
                       let tasks: any[] = [];
                       try {
@@ -1214,7 +1675,7 @@ export default function FabricaChaoDeFabricaPage() {
                       if (tasks.length === 0) {
                         return (
                           <p className="text-xs text-slate-500 italic py-2">
-                            Nenhuma tarefa específica agendada para este lote.
+                            Nenhuma tarefa cadastrada. Toque em &quot;Nova Tarefa&quot; acima para adicionar.
                           </p>
                         );
                       }
@@ -1222,47 +1683,73 @@ export default function FabricaChaoDeFabricaPage() {
                       return (
                         <div className="space-y-2">
                           {tasks.map((task, idx) => (
-                            <button
+                            <div
                               key={idx}
-                              type="button"
-                              onClick={() => handleToggleTankTask(idx)}
-                              className={`w-full p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all active:scale-95 ${
+                              className={`w-full p-3.5 rounded-2xl border flex flex-col gap-2 transition-all ${
                                 task.completed
                                   ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300'
                                   : 'bg-slate-800 border-slate-700 text-white'
                               }`}
                             >
-                              <div className="flex items-center gap-3">
-                                {task.completed ? (
-                                  <CheckSquare className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                                ) : (
-                                  <Square className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                                )}
-                                <div>
-                                  <div
-                                    className={`font-bold text-sm ${
-                                      task.completed ? 'line-through text-slate-400' : 'text-white'
-                                    }`}
-                                  >
-                                    {task.title}
-                                  </div>
-                                  {task.dueDate && (
-                                    <div className="text-[11px] text-slate-400">
-                                      Data: {formatDateShort(task.dueDate)}
-                                    </div>
+                              <div className="flex items-center justify-between">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTankTask(idx)}
+                                  className="flex items-center gap-3 text-left flex-1"
+                                >
+                                  {task.completed ? (
+                                    <CheckSquare className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                                  ) : (
+                                    <Square className="w-5 h-5 text-slate-400 flex-shrink-0" />
                                   )}
-                                </div>
+                                  <div>
+                                    <div
+                                      className={`font-bold text-sm ${
+                                        task.completed ? 'line-through text-slate-400' : 'text-white'
+                                      }`}
+                                    >
+                                      {task.title}
+                                    </div>
+                                    <div className="text-[11px] text-slate-400">
+                                      Previsto: {formatDateShort(task.dueDate)}
+                                    </div>
+                                  </div>
+                                </button>
+
+                                <span
+                                  className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                                    task.completed
+                                      ? 'bg-emerald-500/20 text-emerald-300'
+                                      : 'bg-amber-500/20 text-amber-300'
+                                  }`}
+                                >
+                                  {task.completed ? 'Feito' : 'Pendente'}
+                                </span>
                               </div>
-                              <span
-                                className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
-                                  task.completed
-                                    ? 'bg-emerald-500/20 text-emerald-300'
-                                    : 'bg-amber-500/20 text-amber-300'
-                                }`}
-                              >
-                                {task.completed ? 'Feito' : 'Pendente'}
-                              </span>
-                            </button>
+
+                              {/* DATA DE REALIZAÇÃO + BOTÃO DE EDITAR DATA */}
+                              {task.completed && (
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                                  <span>
+                                    Realizado em:{' '}
+                                    <strong className="text-emerald-400">
+                                      {formatDateShort(task.completedAt || task.dueDate)}
+                                    </strong>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingTaskIndex(idx);
+                                      setEditCompletionDate(task.completedAt || getLocalDateString());
+                                    }}
+                                    className="flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700"
+                                  >
+                                    <Calendar className="w-3 h-3" />
+                                    Mudar Data
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           ))}
                         </div>
                       );
@@ -1275,15 +1762,15 @@ export default function FabricaChaoDeFabricaPage() {
         )}
 
         {/* ========================================================= */}
-        {/* 4. MÓDULO BRASSAGEM DO DIA */}
+        {/* 4. MÓDULO BRASSAGEM (ESCOLHA DE RECEITA & MEDIÇÕES DE PH, OG, ETC) */}
         {/* ========================================================= */}
         {activeTab === 'BRASSAGEM' && (
           <div className="space-y-4">
-            {/* Cronômetro Rápido da Fábrica */}
+            {/* Cronômetro Rápido da Panela */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4" /> Cronômetro de Panela / Fervura
+                  <Clock className="w-4 h-4" /> Cronômetro de Fervura / Mostura
                 </span>
                 <button
                   type="button"
@@ -1319,94 +1806,261 @@ export default function FabricaChaoDeFabricaPage() {
               </div>
             </div>
 
-            {/* Brassagens Ativas */}
+            {/* SELEÇÃO: EM ANDAMENTO VS INICIAR DE RECEITA DO SISTEMA */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
-              <h2 className="font-extrabold text-base text-white flex items-center gap-2">
-                <Flame className="w-5 h-5 text-amber-500" />
-                Registrar Brassagem do Dia
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="font-extrabold text-base text-white flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-amber-500" />
+                  Brassagem do Dia
+                </h2>
 
-              {activeBrewBatches.length === 0 ? (
-                <p className="text-xs text-slate-400 py-3 text-center">
-                  Nenhuma brassagem marcada como &apos;BRASSAGEM&apos; neste momento.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  <label className="block text-xs font-bold text-slate-300">
-                    Selecione a Brassagem em Andamento:
-                  </label>
-                  <select
-                    value={selectedBrewBatch?.id || ''}
-                    onChange={(e) => {
-                      const found = activeBrewBatches.find((b) => b.id === e.target.value);
-                      setSelectedBrewBatch(found || null);
-                      if (found?.recipe?.og) setBrewOgInput(String(found.recipe.og));
-                      if (found?.volumePlannedLiters) setBrewVolumeInput(String(found.volumePlannedLiters));
-                    }}
-                    className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-sm font-bold text-white outline-none"
+                <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setBrewMode('ACTIVE')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      brewMode === 'ACTIVE' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400'
+                    }`}
                   >
-                    <option value="">-- Escolha o Lote --</option>
-                    {activeBrewBatches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.recipe?.name} (Lote #{b.batchNumber})
-                      </option>
-                    ))}
-                  </select>
+                    Em Andamento
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBrewMode('NEW_RECIPE')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      brewMode === 'NEW_RECIPE' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400'
+                    }`}
+                  >
+                    + De Receita
+                  </button>
+                </div>
+              </div>
 
-                  {selectedBrewBatch && (
-                    <div className="pt-2 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                            OG Medida Pós-Fervura:
-                          </label>
-                          <input
-                            type="text"
-                            value={brewOgInput}
-                            onChange={(e) => setBrewOgInput(e.target.value)}
-                            placeholder="1.054"
-                            className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-sm font-black text-white text-center outline-none"
-                          />
-                        </div>
+              {/* OPÇÃO 1: BRASSAGEM EM ANDAMENTO */}
+              {brewMode === 'ACTIVE' ? (
+                activeBrewBatches.length === 0 ? (
+                  <div className="text-center py-4 space-y-2">
+                    <p className="text-xs text-slate-400">
+                      Nenhuma brassagem marcada como &apos;BRASSAGEM&apos; ativa.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBrewMode('NEW_RECIPE')}
+                      className="px-4 py-2 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl"
+                    >
+                      Iniciar Brassagem a partir de Receita
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Selecione a Brassagem Ativa:
+                    </label>
+                    <select
+                      value={selectedBrewBatch?.id || ''}
+                      onChange={(e) => {
+                        const found = activeBrewBatches.find((b) => b.id === e.target.value);
+                        setSelectedBrewBatch(found || null);
+                        if (found) {
+                          if (found.measuredOg) setBrewOgInput(String(found.measuredOg));
+                          else if (found.recipe?.og) setBrewOgInput(String(found.recipe.og));
+                          if (found.volumePlannedLiters) setBrewVolumeInput(String(found.volumePlannedLiters));
+                          if (found.phMash) setBrewPhMashInput(String(found.phMash));
+                          if (found.phBoil) setBrewPhBoilInput(String(found.phBoil));
+                          if (found.tempMash) setBrewTempMashInput(String(found.tempMash));
+                        }
+                      }}
+                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-sm font-bold text-white outline-none"
+                    >
+                      <option value="">-- Escolha o Lote --</option>
+                      {activeBrewBatches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.recipe?.name} (Lote #{b.batchNumber})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              ) : (
+                /* OPÇÃO 2: ESCOLHER RECEITA DISPONÍVEL NO SISTEMA */
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Escolha uma Receita do Catálogo:
+                    </label>
+                    <select
+                      value={selectedRecipeId}
+                      onChange={(e) => handleSelectRecipeForBrew(e.target.value)}
+                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 py-3.5 text-sm font-bold text-white outline-none"
+                    >
+                      <option value="">-- Selecionar Receita --</option>
+                      {recipes.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} — {r.style} (OG: {r.og || '1.050'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                            Volume no Tanque (L):
-                          </label>
-                          <input
-                            type="text"
-                            value={brewVolumeInput}
-                            onChange={(e) => setBrewVolumeInput(e.target.value)}
-                            placeholder="520"
-                            className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-sm font-black text-white text-center outline-none"
-                          />
-                        </div>
+                  {selectedRecipeObj && (
+                    <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 text-xs space-y-1">
+                      <div className="font-black text-amber-300">{selectedRecipeObj.name}</div>
+                      <div className="text-slate-400">
+                        Estilo: {selectedRecipeObj.style} • Rendimento:{' '}
+                        {selectedRecipeObj.batchYieldLiters || 500}L
                       </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                          Temperatura de Mostura (°C):
-                        </label>
-                        <input
-                          type="text"
-                          value={brewTempMashInput}
-                          onChange={(e) => setBrewTempMashInput(e.target.value)}
-                          placeholder="66"
-                          className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-2.5 text-sm font-bold text-white text-center outline-none"
-                        />
+                      <div className="flex gap-4 pt-1 font-mono text-[11px] text-slate-300">
+                        <span>OG Alvo: {selectedRecipeObj.og || '—'}</span>
+                        <span>FG Alvo: {selectedRecipeObj.fg || '—'}</span>
+                        <span>pH Mostura: {selectedRecipeObj.targetPhMash || '5.3'}</span>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={handleSaveBrewData}
-                        disabled={isSavingBrew}
-                        className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 mt-2"
-                      >
-                        <Check className="w-5 h-5" />
-                        Finalizar Brassagem & Ir p/ Fermentação
-                      </button>
                     </div>
                   )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Número do Lote:
+                      </label>
+                      <input
+                        type="text"
+                        value={brewBatchNumber}
+                        onChange={(e) => setBrewBatchNumber(e.target.value.toUpperCase())}
+                        placeholder="Ex: IPA-2601"
+                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-sm font-black text-white text-center font-mono outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Tanque Destino:
+                      </label>
+                      <select
+                        value={brewTargetTankId}
+                        onChange={(e) => setBrewTargetTankId(e.target.value)}
+                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-xs font-bold text-white outline-none"
+                      >
+                        <option value="">Sem tanque (Panela)</option>
+                        {tanks.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.status})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* FORMULÁRIO DE MEDIÇÕES DA BRASSAGEM: OG, PH MOSTURA, PH FERVIURA, TEMP */}
+              {(selectedBrewBatch || (brewMode === 'NEW_RECIPE' && selectedRecipeId)) && (
+                <div className="pt-3 border-t border-slate-800 space-y-3">
+                  <h4 className="font-extrabold text-xs uppercase tracking-wider text-amber-400">
+                    🔬 Medições & Parâmetros da Brassagem
+                  </h4>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        OG Medida (Pós-Fervura):
+                      </label>
+                      <input
+                        type="text"
+                        value={brewOgInput}
+                        onChange={(e) => setBrewOgInput(e.target.value)}
+                        placeholder="1.054"
+                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Volume no Fermentador (L):
+                      </label>
+                      <input
+                        type="text"
+                        value={brewVolumeInput}
+                        onChange={(e) => setBrewVolumeInput(e.target.value)}
+                        placeholder="520"
+                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-300 mb-1">
+                        pH da Mostura:
+                      </label>
+                      <input
+                        type="text"
+                        value={brewPhMashInput}
+                        onChange={(e) => setBrewPhMashInput(e.target.value)}
+                        placeholder="5.3"
+                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-2.5 text-sm font-black text-white text-center outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-300 mb-1">
+                        pH Fervura/Whirl:
+                      </label>
+                      <input
+                        type="text"
+                        value={brewPhBoilInput}
+                        onChange={(e) => setBrewPhBoilInput(e.target.value)}
+                        placeholder="5.1"
+                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-2.5 text-sm font-black text-white text-center outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-300 mb-1">
+                        Temp Mostura (°C):
+                      </label>
+                      <input
+                        type="text"
+                        value={brewTempMashInput}
+                        onChange={(e) => setBrewTempMashInput(e.target.value)}
+                        placeholder="66.5"
+                        className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-2.5 text-sm font-black text-white text-center outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Anotações da Brassagem (Opcional):
+                    </label>
+                    <input
+                      type="text"
+                      value={brewNotesInput}
+                      onChange={(e) => setBrewNotesInput(e.target.value)}
+                      placeholder="Ex: Whirlpool a 80°C, 15 min de repouso..."
+                      className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-3 py-2.5 text-xs text-white outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveBreweryData(false)}
+                      disabled={isSavingBrew}
+                      className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-2xl border border-slate-700 transition-all active:scale-95"
+                    >
+                      Salvar Medições
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSaveBreweryData(true)}
+                      disabled={isSavingBrew}
+                      className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" />
+                      Enviar para Fermentador
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1418,7 +2072,6 @@ export default function FabricaChaoDeFabricaPage() {
         {/* ========================================================= */}
         {activeTab === 'CALCULADORA' && (
           <div className="space-y-4">
-            {/* Abas da Calculadora */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
@@ -1469,7 +2122,6 @@ export default function FabricaChaoDeFabricaPage() {
               </button>
             </div>
 
-            {/* ABA 1: REFRATÔMETRO NA FERMENTAÇÃO */}
             {calcTab === 'REFRACTOMETER' && (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
                 <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
@@ -1526,7 +2178,6 @@ export default function FabricaChaoDeFabricaPage() {
               </div>
             )}
 
-            {/* ABA 2: DENSÍMETRO POR TEMPERATURA */}
             {calcTab === 'HYDROMETER' && (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
                 <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
@@ -1564,7 +2215,7 @@ export default function FabricaChaoDeFabricaPage() {
                       value={calcCalibTemp}
                       onChange={(e) => setCalcCalibTemp(e.target.value)}
                       placeholder="20"
-                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-3 text-sm font-bold text-white text-center outline-none"
+                      className="w-full bg-slate-800 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-2 py-3 text-sm font-black text-white text-center outline-none"
                     />
                   </div>
                 </div>
@@ -1587,7 +2238,6 @@ export default function FabricaChaoDeFabricaPage() {
               </div>
             )}
 
-            {/* ABA 3: BRIX PARA SG */}
             {calcTab === 'BRIX_SG' && (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
                 <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
@@ -1617,7 +2267,6 @@ export default function FabricaChaoDeFabricaPage() {
               </div>
             )}
 
-            {/* ABA 4: ABV DIRETO */}
             {calcTab === 'ABV' && (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
                 <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
@@ -1664,9 +2313,7 @@ export default function FabricaChaoDeFabricaPage() {
         )}
       </main>
 
-      {/* ------------------------------------------------------------- */}
       {/* BARRA INFERIOR DE NAVEGAÇÃO TOUCH GIGANTE (FINGER-FRIENDLY) */}
-      {/* ------------------------------------------------------------- */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-2 py-2 flex items-center justify-around shadow-2xl">
         <button
           onClick={() => setActiveTab('ENVASE')}
