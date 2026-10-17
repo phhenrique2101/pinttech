@@ -43,6 +43,10 @@ import {
   Target,
   AlertCircle,
   Bell,
+  Edit2,
+  Trash2,
+  History,
+  Percent,
 } from 'lucide-react';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import { playFeedback } from '@/lib/sound';
@@ -347,6 +351,316 @@ export default function FabricaChaoDeFabricaPage() {
   const [measurementPh, setMeasurementPh] = useState<string>('');
   const [isSavingMeasurement, setIsSavingMeasurement] = useState(false);
 
+  // Unidade de medição com persistência em localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pinttech_fabrica_tank_unit');
+      if (saved === 'SG' || saved === 'BRIX') {
+        setMeasurementUnit(saved);
+        if (saved === 'BRIX' && measurementGravityInput === '1.020') {
+          const b = sgToBrix(1.020);
+          setMeasurementGravityInput((Math.round(b * 10) / 10).toFixed(1));
+        }
+      }
+    } catch {}
+  }, []);
+
+  const handleMeasurementUnitChange = (newUnit: 'SG' | 'BRIX') => {
+    if (newUnit === measurementUnit) return;
+    if (newUnit === 'BRIX') {
+      const parsed = parseBreweryGravity(measurementGravityInput);
+      if (parsed && parsed >= 0.990) {
+        const brix = sgToBrix(parsed);
+        setMeasurementGravityInput((Math.round(brix * 10) / 10).toFixed(1));
+      }
+    } else {
+      const num = parseFloat(measurementGravityInput.replace(',', '.'));
+      if (!isNaN(num) && num > 0) {
+        const sg = brixToSg(num);
+        setMeasurementGravityInput((Math.round(sg * 1000) / 1000).toFixed(3));
+      }
+    }
+    setMeasurementUnit(newUnit);
+    try {
+      localStorage.setItem('pinttech_fabrica_tank_unit', newUnit);
+    } catch {}
+  };
+
+  const formatGravityDisplay = (sgVal: number | null | undefined, unit: 'SG' | 'BRIX' = measurementUnit) => {
+    if (!sgVal || isNaN(sgVal) || sgVal <= 0) return '—';
+    const brix = Math.round(sgToBrix(sgVal) * 10) / 10;
+    if (unit === 'BRIX') {
+      return `${brix.toFixed(1)} °Bx (${sgVal.toFixed(3)})`;
+    }
+    return `${sgVal.toFixed(3)} (${brix.toFixed(1)} °Bx)`;
+  };
+
+  const getBatchOg = (batch: any): number | null => {
+    if (!batch) return null;
+    return batch.measuredOg || batch.recipe?.og || null;
+  };
+
+  const getBatchTargetFg = (batch: any): number | null => {
+    if (!batch) return null;
+    if (batch.customRecipeDataJson) {
+      try {
+        const parsed = JSON.parse(batch.customRecipeDataJson);
+        if (parsed.targetFg) return parsed.targetFg;
+      } catch {}
+    }
+    return batch.recipe?.fg || null;
+  };
+
+  const getBatchCurrentGravity = (batch: any): number | null => {
+    if (!batch) return null;
+    let grav = batch.measuredFg || null;
+    if (batch.fermentationLogsJson) {
+      try {
+        const logs = JSON.parse(batch.fermentationLogsJson);
+        if (Array.isArray(logs) && logs.length > 0) {
+          const last = logs[logs.length - 1];
+          if (last.gravity) grav = last.gravity;
+        }
+      } catch {}
+    }
+    return grav;
+  };
+
+  const getBatchCalculatedAbv = (batch: any): number | null => {
+    if (!batch) return null;
+    const og = getBatchOg(batch);
+    const cur = getBatchCurrentGravity(batch);
+    if (og && cur && og > cur && og > 1.0) {
+      return Math.round(calculateAbv(og, cur) * 10) / 10;
+    }
+    return batch.measuredAbv || batch.recipe?.abv || null;
+  };
+
+  // Estados para Edição de Metas (OG Inicial & Objetivo FG)
+  const [isEditingTargetsOpen, setIsEditingTargetsOpen] = useState(false);
+  const [editOgInput, setEditOgInput] = useState('');
+  const [editTargetFgInput, setEditTargetFgInput] = useState('');
+  const [editTargetsUnit, setEditTargetsUnit] = useState<'SG' | 'BRIX'>('SG');
+  const [isSavingTargets, setIsSavingTargets] = useState(false);
+
+  const openEditTargetsModal = (batch: any) => {
+    const og = getBatchOg(batch);
+    const targetFg = getBatchTargetFg(batch);
+    const unit = measurementUnit;
+    setEditTargetsUnit(unit);
+    if (unit === 'BRIX') {
+      setEditOgInput(og ? (Math.round(sgToBrix(og) * 10) / 10).toFixed(1) : '');
+      setEditTargetFgInput(targetFg ? (Math.round(sgToBrix(targetFg) * 10) / 10).toFixed(1) : '');
+    } else {
+      setEditOgInput(og ? og.toFixed(3) : '');
+      setEditTargetFgInput(targetFg ? targetFg.toFixed(3) : '');
+    }
+    setIsEditingTargetsOpen(true);
+  };
+
+  const handleEditTargetsUnitChange = (newUnit: 'SG' | 'BRIX') => {
+    if (newUnit === editTargetsUnit) return;
+    if (newUnit === 'BRIX') {
+      const parsedOg = parseBreweryGravity(editOgInput);
+      if (parsedOg && parsedOg >= 0.990) {
+        setEditOgInput((Math.round(sgToBrix(parsedOg) * 10) / 10).toFixed(1));
+      }
+      const parsedFg = parseBreweryGravity(editTargetFgInput);
+      if (parsedFg && parsedFg >= 0.990) {
+        setEditTargetFgInput((Math.round(sgToBrix(parsedFg) * 10) / 10).toFixed(1));
+      }
+    } else {
+      const numOg = parseFloat(editOgInput.replace(',', '.'));
+      if (!isNaN(numOg) && numOg > 0) {
+        setEditOgInput((Math.round(brixToSg(numOg) * 1000) / 1000).toFixed(3));
+      }
+      const numFg = parseFloat(editTargetFgInput.replace(',', '.'));
+      if (!isNaN(numFg) && numFg > 0) {
+        setEditTargetFgInput((Math.round(brixToSg(numFg) * 1000) / 1000).toFixed(3));
+      }
+    }
+    setEditTargetsUnit(newUnit);
+  };
+
+  const handleSaveTargets = async () => {
+    if (!selectedTankForDetails?.activeBatch?.id) return;
+    const batch = selectedTankForDetails.activeBatch;
+    setIsSavingTargets(true);
+
+    let finalOgSg: number | null = null;
+    let finalFgSg: number | null = null;
+
+    if (editTargetsUnit === 'BRIX') {
+      const numOg = parseFloat(editOgInput.replace(',', '.'));
+      if (!isNaN(numOg) && numOg > 0) finalOgSg = brixToSg(numOg);
+
+      const numFg = parseFloat(editTargetFgInput.replace(',', '.'));
+      if (!isNaN(numFg) && numFg > 0) finalFgSg = brixToSg(numFg);
+    } else {
+      finalOgSg = parseBreweryGravity(editOgInput);
+      finalFgSg = parseBreweryGravity(editTargetFgInput);
+    }
+
+    try {
+      const res = await fetch(`/api/batches/${batch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          measuredOg: finalOgSg,
+          targetFg: finalFgSg,
+        }),
+      });
+
+      if (res.ok) {
+        showBanner('✅ Metas (OG Inicial e Objetivo FG) atualizadas com sucesso!', 'success');
+        setIsEditingTargetsOpen(false);
+        await loadInitialData();
+        setSelectedTankForDetails((prev: any) => {
+          if (!prev) return null;
+          let customObj: any = {};
+          if (prev.activeBatch?.customRecipeDataJson) {
+            try { customObj = JSON.parse(prev.activeBatch.customRecipeDataJson); } catch {}
+          }
+          customObj.targetFg = finalFgSg;
+          return {
+            ...prev,
+            activeBatch: {
+              ...prev.activeBatch,
+              measuredOg: finalOgSg,
+              customRecipeDataJson: JSON.stringify(customObj),
+              recipe: prev.activeBatch?.recipe ? { ...prev.activeBatch.recipe, fg: finalFgSg } : prev.activeBatch?.recipe,
+            },
+          };
+        });
+      } else {
+        showBanner('Erro ao salvar metas no servidor', 'error');
+      }
+    } catch {
+      showBanner('Falha de conexão ao salvar metas', 'error');
+    } finally {
+      setIsSavingTargets(false);
+    }
+  };
+
+  // Estados para Mudança de Status do Tanque / Lote
+  const [statusSelectTank, setStatusSelectTank] = useState<any | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  const handleChangeTankStatus = async (tank: any, newStatus: string) => {
+    setIsUpdatingStatus(true);
+    playFeedback('click');
+    const isBatchStatus = ['BRASSAGEM', 'FERMENTANDO', 'MATURANDO', 'PRONTO_ENVASE', 'ENVASADO', 'FINALIZADO'].includes(newStatus);
+    const activeBatch = tank.activeBatch || batches.find((b) => b.tankId === tank.id && b.status !== 'FINALIZADO' && b.status !== 'CANCELADO');
+
+    try {
+      if (activeBatch && isBatchStatus) {
+        await fetch(`/api/batches/${activeBatch.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        showBanner(`✅ Status do lote alterado para ${newStatus}`, 'success');
+      } else {
+        await fetch(`/api/tanks/${tank.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        showBanner(`✅ Status do tanque alterado para ${newStatus}`, 'success');
+      }
+      setStatusSelectTank(null);
+      await loadInitialData();
+      if (selectedTankForDetails?.id === tank.id) {
+        setSelectedTankForDetails((prev: any) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            status: isBatchStatus ? prev.status : newStatus,
+            activeBatch: prev.activeBatch ? { ...prev.activeBatch, status: isBatchStatus ? newStatus : prev.activeBatch.status } : null,
+          };
+        });
+      }
+    } catch {
+      showBanner('Erro ao alterar status', 'error');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Live preview da medição diária (cálculo de ABV e Atenuação instantâneo ao digitar)
+  const liveMeasurementPreview = useMemo(() => {
+    if (!selectedTankForDetails?.activeBatch) return null;
+    const og = getBatchOg(selectedTankForDetails.activeBatch);
+    if (!og || og <= 1.0) return null;
+
+    let finalSg: number | null = null;
+    if (measurementUnit === 'BRIX') {
+      const pBrix = parseFloat(measurementGravityInput.replace(',', '.'));
+      if (!isNaN(pBrix) && pBrix > 0) {
+        const corr = correctRefractometerBrix(og, pBrix);
+        finalSg = corr.fgSg;
+      }
+    } else {
+      finalSg = parseBreweryGravity(measurementGravityInput);
+    }
+
+    if (finalSg && og > finalSg) {
+      const abv = calculateAbv(og, finalSg);
+      const att = Math.round(((og - finalSg) / (og - 1.0)) * 100);
+      return {
+        abv: Math.round(abv * 10) / 10,
+        att,
+        sg: finalSg,
+        brix: Math.round(sgToBrix(finalSg) * 10) / 10,
+      };
+    }
+    return null;
+  }, [selectedTankForDetails, measurementGravityInput, measurementUnit]);
+
+  // Excluir medição diária em caso de digitação incorreta
+  const handleDeleteMeasurementLog = async (logIndex: number) => {
+    if (!selectedTankForDetails?.activeBatch?.id) return;
+    const batch = selectedTankForDetails.activeBatch;
+    let logs: any[] = [];
+    try {
+      if (batch.fermentationLogsJson) logs = JSON.parse(batch.fermentationLogsJson);
+    } catch {}
+
+    if (!logs[logIndex]) return;
+    if (!confirm('Deseja realmente remover esta medição?')) return;
+
+    const updatedLogs = logs.filter((_, idx) => idx !== logIndex);
+    const lastLog = updatedLogs[updatedLogs.length - 1];
+    const newFg = lastLog ? lastLog.gravity : null;
+    const og = getBatchOg(batch);
+    const newAbv = og && newFg && og > newFg ? Math.round(calculateAbv(og, newFg) * 10) / 10 : null;
+
+    try {
+      await fetch(`/api/batches/${batch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fermentationLogsJson: JSON.stringify(updatedLogs),
+          measuredFg: newFg,
+          measuredAbv: newAbv,
+        }),
+      });
+      showBanner('Medição removida com sucesso', 'info');
+      setSelectedTankForDetails((prev: any) => ({
+        ...prev,
+        activeBatch: {
+          ...prev.activeBatch,
+          fermentationLogsJson: JSON.stringify(updatedLogs),
+          measuredFg: newFg,
+          measuredAbv: newAbv,
+        },
+      }));
+      await loadInitialData();
+    } catch {
+      showBanner('Erro ao remover medição', 'error');
+    }
+  };
+
   // Estados para Adicionar Nova Tarefa de Adega
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -403,26 +717,22 @@ export default function FabricaChaoDeFabricaPage() {
         (b) => b.tankId === tank.id && b.status !== 'FINALIZADO' && b.status !== 'CANCELADO'
       );
 
-      const og = activeBatch?.measuredOg || activeBatch?.recipe?.og || null;
-      const targetFg = activeBatch?.recipe?.fg || null;
+      const og = getBatchOg(activeBatch);
+      const targetFg = getBatchTargetFg(activeBatch);
+      const currentGravity = getBatchCurrentGravity(activeBatch);
 
-      let currentGravity = activeBatch?.measuredFg || null;
       let lastLogTemp: number | null = null;
       try {
         if (activeBatch?.fermentationLogsJson) {
           const logs = JSON.parse(activeBatch.fermentationLogsJson);
           if (Array.isArray(logs) && logs.length > 0) {
             const last = logs[logs.length - 1];
-            if (last.gravity) currentGravity = last.gravity;
             if (last.tempCelsius !== undefined) lastLogTemp = last.tempCelsius;
           }
         }
       } catch {}
 
-      let currentAbv = activeBatch?.measuredAbv || null;
-      if (og && currentGravity && og > currentGravity) {
-        currentAbv = Math.round(calculateAbv(og, currentGravity) * 10) / 10;
-      }
+      const currentAbv = getBatchCalculatedAbv(activeBatch);
 
       let progressPercent = 0;
       let pointsRemaining = 0;
@@ -433,6 +743,8 @@ export default function FabricaChaoDeFabricaPage() {
         pointsRemaining = Math.max(0, Math.round((currentGravity - targetFg) * 1000));
       }
 
+      const targetAbv = og && targetFg && og > targetFg ? Math.round(calculateAbv(og, targetFg) * 10) / 10 : null;
+
       return {
         ...tank,
         activeBatch,
@@ -441,6 +753,7 @@ export default function FabricaChaoDeFabricaPage() {
           targetFg,
           currentGravity,
           currentAbv,
+          targetAbv,
           progressPercent,
           pointsRemaining,
           lastLogTemp,
@@ -1290,13 +1603,20 @@ export default function FabricaChaoDeFabricaPage() {
                             <span className="font-black text-xl text-white">{tank.name}</span>
                             <span className="text-xs font-bold text-slate-300">({tank.capacityLiters}L)</span>
                           </div>
-                          <span
-                            className={`text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm ${
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStatusSelectTank(tank);
+                            }}
+                            className={`text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 ${
                               isOccupied ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 border border-slate-700'
                             }`}
+                            title="Clique para mudar o status do tanque / lote"
                           >
-                            {status}
-                          </span>
+                            <span>{status}</span>
+                            <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                          </button>
                         </div>
 
                         {/* BOTÕES DE TOQUE PARA SINALIZAR / ALERTAR PURGA E CO2 */}
@@ -1342,13 +1662,13 @@ export default function FabricaChaoDeFabricaPage() {
                               <div>
                                 <span className="block text-[11px] uppercase font-bold text-slate-300">OG Inicial</span>
                                 <span className="text-sm font-black text-white font-mono">
-                                  {m.og ? m.og.toFixed(3) : '—'}
+                                  {m.og ? (measurementUnit === 'BRIX' ? `${(Math.round(sgToBrix(m.og) * 10) / 10).toFixed(1)}°Bx` : m.og.toFixed(3)) : '—'}
                                 </span>
                               </div>
                               <div className="border-x-2 border-slate-800">
                                 <span className="block text-[11px] uppercase font-bold text-amber-400">Meta FG</span>
                                 <span className="text-sm font-black text-amber-400 font-mono">
-                                  {m.targetFg ? m.targetFg.toFixed(3) : '—'}
+                                  {m.targetFg ? (measurementUnit === 'BRIX' ? `${(Math.round(sgToBrix(m.targetFg) * 10) / 10).toFixed(1)}°Bx` : m.targetFg.toFixed(3)) : '—'}
                                 </span>
                               </div>
                               <div>
@@ -1356,6 +1676,9 @@ export default function FabricaChaoDeFabricaPage() {
                                 <span className="text-sm font-black text-emerald-400 font-mono">
                                   {m.currentAbv ? `${m.currentAbv}%` : '—'}
                                 </span>
+                                {m.targetAbv && (
+                                  <span className="text-[10px] text-slate-400 block">Alvo: {m.targetAbv}%</span>
+                                )}
                               </div>
                             </div>
 
@@ -1364,7 +1687,9 @@ export default function FabricaChaoDeFabricaPage() {
                               <div className="space-y-1 pt-0.5">
                                 <div className="flex justify-between text-xs font-bold text-slate-200">
                                   <span>
-                                    {m.currentGravity ? `Atual: ${m.currentGravity.toFixed(3)} SG` : 'Sem medição'}
+                                    {m.currentGravity
+                                      ? `Atual: ${m.currentGravity.toFixed(3)} SG (${(Math.round(sgToBrix(m.currentGravity) * 10) / 10).toFixed(1)} °Bx)`
+                                      : 'Sem medição'}
                                   </span>
                                   <span className="text-amber-300 font-black">
                                     {m.pointsRemaining > 0
@@ -1408,9 +1733,15 @@ export default function FabricaChaoDeFabricaPage() {
                         Capacidade: {selectedTankForDetails.capacityLiters}L
                       </p>
                     </div>
-                    <span className="text-xs font-black px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950">
-                      {selectedTankForDetails.activeBatch?.status || selectedTankForDetails.status}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStatusSelectTank(selectedTankForDetails)}
+                      className="text-xs font-black px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                      title="Clique para mudar o status"
+                    >
+                      <span>{selectedTankForDetails.activeBatch?.status || selectedTankForDetails.status}</span>
+                      <ChevronDown className="w-4 h-4 opacity-75" />
+                    </button>
                   </div>
 
                   {/* SINALIZADORES DE ALERTA NO DETALHE */}
@@ -1442,26 +1773,75 @@ export default function FabricaChaoDeFabricaPage() {
                     </button>
                   </div>
 
-                  {selectedTankForDetails.activeBatch && (
-                    <div className="grid grid-cols-2 gap-2.5 text-xs pt-2 border-t-2 border-slate-800">
-                      <div className="bg-slate-800 p-3 rounded-2xl border border-slate-700">
-                        <span className="text-xs text-slate-300 uppercase font-bold block">OG Inicial</span>
-                        <span className="text-base font-black text-white font-mono">
-                          {selectedTankForDetails.activeBatch.measuredOg?.toFixed(3) ||
-                            selectedTankForDetails.activeBatch.recipe?.og?.toFixed(3) ||
-                            '—'}
-                        </span>
+                  {selectedTankForDetails.activeBatch && (() => {
+                    const batch = selectedTankForDetails.activeBatch;
+                    const og = getBatchOg(batch);
+                    const targetFg = getBatchTargetFg(batch);
+                    const curGrav = getBatchCurrentGravity(batch);
+                    const curAbv = getBatchCalculatedAbv(batch);
+                    const targetAbv = og && targetFg && og > targetFg ? Math.round(calculateAbv(og, targetFg) * 10) / 10 : null;
+                    const att = og && curGrav && og > curGrav ? Math.round(((og - curGrav) / (og - 1.0)) * 100) : null;
+
+                    return (
+                      <div className="space-y-3 pt-2 border-t-2 border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
+                            <Target className="w-4 h-4" /> Parâmetros & Metas do Lote
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openEditTargetsModal(batch)}
+                            className="flex items-center gap-1.5 text-xs font-black text-amber-400 bg-amber-500/15 hover:bg-amber-500/25 px-3 py-1.5 rounded-xl border border-amber-500/30 active:scale-95 transition-all shadow-sm"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Editar OG / Meta FG
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
+                            <span className="text-[11px] text-slate-300 uppercase font-bold block">OG Inicial</span>
+                            <span className="text-sm font-black text-white font-mono">
+                              {formatGravityDisplay(og)}
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
+                            <span className="text-[11px] text-amber-400 uppercase font-bold block">Objetivo (Meta FG)</span>
+                            <span className="text-sm font-black text-amber-400 font-mono">
+                              {formatGravityDisplay(targetFg)}
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
+                            <span className="text-[11px] text-cyan-400 uppercase font-bold block">Densidade Atual</span>
+                            <span className="text-sm font-black text-cyan-300 font-mono">
+                              {curGrav ? formatGravityDisplay(curGrav) : 'Sem medição'}
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700">
+                            <span className="text-[11px] text-emerald-400 uppercase font-bold block">Teor Alcoólico (ABV)</span>
+                            <span className="text-base font-black text-emerald-400 font-mono">
+                              {curAbv ? `${curAbv}%` : '—'}
+                            </span>
+                            {targetAbv && (
+                              <span className="text-[10px] text-slate-400 block font-medium">Meta: {targetAbv}%</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {att !== null && (
+                          <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                            <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                              <Activity className="w-3.5 h-3.5 text-amber-400" /> Atenuação Atual:
+                            </span>
+                            <span className="font-mono font-black text-emerald-400">{att}%</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-800 p-3 rounded-2xl border border-slate-700">
-                        <span className="text-xs text-amber-400 uppercase font-bold block">
-                          Objetivo FG (Meta da Receita)
-                        </span>
-                        <span className="text-base font-black text-amber-400 font-mono">
-                          {selectedTankForDetails.activeBatch.recipe?.fg?.toFixed(3) || '—'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* FORMULÁRIO DE MEDIÇÃO DIÁRIA */}
@@ -1475,18 +1855,18 @@ export default function FabricaChaoDeFabricaPage() {
                       <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
                         <button
                           type="button"
-                          onClick={() => setMeasurementUnit('SG')}
-                          className={`px-3 py-1 text-xs font-black rounded-lg ${
-                            measurementUnit === 'SG' ? 'bg-amber-500 text-slate-950' : 'text-slate-300'
+                          onClick={() => handleMeasurementUnitChange('SG')}
+                          className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
+                            measurementUnit === 'SG' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-300'
                           }`}
                         >
                           SG
                         </button>
                         <button
                           type="button"
-                          onClick={() => setMeasurementUnit('BRIX')}
-                          className={`px-3 py-1 text-xs font-black rounded-lg ${
-                            measurementUnit === 'BRIX' ? 'bg-amber-500 text-slate-950' : 'text-slate-300'
+                          onClick={() => handleMeasurementUnitChange('BRIX')}
+                          className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
+                            measurementUnit === 'BRIX' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-300'
                           }`}
                         >
                           Brix
@@ -1533,6 +1913,32 @@ export default function FabricaChaoDeFabricaPage() {
                       />
                     </div>
 
+                    {/* PRÉVIA EM TEMPO REAL DO TEOR ALCOÓLICO (ABV) */}
+                    {liveMeasurementPreview && (
+                      <div className="bg-emerald-950/40 border-2 border-emerald-500/60 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2 shadow-lg animate-in fade-in">
+                        <div className="flex items-center gap-2.5">
+                          <Sparkles className="w-5 h-5 text-emerald-400 flex-shrink-0 animate-pulse" />
+                          <div>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block">
+                              Prévia em Tempo Real:
+                            </span>
+                            <span className="text-sm font-black text-white">
+                              Teor Alcoólico:{' '}
+                              <strong className="text-emerald-400 font-mono text-base">
+                                {liveMeasurementPreview.abv}% ABV
+                              </strong>
+                              <span className="text-slate-300 font-normal ml-2">
+                                | Atenuação: <strong className="text-white font-mono">{liveMeasurementPreview.att}%</strong>
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-1 rounded-xl border border-emerald-500/40">
+                          {liveMeasurementPreview.sg.toFixed(3)} SG / {liveMeasurementPreview.brix.toFixed(1)} °Bx
+                        </span>
+                      </div>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleSaveTankMeasurement}
@@ -1544,6 +1950,91 @@ export default function FabricaChaoDeFabricaPage() {
                     </button>
                   </div>
                 )}
+
+                {/* HISTÓRICO DE MEDIÇÕES DO LOTE */}
+                {selectedTankForDetails.activeBatch && (() => {
+                  let logs: any[] = [];
+                  try {
+                    if (selectedTankForDetails.activeBatch.fermentationLogsJson) {
+                      logs = JSON.parse(selectedTankForDetails.activeBatch.fermentationLogsJson);
+                    }
+                  } catch {}
+
+                  if (!Array.isArray(logs) || logs.length === 0) return null;
+
+                  const og = getBatchOg(selectedTankForDetails.activeBatch);
+
+                  return (
+                    <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-black text-base text-white flex items-center gap-2">
+                          <History className="w-5 h-5 text-amber-400" />
+                          Histórico de Medições do Lote ({logs.length})
+                        </h4>
+                        <span className="text-xs font-bold text-slate-300">
+                          Última: {logs[logs.length - 1]?.date ? formatDateShort(logs[logs.length - 1].date) : 'Hoje'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {logs.slice().reverse().map((log: any, rIdx: number) => {
+                          const origIndex = logs.length - 1 - rIdx;
+                          const logSg = log.gravity;
+                          const logAbv = log.abv ?? (og && logSg && og > logSg ? Math.round(calculateAbv(og, logSg) * 10) / 10 : null);
+                          const brixVal = log.rawInputBrix ? `${log.rawInputBrix.toFixed(1)} °Bx` : logSg ? `${(Math.round(sgToBrix(logSg) * 10) / 10).toFixed(1)} °Bx` : '—';
+
+                          return (
+                            <div
+                              key={log.id || origIndex}
+                              className="bg-slate-800/80 border border-slate-700 p-3 rounded-2xl flex items-center justify-between gap-3 text-xs"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-300">
+                                    {formatDateShort(log.date)}
+                                  </span>
+                                  {log.tempCelsius !== undefined && (
+                                    <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                                      {log.tempCelsius}°C
+                                    </span>
+                                  )}
+                                  {log.ph !== undefined && log.ph !== null && (
+                                    <span className="font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20">
+                                      pH {log.ph}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-slate-300 font-mono text-[11px]">
+                                  {logSg ? `${logSg.toFixed(3)} SG` : '—'} ({brixVal})
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {logAbv !== null && logAbv !== undefined && (
+                                  <div className="text-right">
+                                    <span className="text-[10px] text-slate-400 uppercase font-bold block">ABV</span>
+                                    <span className="text-sm font-black text-emerald-400 font-mono">
+                                      {logAbv}%
+                                    </span>
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMeasurementLog(origIndex)}
+                                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
+                                  title="Remover esta medição"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* TAREFAS DE ADEGA + BOTÃO DE NOVA TAREFA */}
                 {selectedTankForDetails.activeBatch && (
@@ -1583,7 +2074,7 @@ export default function FabricaChaoDeFabricaPage() {
                             'Dry Hopping',
                             'Purga de Levedura',
                             'Cold Crash (0°C)',
-                            'Clarificação / Gelatina',
+                            'Clarificação',
                             'Bater CO2 / Pressurizar',
                             'Medição de Densidade',
                           ].map((chip) => (
@@ -1770,6 +2261,214 @@ export default function FabricaChaoDeFabricaPage() {
                     })()}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* MODAL: EDITAR OG INICIAL E OBJETIVO FG */}
+            {isEditingTargetsOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-lg text-white flex items-center gap-2">
+                      <Target className="w-5 h-5 text-amber-400" />
+                      Editar OG & Meta FG
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTargetsOpen(false)}
+                      className="p-1 rounded-xl text-slate-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-300">
+                    Ajuste as metas físico-químicas deste lote. O sistema recalcula automaticamente a atenuação e a estimativa de ABV.
+                  </p>
+
+                  {/* SELETOR DE UNIDADE NO MODAL */}
+                  <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-2xl border border-slate-800">
+                    <span className="text-xs font-bold text-slate-300">Unidade para edição:</span>
+                    <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => handleEditTargetsUnitChange('SG')}
+                        className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
+                          editTargetsUnit === 'SG' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-300'
+                        }`}
+                      >
+                        SG (1.xxx)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEditTargetsUnitChange('BRIX')}
+                        className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
+                          editTargetsUnit === 'BRIX' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-300'
+                        }`}
+                      >
+                        Brix (°Bx)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-200 mb-1">
+                        OG Inicial {editTargetsUnit === 'SG' ? '(ex: 1.050)' : '(ex: 12.4 °Bx)'}:
+                      </label>
+                      <input
+                        type="text"
+                        value={editOgInput}
+                        onChange={(e) => setEditOgInput(e.target.value)}
+                        placeholder={editTargetsUnit === 'SG' ? '1.050' : '12.4'}
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-amber-400 mb-1">
+                        Objetivo FG (Meta da Receita) {editTargetsUnit === 'SG' ? '(ex: 1.010)' : '(ex: 2.6 °Bx)'}:
+                      </label>
+                      <input
+                        type="text"
+                        value={editTargetFgInput}
+                        onChange={(e) => setEditTargetFgInput(e.target.value)}
+                        placeholder={editTargetsUnit === 'SG' ? '1.010' : '2.6'}
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-amber-400 text-center outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* PREVIEW DO TEOR ALCOÓLICO ESPERADO */}
+                  {(() => {
+                    let ogNum = editTargetsUnit === 'BRIX'
+                      ? (parseFloat(editOgInput.replace(',', '.')) ? brixToSg(parseFloat(editOgInput.replace(',', '.'))) : null)
+                      : parseBreweryGravity(editOgInput);
+                    let fgNum = editTargetsUnit === 'BRIX'
+                      ? (parseFloat(editTargetFgInput.replace(',', '.')) ? brixToSg(parseFloat(editTargetFgInput.replace(',', '.'))) : null)
+                      : parseBreweryGravity(editTargetFgInput);
+
+                    if (ogNum && fgNum && ogNum > fgNum && ogNum > 1.0) {
+                      const expAbv = Math.round(calculateAbv(ogNum, fgNum) * 10) / 10;
+                      const expAtt = Math.round(((ogNum - fgNum) / (ogNum - 1.0)) * 100);
+                      return (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-center space-y-1">
+                          <span className="text-[11px] font-bold text-amber-400 block uppercase">
+                            Previsão com estas metas:
+                          </span>
+                          <span className="text-sm font-black text-white">
+                            ABV Alvo: <strong className="text-emerald-400 text-base font-mono">{expAbv}%</strong> | Atenuação Alvo: <strong className="text-white font-mono">{expAtt}%</strong>
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTargetsOpen(false)}
+                      className="flex-1 py-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-sm rounded-2xl border border-slate-700 transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveTargets}
+                      disabled={isSavingTargets}
+                      className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" />
+                      Salvar Metas
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL: MUDAR STATUS DO TANQUE / LOTE */}
+            {statusSelectTank && (
+              <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-black text-lg text-white flex items-center gap-2">
+                        <Cylinder className="w-5 h-5 text-amber-400" />
+                        Alterar Status: {statusSelectTank.name}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Status atual:{' '}
+                        <strong className="text-amber-400 uppercase">
+                          {statusSelectTank.activeBatch?.status || statusSelectTank.status}
+                        </strong>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStatusSelectTank(null)}
+                      className="p-1 rounded-xl text-slate-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                    <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider block pt-1">
+                      {statusSelectTank.activeBatch ? 'Etapas de Produção / Lote no Tanque:' : 'Status Operacional do Tanque:'}
+                    </span>
+
+                    {[
+                      { key: 'FERMENTANDO', label: 'Fermentando', badgeColor: 'bg-amber-500 text-slate-950', desc: 'Fermentação ativa no tanque com controle de temperatura' },
+                      { key: 'MATURANDO', label: 'Maturando', badgeColor: 'bg-purple-500 text-white', desc: 'Cold crash, descanso diacetil ou maturação a frio' },
+                      { key: 'PRONTO_ENVASE', label: 'Pronto p/ Envase', badgeColor: 'bg-emerald-500 text-slate-950', desc: 'Cerveja finalizada, carbonatada e pronta para barril/lata' },
+                      { key: 'BRASSAGEM', label: 'Brassagem', badgeColor: 'bg-orange-500 text-white', desc: 'Lote recém brassado / transferindo para tanque' },
+                      { key: 'ENVASADO', label: 'Envasado', badgeColor: 'bg-blue-500 text-white', desc: 'Lote já envasado em barris / garrafas' },
+                      { key: 'HIGIENIZANDO', label: 'Higienizando / CIP', badgeColor: 'bg-cyan-500 text-slate-950', desc: 'Tanque em processo de lavagem ou sanitização' },
+                      { key: 'MANUTENCAO', label: 'Manutenção', badgeColor: 'bg-rose-500 text-white', desc: 'Válvula, vedação ou camisa em manutenção' },
+                      { key: 'LIVRE', label: 'Livre / Disponível', badgeColor: 'bg-slate-700 text-slate-200', desc: 'Tanque limpo e vazio pronto para nova brassagem' },
+                      ...(statusSelectTank.activeBatch ? [
+                        { key: 'FINALIZADO', label: 'Finalizado (Liberar Tanque)', badgeColor: 'bg-slate-600 text-white', desc: 'Conclui este lote e libera o tanque como LIVRE' },
+                      ] : []),
+                    ].map((st) => {
+                      const isCurrent = (statusSelectTank.activeBatch?.status || statusSelectTank.status) === st.key;
+                      return (
+                        <button
+                          key={st.key}
+                          type="button"
+                          disabled={isUpdatingStatus}
+                          onClick={() => handleChangeTankStatus(statusSelectTank, st.key)}
+                          className={`w-full p-3.5 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 active:scale-98 ${
+                            isCurrent
+                              ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/30'
+                              : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg ${st.badgeColor}`}>
+                                {st.label}
+                              </span>
+                              {isCurrent && (
+                                <span className="text-[11px] font-bold text-amber-400">✓ Atual</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-slate-400 block mt-1">{st.desc}</span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-500" />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusSelectTank(null)}
+                    className="w-full py-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-sm rounded-2xl border border-slate-700 transition-all"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             )}
           </div>

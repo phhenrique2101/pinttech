@@ -98,6 +98,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       customRecipeDataJson,
       brewDate,
       ingredients,
+      targetFg,
     } = body;
 
     const volPlanned = volumePlannedLiters !== undefined ? parseFloat(volumePlannedLiters) : existing.volumePlannedLiters;
@@ -308,6 +309,36 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         }
       }
 
+      let finalCustomRecipeDataJson = customRecipeDataJson !== undefined
+        ? (customRecipeDataJson ? (typeof customRecipeDataJson === 'string' ? customRecipeDataJson : JSON.stringify(customRecipeDataJson)) : null)
+        : existing.customRecipeDataJson;
+
+      if (targetFg !== undefined) {
+        let customObj: any = {};
+        if (finalCustomRecipeDataJson) {
+          try {
+            customObj = JSON.parse(finalCustomRecipeDataJson);
+          } catch {}
+        }
+        const parsedTargetFg = parseGrav(targetFg);
+        customObj.targetFg = parsedTargetFg;
+        finalCustomRecipeDataJson = JSON.stringify(customObj);
+      }
+
+      let autoFermentationDate = fermentationStartDate !== undefined
+        ? (fermentationStartDate ? new Date(fermentationStartDate) : null)
+        : existing.fermentationStartDate;
+      if (status === 'FERMENTANDO' && !autoFermentationDate) {
+        autoFermentationDate = new Date();
+      }
+
+      let autoMaturationDate = maturationStartDate !== undefined
+        ? (maturationStartDate ? new Date(maturationStartDate) : null)
+        : existing.maturationStartDate;
+      if (status === 'MATURANDO' && !autoMaturationDate) {
+        autoMaturationDate = new Date();
+      }
+
       const updatedBatch = await tx.productionBatch.update({
         where: { id: params.id },
         data: {
@@ -341,11 +372,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           technicalResponsible: technicalResponsible !== undefined ? (technicalResponsible?.trim() || null) : existing.technicalResponsible,
           sensoryNotes: sensoryNotes !== undefined ? (sensoryNotes?.trim() || null) : existing.sensoryNotes,
           packagingDate: packagingDate !== undefined ? (packagingDate ? new Date(packagingDate) : null) : existing.packagingDate,
-          fermentationStartDate: fermentationStartDate !== undefined ? (fermentationStartDate ? new Date(fermentationStartDate) : null) : existing.fermentationStartDate,
-          maturationStartDate: maturationStartDate !== undefined ? (maturationStartDate ? new Date(maturationStartDate) : null) : existing.maturationStartDate,
+          fermentationStartDate: autoFermentationDate,
+          maturationStartDate: autoMaturationDate,
           tankTasksJson: tankTasksJson !== undefined ? (tankTasksJson ? (typeof tankTasksJson === 'string' ? tankTasksJson : JSON.stringify(tankTasksJson)) : null) : existing.tankTasksJson,
           fermentationLogsJson: fermentationLogsJson !== undefined ? (fermentationLogsJson ? (typeof fermentationLogsJson === 'string' ? fermentationLogsJson : JSON.stringify(fermentationLogsJson)) : null) : existing.fermentationLogsJson,
-          customRecipeDataJson: customRecipeDataJson !== undefined ? (customRecipeDataJson ? (typeof customRecipeDataJson === 'string' ? customRecipeDataJson : JSON.stringify(customRecipeDataJson)) : null) : existing.customRecipeDataJson,
+          customRecipeDataJson: finalCustomRecipeDataJson,
         },
         include: {
           recipe: true,
@@ -357,7 +388,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
 
       // Se foi enviado novo preço de venda ou custo de receita, sincroniza com a receita original
-      if (existing.recipeId && (salePricePerLiter !== undefined || recipeCostPerLiter !== undefined || (numCostPerLiter !== undefined && numCostPerLiter !== null))) {
+      if (existing.recipeId && (salePricePerLiter !== undefined || recipeCostPerLiter !== undefined || (numCostPerLiter !== undefined && numCostPerLiter !== null) || targetFg !== undefined)) {
         const recipeUpdateData: any = {};
         if (salePricePerLiter !== undefined && salePricePerLiter !== null && !isNaN(parseFloat(salePricePerLiter))) {
           const sPrice = parseFloat(salePricePerLiter);
@@ -368,6 +399,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           recipeUpdateData.costPerLiter = parseFloat(recipeCostPerLiter);
         } else if (numCostPerLiter !== undefined && numCostPerLiter !== null && !isNaN(numCostPerLiter)) {
           recipeUpdateData.costPerLiter = numCostPerLiter;
+        }
+        if (targetFg !== undefined) {
+          const parsedFg = parseGrav(targetFg);
+          if (parsedFg) recipeUpdateData.fg = parsedFg;
         }
 
         if (Object.keys(recipeUpdateData).length > 0) {
