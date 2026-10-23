@@ -72,7 +72,8 @@ SELECT
   r."mapaRegistration" AS mapa_registration,
   r."createdAt" AS created_at,
   r."commercialDenomination" AS commercial_denomination,
-  r."mapaProductId" AS mapa_product_id
+  r."mapaProductId" AS mapa_product_id,
+  r."xmlFileName" AS xml_file_name
 FROM "BeerRecipe" r
 JOIN "Brewery" b ON b."id" = r."breweryId";
 

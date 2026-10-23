@@ -24,6 +24,10 @@ export async function GET(req: NextRequest) {
           orderBy: { createdAt: 'asc' },
         },
         mapaProduct: true,
+        batches: {
+          select: { id: true, status: true, batchNumber: true, tankId: true },
+          orderBy: { createdAt: 'desc' },
+        },
         _count: { select: { batches: true, ingredients: true } },
       },
       orderBy: { name: 'asc' },

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { xmlContent, description: customDescription } = await req.json();
+    const { xmlContent, fileName, description: customDescription } = await req.json();
     if (!xmlContent || typeof xmlContent !== 'string') {
       return NextResponse.json({ error: 'Conteúdo BeerXML não fornecido' }, { status: 400 });
     }
@@ -109,6 +109,8 @@ export async function POST(req: NextRequest) {
               tasteNotes: p.tasteNotes,
               notes: p.notes,
             }),
+            xmlFileName: fileName || `${p.name.trim().replace(/\s+/g, '_')}.xml`,
+            xmlContent,
           },
           include: {
             ingredients: true,
@@ -139,6 +141,8 @@ export async function POST(req: NextRequest) {
               tasteNotes: p.tasteNotes,
               notes: p.notes,
             }),
+            xmlFileName: fileName || `${p.name.trim().replace(/\s+/g, '_')}.xml`,
+            xmlContent,
             ingredients: {
               create: ingredientsData,
             },

@@ -22,6 +22,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 });
     }
 
+    const sanitizedFilename = (recipe.xmlFileName || `${recipe.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.xml`).trim();
+
+    if (recipe.xmlContent) {
+      return new NextResponse(recipe.xmlContent, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/xml',
+          'Content-Disposition': `attachment; filename="${sanitizedFilename}"`,
+        },
+      });
+    }
+
     let fermentables: FermentableItem[] = [];
     let hops: HopItem[] = [];
     let yeast: YeastItem | undefined = undefined;
@@ -86,13 +98,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       mashSteps,
     });
 
-    const sanitizedFilename = recipe.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-
     return new NextResponse(xml, {
       status: 200,
       headers: {
         'Content-Type': 'application/xml',
-        'Content-Disposition': `attachment; filename="${sanitizedFilename}.xml"`,
+        'Content-Disposition': `attachment; filename="${sanitizedFilename}"`,
       },
     });
   } catch (error: any) {

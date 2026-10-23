@@ -38,6 +38,8 @@ import {
   ArrowUp,
   ArrowDown,
   Camera,
+  FileCode,
+  Download,
 } from 'lucide-react';
 import BeerXmlImporterModal from '@/components/brew/BeerXmlImporterModal';
 import MapaTraceabilitySheetModal from '@/components/brew/MapaTraceabilitySheetModal';
@@ -80,6 +82,7 @@ export default function ProducaoPage() {
   // View mode para Registros MAPA e Catálogo de Receitas (padrão em linhas)
   const [mapaViewMode, setMapaViewMode] = useState<'CARDS' | 'ROWS'>('ROWS');
   const [recipeViewMode, setRecipeViewMode] = useState<'CARDS' | 'ROWS'>('ROWS');
+  const [recipeFilter, setRecipeFilter] = useState<'AVAILABLE' | 'ALL' | 'BREWED'>('AVAILABLE');
 
   // Tank filter state
   const [tankStatusFilter, setTankStatusFilter] = useState<string>('ALL');
@@ -283,12 +286,11 @@ export default function ProducaoPage() {
     );
   }, [unassignedBatches, search, mapaProducts]);
 
-  // Busca do Lote Ativo correspondente a um Tanque
+  // Busca do Lote Ativo correspondente a um Tanque (lotes envasados ou finalizados não ocupam o tanque)
   const getTankActiveBatch = (t: any) => {
     return (
       activeBatches.find((b) => b.tankId === t.id || b.tank?.id === t.id) ||
       (t.batches || []).find((b: any) => b.status !== 'FINALIZADO' && b.status !== 'ENVASADO' && b.status !== 'CANCELADO') ||
-      t.batches?.[0] ||
       null
     );
   };
@@ -325,12 +327,48 @@ export default function ProducaoPage() {
   };
 
   const filteredHistory = filterList(historicalBatches);
-  const filteredRecipes = recipes.filter(
-    (r) =>
-      !search.trim() ||
-      r.name?.toLowerCase().includes(search.toLowerCase()) ||
-      r.style?.toLowerCase().includes(search.toLowerCase())
-  );
+
+  // Verifica se uma receita está atualmente no tanque ou já foi brassada
+  const isRecipeInTankOrBrewed = (r: any) => {
+    // 1. Verifica se há lotes ativos no tanque ou em brassagem
+    const hasActiveBatch = batches.some(
+      (b) => b.recipeId === r.id && b.status !== 'FINALIZADO' && b.status !== 'ENVASADO' && b.status !== 'CANCELADO'
+    );
+    if (hasActiveBatch) return true;
+
+    // 2. Se a receita já possui lotes de produção associados
+    const totalBatches = (r._count?.batches || r.batches?.length || 0);
+    return totalBatches > 0;
+  };
+
+  // Receitas XML prontas para brassagem (ainda não foram para o tanque)
+  const availableRecipes = useMemo(() => {
+    return recipes.filter((r) => !isRecipeInTankOrBrewed(r));
+  }, [recipes, batches]);
+
+  // Receitas já brassadas ou atualmente em produção/tanque
+  const brewedRecipes = useMemo(() => {
+    return recipes.filter((r) => isRecipeInTankOrBrewed(r));
+  }, [recipes, batches]);
+
+  // Receitas filtradas pelo modo selecionado e busca
+  const filteredRecipes = useMemo(() => {
+    let list = recipes;
+    if (recipeFilter === 'AVAILABLE') {
+      list = availableRecipes;
+    } else if (recipeFilter === 'BREWED') {
+      list = brewedRecipes;
+    }
+    if (!search.trim()) return list;
+    const q = search.toLowerCase();
+    return list.filter(
+      (r) =>
+        r.name?.toLowerCase().includes(q) ||
+        r.style?.toLowerCase().includes(q) ||
+        (r.xmlFileName && r.xmlFileName.toLowerCase().includes(q)) ||
+        (r.mapaRegistration && r.mapaRegistration.toLowerCase().includes(q))
+    );
+  }, [recipes, availableRecipes, brewedRecipes, recipeFilter, search]);
 
   const filteredMapaProducts = useMemo(() => {
     return mapaProducts.filter((item) => {
@@ -350,11 +388,13 @@ export default function ProducaoPage() {
   const filteredTanks = useMemo(() => {
     return tanks.filter((t) => {
       const activeBatch = getTankActiveBatch(t);
-      const isOccupied = t.status === 'OCUPADO' || !!activeBatch;
+      const isOccupied = !!activeBatch;
 
       let matchesStatus = true;
       if (tankStatusFilter === 'OCUPADO') {
         matchesStatus = isOccupied;
+      } else if (tankStatusFilter === 'LIVRE') {
+        matchesStatus = !isOccupied && t.status !== 'HIGIENIZANDO' && t.status !== 'MANUTENCAO';
       } else if (tankStatusFilter !== 'ALL') {
         matchesStatus = t.status === tankStatusFilter;
       }
@@ -396,12 +436,12 @@ export default function ProducaoPage() {
           break;
         case 'occupation': {
           const batchA = getTankActiveBatch(a);
-          const isOccA = a.status === 'OCUPADO' || !!batchA;
+          const isOccA = !!batchA;
           const volA = isOccA && batchA ? (batchA.volumeProducedLiters || batchA.volumePlannedLiters || a.capacityLiters) : 0;
           const fillA = a.capacityLiters > 0 ? (volA / a.capacityLiters) : 0;
 
           const batchB = getTankActiveBatch(b);
-          const isOccB = b.status === 'OCUPADO' || !!batchB;
+          const isOccB = !!batchB;
           const volB = isOccB && batchB ? (batchB.volumeProducedLiters || batchB.volumePlannedLiters || b.capacityLiters) : 0;
           const fillB = b.capacityLiters > 0 ? (volB / b.capacityLiters) : 0;
 
@@ -1099,9 +1139,9 @@ export default function ProducaoPage() {
             { id: 'HISTORY_MAPA', label: 'Lotes Finalizados', count: historicalBatches.length, icon: ShieldCheck },
             {
               id: 'RECIPES',
-              label: 'Catálogo de Receitas',
-              count: recipes.length,
-              icon: Beer,
+              label: 'Catálogo de Receitas XML',
+              count: availableRecipes.length,
+              icon: FileCode,
             },
             {
               id: 'MAPA_REGISTRATIONS',
@@ -1483,7 +1523,8 @@ export default function ProducaoPage() {
                   <tbody className="divide-y divide-slate-800">
                     {sortedTanks.map((tank) => {
                       const activeBatch = getTankActiveBatch(tank);
-                      const isOccupied = tank.status === 'OCUPADO' || !!activeBatch;
+                      const isOccupied = !!activeBatch;
+                      const displayStatus = isOccupied ? (activeBatch?.status || 'OCUPADO') : (tank.status === 'OCUPADO' ? 'LIVRE' : tank.status);
                       const elapsedDays = activeBatch ? getElapsedDays(activeBatch.brewDate || activeBatch.createdAt) : null;
 
                       return (
@@ -1495,9 +1536,9 @@ export default function ProducaoPage() {
                                 className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                                   isOccupied
                                     ? 'bg-purple-400 animate-pulse'
-                                    : tank.status === 'LIVRE'
+                                    : displayStatus === 'LIVRE'
                                     ? 'bg-emerald-400'
-                                    : tank.status === 'HIGIENIZANDO'
+                                    : displayStatus === 'HIGIENIZANDO'
                                     ? 'bg-blue-400'
                                     : 'bg-amber-400'
                                 }`}
@@ -1519,14 +1560,14 @@ export default function ProducaoPage() {
                               className={`px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block ${
                                 isOccupied
                                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                  : tank.status === 'LIVRE'
+                                  : displayStatus === 'LIVRE'
                                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                  : tank.status === 'HIGIENIZANDO'
+                                  : displayStatus === 'HIGIENIZANDO'
                                   ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                                   : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                               }`}
                             >
-                              {isOccupied ? (activeBatch?.status || 'OCUPADO') : tank.status}
+                              {displayStatus}
                             </span>
                           </td>
 
@@ -1695,7 +1736,8 @@ export default function ProducaoPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {sortedTanks.map((tank) => {
                 const activeBatch = getTankActiveBatch(tank);
-                const isOccupied = tank.status === 'OCUPADO' || !!activeBatch;
+                const isOccupied = !!activeBatch;
+                const displayStatus = isOccupied ? (activeBatch?.status || 'OCUPADO') : (tank.status === 'OCUPADO' ? 'LIVRE' : tank.status);
                 const volumeInTank = activeBatch ? (activeBatch.volumeProducedLiters || activeBatch.volumePlannedLiters || tank.capacityLiters) : 0;
                 const fillPercent = tank.capacityLiters > 0 ? Math.min(100, Math.round((volumeInTank / tank.capacityLiters) * 100)) : 0;
                 const elapsedDays = activeBatch ? getElapsedDays(activeBatch.brewDate || activeBatch.createdAt) : null;
@@ -1719,14 +1761,14 @@ export default function ProducaoPage() {
                               className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
                                 isOccupied
                                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                  : tank.status === 'LIVRE'
+                                  : displayStatus === 'LIVRE'
                                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                  : tank.status === 'HIGIENIZANDO'
+                                  : displayStatus === 'HIGIENIZANDO'
                                   ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                                   : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                               }`}
                             >
-                              {isOccupied ? (activeBatch?.status || 'OCUPADO') : tank.status}
+                              {displayStatus}
                             </span>
                           </div>
                           <span className="text-xs text-slate-400 block mt-0.5">
@@ -2610,23 +2652,30 @@ export default function ProducaoPage() {
         </div>
       )}
 
-      {/* ABA: CATÁLOGO DE RECEITAS */}
+      {/* ABA: CATÁLOGO DE RECEITAS (ARQUIVOS XML) */}
       {activeTab === 'RECIPES' && (
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-slate-900 dark:text-white text-sm">Catálogo de Receitas (BeerSmith / Brewfather)</h3>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
-                  {filteredRecipes.length} {filteredRecipes.length === 1 ? 'receita' : 'receitas'}
-                </span>
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  <FileCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                    <span>Catálogo de Receitas XML</span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                      {filteredRecipes.length} {filteredRecipes.length === 1 ? 'arquivo' : 'arquivos'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Arquivos BeerXML (BeerSmith / Brewfather). Ao iniciar a brassagem e transferir para o tanque, o arquivo sai da fila de prontas e passa para os tanques.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Portfólio de receitas prontas para serem brassadas futuramente. Inicie a brassagem de qualquer receita em 1 clique.
-              </p>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               {/* Alternador de Modo de Visualização: Linhas vs Cards */}
               <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                 <button
@@ -2660,204 +2709,353 @@ export default function ProducaoPage() {
 
               <button
                 onClick={() => setImporterModalOpen(true)}
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow"
+                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow active:scale-95 transition"
               >
                 <Upload className="w-4 h-4" />
-                <span>Importar Novo BeerXML</span>
+                <span>+ Importar Arquivo XML</span>
               </button>
             </div>
           </div>
 
+          {/* Filtros de Estado: Prontas para Brassagem (Padrão) vs Já Brassadas / Todas */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setRecipeFilter('AVAILABLE')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                recipeFilter === 'AVAILABLE'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Prontas para Brassagem</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                recipeFilter === 'AVAILABLE' ? 'bg-slate-950 text-amber-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }`}>
+                {availableRecipes.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setRecipeFilter('BREWED')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                recipeFilter === 'BREWED'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800'
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5" />
+              <span>Já Brassadas / No Tanque</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                recipeFilter === 'BREWED' ? 'bg-slate-950 text-amber-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }`}>
+                {brewedRecipes.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setRecipeFilter('ALL')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                recipeFilter === 'ALL'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800'
+              }`}
+            >
+              <span>Todos os Arquivos ({recipes.length})</span>
+            </button>
+          </div>
+
           {filteredRecipes.length === 0 ? (
             <div className="p-12 text-center bg-white dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl space-y-3 text-slate-500 dark:text-slate-400">
-              <Beer className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500" />
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Nenhuma receita encontrada</h4>
-              <p className="text-xs text-slate-500">Importe arquivos BeerXML gerados pelo BeerSmith ou Brewfather para começar.</p>
+              <FileCode className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500" />
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                {recipeFilter === 'AVAILABLE' ? 'Nenhuma receita XML pendente para brassagem' : 'Nenhuma receita encontrada'}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                {recipeFilter === 'AVAILABLE'
+                  ? 'Todas as receitas importadas já foram brassadas ou transferidas para os tanques. Importe um novo arquivo BeerXML para iniciar a próxima brassagem.'
+                  : 'Importe arquivos BeerXML gerados pelo BeerSmith ou Brewfather para começar.'}
+              </p>
+              <button
+                onClick={() => setImporterModalOpen(true)}
+                className="mt-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black inline-flex items-center gap-1.5 shadow"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Importar Arquivo XML</span>
+              </button>
             </div>
           ) : recipeViewMode === 'ROWS' ? (
-            /* VISUALIZAÇÃO EM LINHAS (TABELA DE RECEITAS) */
+            /* VISUALIZAÇÃO EM LINHAS (TABELA DE ARQUIVOS XML) */
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
                     <tr>
-                      <th className="p-3.5">Receita & Estilo</th>
+                      <th className="p-3.5">Arquivo XML & Receita</th>
                       <th className="p-3.5">Registro MAPA</th>
                       <th className="p-3.5 text-center">OG</th>
                       <th className="p-3.5 text-center">ABV</th>
                       <th className="p-3.5 text-center">IBU</th>
                       <th className="p-3.5 text-center">EBC</th>
-                      <th className="p-3.5 text-right w-44">Ações</th>
+                      <th className="p-3.5 text-center">Status</th>
+                      <th className="p-3.5 text-right w-52">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                    {filteredRecipes.map((recipe) => (
-                      <tr
-                        key={recipe.id}
-                        className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition group"
-                      >
-                        <td className="p-3.5">
-                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
-                            {recipe.style}
-                          </span>
-                          <div className="font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-300 transition">
-                            {recipe.name}
-                          </div>
-                          {recipe.description && (
-                            <div className="text-[10px] text-slate-400 truncate max-w-sm italic mt-0.5">
-                              {recipe.description}
+                    {filteredRecipes.map((recipe) => {
+                      const xmlName = recipe.xmlFileName || `${recipe.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.xml`;
+                      const inTank = batches.some(
+                        (b) => b.recipeId === recipe.id && b.status !== 'FINALIZADO' && b.status !== 'ENVASADO' && b.status !== 'CANCELADO'
+                      );
+                      const isBrewed = (recipe._count?.batches || recipe.batches?.length || 0) > 0;
+
+                      return (
+                        <tr
+                          key={recipe.id}
+                          className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition group"
+                        >
+                          <td className="p-3.5">
+                            <div className="flex items-start gap-2.5">
+                              <span className="px-1.5 py-0.5 rounded font-mono text-[9px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 uppercase shrink-0 mt-0.5">
+                                XML
+                              </span>
+                              <div>
+                                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
+                                  {recipe.style}
+                                </span>
+                                <div className="font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-300 transition flex items-center gap-1.5">
+                                  <span>{recipe.name}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                                  <FileCode className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span className="truncate max-w-xs">{xmlName}</span>
+                                </div>
+                              </div>
                             </div>
-                          )}
-                        </td>
+                          </td>
 
-                        <td className="p-3.5 whitespace-nowrap">
-                          {recipe.mapaRegistration ? (
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/70 dark:bg-slate-950 border border-amber-200/70 dark:border-slate-800 text-amber-800 dark:text-amber-300 font-mono text-xs font-bold">
-                              <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                              <span>{recipe.mapaRegistration}</span>
+                          <td className="p-3.5 whitespace-nowrap">
+                            {recipe.mapaRegistration ? (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/70 dark:bg-slate-950 border border-amber-200/70 dark:border-slate-800 text-amber-800 dark:text-amber-300 font-mono text-xs font-bold">
+                                <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                <span>{recipe.mapaRegistration}</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">Sem MAPA</span>
+                            )}
+                          </td>
+
+                          <td className="p-3.5 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                            {recipe.og?.toFixed(3) || '1.050'}
+                          </td>
+
+                          <td className="p-3.5 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                            {recipe.abv?.toFixed(1) || '5.0'}%
+                          </td>
+
+                          <td className="p-3.5 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                            {recipe.ibu || '25'}
+                          </td>
+
+                          <td className="p-3.5 text-center font-mono text-slate-600 dark:text-slate-400">
+                            {recipe.ebc || '10'}
+                          </td>
+
+                          <td className="p-3.5 text-center whitespace-nowrap">
+                            {inTank ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                                ⚡ No Tanque
+                              </span>
+                            ) : isBrewed ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
+                                ✔ Brassada
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                🟡 Pronta p/ Brassagem
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="p-3.5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openStartBatchModal(recipe)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black flex items-center gap-1 shadow-xs transition active:scale-95"
+                                title="Iniciar Brassagem da Receita e Enviar ao Tanque"
+                              >
+                                <Flame className="w-3 h-3" />
+                                <span>Brassagem</span>
+                              </button>
+
+                              <a
+                                href={`/api/recipes/${recipe.id}/export-beerxml`}
+                                download={xmlName}
+                                className="p-1 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:text-slate-400 dark:hover:text-amber-300 dark:hover:bg-slate-800 transition"
+                                title="Baixar Arquivo XML (BeerXML)"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </a>
+
+                              <button
+                                onClick={() => setSelectedRecipeForEdit(recipe)}
+                                className="p-1 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition"
+                                title="Editar Receita"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  setItemToDelete({
+                                    type: 'RECIPE',
+                                    id: recipe.id,
+                                    title: recipe.name,
+                                    subtitle: `Arquivo: ${xmlName}`,
+                                  })
+                                }
+                                className="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-slate-800 transition"
+                                title="Excluir Arquivo do Catálogo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
-                          ) : (
-                            <span className="text-slate-400 italic text-[11px]">Sem MAPA</span>
-                          )}
-                        </td>
-
-                        <td className="p-3.5 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                          {recipe.og?.toFixed(3) || '1.050'}
-                        </td>
-
-                        <td className="p-3.5 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
-                          {recipe.abv?.toFixed(1) || '5.0'}%
-                        </td>
-
-                        <td className="p-3.5 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                          {recipe.ibu || '25'}
-                        </td>
-
-                        <td className="p-3.5 text-center font-mono text-slate-600 dark:text-slate-400">
-                          {recipe.ebc || '10'}
-                        </td>
-
-                        <td className="p-3.5 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => openStartBatchModal(recipe)}
-                              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black flex items-center gap-1 shadow-xs transition active:scale-95"
-                              title="Iniciar Brassagem da Receita"
-                            >
-                              <Flame className="w-3 h-3" />
-                              <span>Brassagem</span>
-                            </button>
-                            <button
-                              onClick={() => setSelectedRecipeForEdit(recipe)}
-                              className="p-1 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition"
-                              title="Editar Receita"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() =>
-                                setItemToDelete({
-                                  type: 'RECIPE',
-                                  id: recipe.id,
-                                  title: recipe.name,
-                                  subtitle: `Estilo: ${recipe.style}`,
-                                })
-                              }
-                              className="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-slate-800 transition"
-                              title="Excluir Receita"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
           ) : (
-            /* VISUALIZAÇÃO EM GRADE (CARDS DE RECEITAS) */
+            /* VISUALIZAÇÃO EM GRADE (CARDS DE ARQUIVOS XML) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredRecipes.map((recipe) => (
-                <div
-                  key={recipe.id}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-700 shadow-xs transition"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
-                          {recipe.style}
-                        </span>
-                        <h4 className="text-base font-black text-slate-900 dark:text-white">{recipe.name}</h4>
+              {filteredRecipes.map((recipe) => {
+                const xmlName = recipe.xmlFileName || `${recipe.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.xml`;
+                const inTank = batches.some(
+                  (b) => b.recipeId === recipe.id && b.status !== 'FINALIZADO' && b.status !== 'ENVASADO' && b.status !== 'CANCELADO'
+                );
+                const isBrewed = (recipe._count?.batches || recipe.batches?.length || 0) > 0;
+
+                return (
+                  <div
+                    key={recipe.id}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3.5 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-700 shadow-xs transition"
+                  >
+                    <div>
+                      {/* Top XML Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="px-1.5 py-0.5 rounded font-mono text-[9px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 uppercase">
+                              .XML
+                            </span>
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                              {recipe.style}
+                            </span>
+                          </div>
+                          <h4 className="text-base font-black text-slate-900 dark:text-white">{recipe.name}</h4>
+                          <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1 mt-0.5 truncate" title={xmlName}>
+                            <FileCode className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{xmlName}</span>
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a
+                            href={`/api/recipes/${recipe.id}/export-beerxml`}
+                            download={xmlName}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-slate-800 dark:hover:bg-amber-500/20 text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-300 border border-slate-200 dark:border-slate-700 transition"
+                            title="Baixar Arquivo XML"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
+
+                          <button
+                            onClick={() => setSelectedRecipeForEdit(recipe)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white border border-slate-200 dark:border-slate-700 transition"
+                            title="Editar Receita"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              setItemToDelete({
+                                type: 'RECIPE',
+                                id: recipe.id,
+                                title: recipe.name,
+                                subtitle: `Arquivo: ${xmlName}`,
+                              })
+                            }
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-500/20 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-500/30 transition"
+                            title="Excluir Arquivo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => setSelectedRecipeForEdit(recipe)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white border border-slate-200 dark:border-slate-700 transition"
-                          title="Editar Receita"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="mt-2.5">
+                        {inTank ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                            ⚡ No Tanque
+                          </span>
+                        ) : isBrewed ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
+                            ✔ Brassada
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                            🟡 Pronta p/ Brassagem
+                          </span>
+                        )}
+                      </div>
 
-                        <button
-                          onClick={() =>
-                            setItemToDelete({
-                              type: 'RECIPE',
-                              id: recipe.id,
-                              title: recipe.name,
-                              subtitle: `Estilo: ${recipe.style}`,
-                            })
-                          }
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-500/20 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-500/30 transition"
-                          title="Excluir Receita"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2">
+                        {recipe.description || 'Receita cervejeira pronta para produção.'}
+                      </p>
+
+                      <div className="grid grid-cols-4 gap-1.5 bg-slate-50 dark:bg-slate-950 p-2 rounded-xl text-center text-xs font-mono mt-3 border border-slate-200/80 dark:border-slate-800/80">
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-sans block">OG</span>
+                          <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.og?.toFixed(3) || '1.050'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-sans block">ABV</span>
+                          <span className="text-amber-700 dark:text-slate-200 font-bold">{recipe.abv?.toFixed(1) || '5.0'}%</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-sans block">IBU</span>
+                          <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.ibu || '25'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-sans block">EBC</span>
+                          <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.ebc || '10'}</span>
+                        </div>
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
-                      {recipe.description || 'Sem observações informadas.'}
-                    </p>
-
-                    <div className="grid grid-cols-4 gap-1.5 bg-slate-50 dark:bg-slate-950 p-2 rounded-xl text-center text-xs font-mono mt-3 border border-slate-200/80 dark:border-slate-800/80">
-                      <div>
-                        <span className="text-[9px] text-slate-500 font-sans block">OG</span>
-                        <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.og?.toFixed(3) || '1.050'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-slate-500 font-sans block">ABV</span>
-                        <span className="text-amber-700 dark:text-slate-200 font-bold">{recipe.abv?.toFixed(1) || '5.0'}%</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-slate-500 font-sans block">IBU</span>
-                        <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.ibu || '25'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-slate-500 font-sans block">EBC</span>
-                        <span className="text-slate-800 dark:text-slate-200 font-bold">{recipe.ebc || '10'}</span>
-                      </div>
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
+                        {recipe.mapaRegistration || 'Sem MAPA'}
+                      </span>
+                      <button
+                        onClick={() => openStartBatchModal(recipe)}
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 transition shadow"
+                        title="Iniciar Brassagem da Receita e Enviar ao Tanque"
+                      >
+                        <Flame className="w-3.5 h-3.5" />
+                        <span>Iniciar Brassagem</span>
+                      </button>
                     </div>
                   </div>
-
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
-                      {recipe.mapaRegistration || 'Sem MAPA'}
-                    </span>
-                    <button
-                      onClick={() => openStartBatchModal(recipe)}
-                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 transition shadow"
-                      title="Iniciar Brassagem da Receita"
-                    >
-                      <Flame className="w-3.5 h-3.5" />
-                      <span>Iniciar Brassagem</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

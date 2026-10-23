@@ -205,6 +205,7 @@ export default function BeerXmlImporterModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           xmlContent: fileContent,
+          fileName: fileName || `${parsedRecipe.name.trim().replace(/\s+/g, '_')}.xml`,
           description: recipeNotes.trim() || undefined,
         }),
       });
@@ -236,6 +237,7 @@ export default function BeerXmlImporterModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           xmlContent: fileContent,
+          fileName: fileName || `${parsedRecipe.name.trim().replace(/\s+/g, '_')}.xml`,
           description: recipeNotes.trim() || undefined,
         }),
       });

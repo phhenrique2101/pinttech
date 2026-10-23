@@ -1119,7 +1119,7 @@ export default function LiveBatchManagerModal({
                       <span>Estágio da Produção (Clique para Avançar de Etapa)</span>
                     </span>
                     <p className="text-[11px] text-slate-500">
-                      O status atualiza imediatamente os tanques, relatórios de adega e previsões de envase.
+                      O status atualiza imediatamente os tanques e relatórios. Ao marcar como Envasado ou Finalizado, o tanque é automaticamente liberado e o lote segue para Lotes Finalizados.
                     </p>
                   </div>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-950 border border-amber-300 w-fit">
@@ -1135,7 +1135,7 @@ export default function LiveBatchManagerModal({
                     { value: 'FERMENTANDO', label: '3. Fermentando', icon: Activity, activeClass: 'bg-cyan-600 text-white font-black border-cyan-600 ring-2 ring-cyan-400' },
                     { value: 'MATURANDO', label: '4. Maturando', icon: Thermometer, activeClass: 'bg-purple-600 text-white font-black border-purple-600 ring-2 ring-purple-400' },
                     { value: 'PRONTO_ENVASE', label: '5. Pronto Envase', icon: CheckCircle2, activeClass: 'bg-emerald-600 text-white font-black border-emerald-600 ring-2 ring-emerald-400' },
-                    { value: 'ENVASADO', label: '6. Envasado', icon: Package, activeClass: 'bg-blue-600 text-white font-black border-blue-600 ring-2 ring-blue-400' },
+                    { value: 'ENVASADO', label: '6. Envasado (Libera Tanque)', icon: Package, activeClass: 'bg-blue-600 text-white font-black border-blue-600 ring-2 ring-blue-400' },
                     { value: 'FINALIZADO', label: '7. Finalizado', icon: Check, activeClass: 'bg-slate-700 text-white font-black border-slate-700 ring-2 ring-slate-400' },
                   ].map((step) => {
                     const Icon = step.icon;

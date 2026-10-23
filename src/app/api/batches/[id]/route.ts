@@ -417,8 +417,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return updatedBatch;
     });
 
-    // Synchronize tank occupation if tankId changed or batch finalized
-    if (status === 'FINALIZADO' && existing.tankId) {
+    // Synchronize tank occupation if tankId changed or batch finalized/envasado
+    if ((status === 'FINALIZADO' || status === 'ENVASADO') && existing.tankId) {
       await prisma.tank.update({
         where: { id: existing.tankId },
         data: { status: 'LIVRE', currentBatchId: null },
@@ -534,6 +534,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         tank: true,
       },
     });
+
+    if ((body.status === 'FINALIZADO' || body.status === 'ENVASADO') && existing.tankId) {
+      await prisma.tank.update({
+        where: { id: existing.tankId },
+        data: { status: 'LIVRE', currentBatchId: null },
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (error: any) {

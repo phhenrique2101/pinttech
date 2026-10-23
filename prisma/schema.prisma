@@ -248,6 +248,8 @@ model BeerRecipe {
   mashScheduleJson      String?           // Rampas de mostura em JSON
   bjcpStyleCode         String?           // Código oficial BJCP (ex: 21A, 5D, 18B)
   recipeDataJson        String?           // Dados estendidos completos (estilo Brewfather)
+  xmlFileName           String?           // Nome original do arquivo .xml (ex: IPA_Citra.xml)
+  xmlContent            String?           @db.Text // Conteúdo bruto do BeerXML
 
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
