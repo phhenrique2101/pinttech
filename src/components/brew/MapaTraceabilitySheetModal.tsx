@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   X,
   Printer,
@@ -22,6 +23,7 @@ import {
   ExternalLink,
   Download,
   FileText,
+  ArrowLeft,
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import BreweryEditModal from './BreweryEditModal';
@@ -44,7 +46,9 @@ interface MapaTraceabilitySheetModalProps {
   batch: any;
   brewery: any;
   onBreweryUpdated?: (updatedBrewery: any) => void;
-  onClose: () => void;
+  onClose?: () => void;
+  isStandalone?: boolean;
+  autoPrint?: boolean;
 }
 
 export default function MapaTraceabilitySheetModal({
@@ -52,6 +56,8 @@ export default function MapaTraceabilitySheetModal({
   brewery: initialBrewery,
   onBreweryUpdated,
   onClose,
+  isStandalone = false,
+  autoPrint = false,
 }: MapaTraceabilitySheetModalProps) {
   const [brewery, setBrewery] = useState(initialBrewery);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -106,84 +112,36 @@ export default function MapaTraceabilitySheetModal({
   const recipe = currentBatch.recipe || {};
 
   const handlePrint = () => {
-    const originalTitle = document.title;
-    const batchNum = currentBatch.batchNumber || 'LOTE';
-    const beerName = (recipe.name || currentBatch.recipeName || 'Cerveja').replace(/[^a-zA-Z0-9_-]/g, '_');
-    document.title = `Ficha_Rastreabilidade_MAPA_Lote_${batchNum}_${beerName}`;
+    if (isStandalone) {
+      const originalTitle = document.title;
+      const batchNum = currentBatch.batchNumber || 'LOTE';
+      const beerName = (recipe.name || currentBatch.recipeName || 'Cerveja').replace(/[^a-zA-Z0-9_-]/g, '_');
+      document.title = `Ficha_Rastreabilidade_MAPA_Lote_${batchNum}_${beerName}`;
 
-    window.print();
+      window.print();
 
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1500);
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 1500);
+    } else {
+      // Abre a página dedicada e limpa de impressão em nova aba acionando o print
+      window.open(`/producao/mapa/${currentBatch.id}?print=true`, '_blank');
+    }
   };
 
   const handleOpenInNewTab = () => {
-    const printContent = document.getElementById('mapa-traceability-document');
-    if (!printContent) {
-      handlePrint();
-      return;
-    }
-
-    const batchNum = currentBatch.batchNumber || 'LOTE';
-    const beerName = (recipe.name || currentBatch.recipeName || 'Cerveja').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const docTitle = `Ficha_Rastreabilidade_MAPA_Lote_${batchNum}_${beerName}`;
-
-    const newWindow = window.open('', '_blank');
-    if (!newWindow) {
-      handlePrint();
-      return;
-    }
-
-    const styleTags = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-      .map((el) => el.outerHTML)
-      .join('\n');
-
-    newWindow.document.write(`
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>\${docTitle}</title>
-          \${styleTags}
-          <style>
-            @page {
-              size: A4 portrait;
-              margin: 10mm 12mm 12mm 12mm;
-            }
-            body {
-              background-color: #ffffff !important;
-              color: #0f172a !important;
-              padding: 24px;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            .print\\\\:hidden {
-              display: none !important;
-            }
-            @media print {
-              body {
-                padding: 0 !important;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div style="max-width: 900px; margin: 0 auto;">
-            \${printContent.innerHTML}
-          </div>
-          <script>
-            window.addEventListener('load', function() {
-              setTimeout(function() {
-                window.print();
-              }, 400);
-            });
-          </script>
-        </body>
-      </html>
-    `);
-    newWindow.document.close();
+    window.open(`/producao/mapa/${currentBatch.id}`, '_blank');
   };
+
+  // Disparo automático na página standalone se solicitado na URL (?print=true)
+  useEffect(() => {
+    if (isStandalone && autoPrint && currentBatch?.id) {
+      const timer = setTimeout(() => {
+        handlePrint();
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [isStandalone, autoPrint, currentBatch?.id]);
 
   // Deduplicate and aggregate all kegs that were envasados from this batch
   const envasadosKegs = useMemo(() => {
@@ -314,71 +272,11 @@ export default function MapaTraceabilitySheetModal({
     }
   };
 
-  return (
-    <div className="mapa-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
-      {/* Container Principal */}
-      <div className="mapa-print-card relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[95vh] print:max-w-none print:w-full print:m-0 print:p-0 print:border-none print:shadow-none print:bg-white print:max-h-none print:overflow-visible">
-        {/* Top Action Bar (Ocultada na Impressão) */}
-        <div className="print:hidden p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">Dossiê Oficial de Rastreabilidade MAPA</h3>
-              <p className="text-xs text-slate-400">
-                Lote {currentBatch.batchNumber} • Pronto para apresentação a fiscais, auditoria e exportação em PDF
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setIsEditModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition shadow-sm cursor-pointer"
-              title="Atualizar dados cadastrais da cervejaria (CNPJ, Registro MAPA, Telefone, etc.)"
-            >
-              <Building2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Editar Cadastro</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleOpenInNewTab}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition shadow-sm cursor-pointer"
-              title="Abrir este relatório em uma nova aba limpa para impressão ou download"
-            >
-              <ExternalLink className="w-4 h-4 text-slate-400" />
-              <span>Abrir em Nova Aba</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-lg transition active:scale-95 cursor-pointer"
-              title="Gera o arquivo PDF oficial ou envia para a impressora sem elementos da tela"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Salvar como PDF / Imprimir</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
-              title="Fechar"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* ÁREA IMPRIMÍVEL (A4 FORMAL) */}
-        <div id="mapa-traceability-document" className="p-6 md:p-8 overflow-y-auto bg-white text-slate-900 font-sans print:p-0 print:m-0 print:overflow-visible text-xs leading-relaxed keep-white">
-          {/* 1. CABEÇALHO OFICIAL MAPA */}
-          <div className="border-b-2 border-slate-950 pb-4 mb-4 page-break-avoid print-avoid-break">
-            {/* Faixa Institucional Oficial */}
+  const renderDocumentContent = () => (
+    <div id="mapa-traceability-document" className="p-6 md:p-8 overflow-y-auto bg-white text-slate-900 font-sans print:p-0 print:m-0 print:overflow-visible text-xs leading-relaxed keep-white">
+      {/* 1. CABEÇALHO OFICIAL MAPA */}
+      <div className="border-b-2 border-slate-950 pb-4 mb-4 page-break-avoid print-avoid-break">
+        {/* Faixa Institucional Oficial */}
             <div className="bg-slate-950 text-white px-3.5 py-2 rounded-md flex items-center justify-between mb-3 shadow-xs print:bg-slate-900 print:text-white print:rounded-none">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-amber-400 print:text-white" />
@@ -946,6 +844,132 @@ export default function MapaTraceabilitySheetModal({
             </div>
           </div>
         </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-6 px-4 sm:px-6 print:p-0 print:bg-white">
+        {/* Floating Action Bar */}
+        <div className="max-w-4xl mx-auto mb-6 print:hidden">
+          <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/producao"
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-2 border border-slate-700 transition cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Voltar para Produção</span>
+              </Link>
+              <div className="hidden sm:block">
+                <h3 className="text-sm font-bold text-white">Dossiê Oficial de Rastreabilidade MAPA</h3>
+                <p className="text-xs text-slate-400">Lote {currentBatch.batchNumber}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
+              >
+                <Building2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Editar Cadastro</span>
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-2 shadow-lg transition active:scale-95 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Salvar como PDF / Imprimir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Document container */}
+        <div className="max-w-4xl mx-auto bg-white border border-slate-300 rounded-2xl shadow-xl overflow-hidden print:border-none print:shadow-none print:rounded-none print:max-w-none">
+          {renderDocumentContent()}
+        </div>
+
+        {/* Modal de Edição de Dados Cadastrais da Cervejaria */}
+        <BreweryEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          brewery={brewery}
+          onSuccess={(updated) => {
+            setBrewery(updated);
+            onBreweryUpdated?.(updated);
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mapa-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
+      {/* Container Principal */}
+      <div className="mapa-print-card relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[95vh] print:max-w-none print:w-full print:m-0 print:p-0 print:border-none print:shadow-none print:bg-white print:max-h-none print:overflow-visible">
+        {/* Top Action Bar (Ocultada na Impressão) */}
+        <div className="print:hidden p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Dossiê Oficial de Rastreabilidade MAPA</h3>
+              <p className="text-xs text-slate-400">
+                Lote {currentBatch.batchNumber} • Pronto para apresentação a fiscais, auditoria e exportação em PDF
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition shadow-sm cursor-pointer"
+              title="Atualizar dados cadastrais da cervejaria (CNPJ, Registro MAPA, Telefone, etc.)"
+            >
+              <Building2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Editar Cadastro</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenInNewTab}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition shadow-sm cursor-pointer"
+              title="Abrir este relatório em uma nova aba limpa para visualização e impressão"
+            >
+              <ExternalLink className="w-4 h-4 text-slate-400" />
+              <span>Abrir em Nova Aba</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-lg transition active:scale-95 cursor-pointer"
+              title="Gera o arquivo PDF oficial sem elementos da tela"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Salvar como PDF / Imprimir</span>
+            </button>
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ÁREA IMPRIMÍVEL (A4 FORMAL) */}
+        {renderDocumentContent()}
       </div>
 
       {/* Modal de Edição de Dados Cadastrais da Cervejaria */}

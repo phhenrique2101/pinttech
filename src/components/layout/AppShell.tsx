@@ -17,6 +17,18 @@ interface AppShellProps {
 export default function AppShell({ user, isBrewSubdomain, children }: AppShellProps) {
   const pathname = usePathname();
   const isFabrica = pathname?.startsWith('/fabrica');
+  const isMapaPrint = pathname?.startsWith('/producao/mapa');
+
+  // Modo Documento Oficial MAPA (Página limpa sem barras do ERP para impressão e PDF)
+  if (isMapaPrint) {
+    return (
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 print:bg-white print:p-0">
+        <main className="w-full">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   // Modo Imersivo de Chão de Fábrica (Tela cheia para tablets e celulares sem barras do ERP)
   if (isFabrica) {
