@@ -494,3 +494,98 @@ html.dark ::-webkit-scrollbar-thumb {
 html.dark ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+
+/* =========================================================
+   ESTILOS DE IMPRESSÃO PROFISSIONAL (A4 / DOSSIÊS OFICIAIS)
+   Elimina qualquer elemento da casca do sistema (navbars,
+   rodapés de navegação mobile, barras laterais, etc.) e
+   formata o documento em página A4 limpa e elegante.
+   ========================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 12mm 12mm;
+  }
+
+  /* Oculta sumariamente qualquer navegação ou barra do sistema */
+  header,
+  nav,
+  aside,
+  footer,
+  .print\:hidden,
+  [class*="MobileBottomNav"],
+  [class*="Navbar"],
+  [class*="Sidebar"],
+  .fixed.bottom-0 {
+    display: none !important;
+  }
+
+  body, html {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Transforma containers modais em documento corrido e limpo */
+  .mapa-print-overlay {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .mapa-print-card {
+    position: static !important;
+    display: block !important;
+    background: #ffffff !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  /* Controle de quebras de página para relatório técnico */
+  .page-break-avoid,
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  table {
+    page-break-inside: auto !important;
+    width: 100% !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+}

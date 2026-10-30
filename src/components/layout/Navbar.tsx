@@ -123,7 +123,7 @@ export default function Navbar({ user }: { user: CurrentUser | null }) {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm print:hidden">
       {/* Impersonation Alert Banner for Super Admin */}
       {isSuperAdmin && user?.breweryId && (
         <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-yellow-600 text-white px-4 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-xs">

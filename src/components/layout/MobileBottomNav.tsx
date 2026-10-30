@@ -18,7 +18,7 @@ export default function MobileBottomNav({ user }: { user: CurrentUser | null }) 
   ];
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-2 flex items-center justify-around shadow-lg">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-2 flex items-center justify-around shadow-lg print:hidden">
       {navItems.map((item) => {
         const isActive = pathname === item.href;
         const Icon = item.icon;

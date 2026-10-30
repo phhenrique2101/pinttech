@@ -103,7 +103,7 @@ export default function Sidebar({ user }: { user: CurrentUser | null }) {
   });
 
   return (
-    <aside className="w-64 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 flex-shrink-0 hidden md:flex flex-col border-r border-slate-200 dark:border-slate-800 transition-colors select-none">
+    <aside className="w-64 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 flex-shrink-0 hidden md:flex flex-col border-r border-slate-200 dark:border-slate-800 transition-colors select-none print:hidden">
       {/* Super Admin Switcher in Sidebar */}
       {isSuperAdmin && (
         <div className="p-3 border-b border-slate-200 dark:border-amber-500/20 bg-slate-50/90 dark:bg-slate-950/70">

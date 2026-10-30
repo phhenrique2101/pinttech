@@ -19,6 +19,9 @@ import {
   AlertCircle,
   Tag,
   RefreshCw,
+  ExternalLink,
+  Download,
+  FileText,
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import BreweryEditModal from './BreweryEditModal';
@@ -98,13 +101,89 @@ export default function MapaTraceabilitySheetModal({
     }
   }, [initialBrewery, onBreweryUpdated]);
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const currentBatch = fullBatch || batch;
   const ingredients: BatchIngredient[] = currentBatch.ingredients || [];
   const recipe = currentBatch.recipe || {};
+
+  const handlePrint = () => {
+    const originalTitle = document.title;
+    const batchNum = currentBatch.batchNumber || 'LOTE';
+    const beerName = (recipe.name || currentBatch.recipeName || 'Cerveja').replace(/[^a-zA-Z0-9_-]/g, '_');
+    document.title = `Ficha_Rastreabilidade_MAPA_Lote_${batchNum}_${beerName}`;
+
+    window.print();
+
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1500);
+  };
+
+  const handleOpenInNewTab = () => {
+    const printContent = document.getElementById('mapa-traceability-document');
+    if (!printContent) {
+      handlePrint();
+      return;
+    }
+
+    const batchNum = currentBatch.batchNumber || 'LOTE';
+    const beerName = (recipe.name || currentBatch.recipeName || 'Cerveja').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const docTitle = `Ficha_Rastreabilidade_MAPA_Lote_${batchNum}_${beerName}`;
+
+    const newWindow = window.open('', '_blank');
+    if (!newWindow) {
+      handlePrint();
+      return;
+    }
+
+    const styleTags = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((el) => el.outerHTML)
+      .join('\n');
+
+    newWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>\${docTitle}</title>
+          \${styleTags}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm 12mm 12mm;
+            }
+            body {
+              background-color: #ffffff !important;
+              color: #0f172a !important;
+              padding: 24px;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            .print\\\\:hidden {
+              display: none !important;
+            }
+            @media print {
+              body {
+                padding: 0 !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div style="max-width: 900px; margin: 0 auto;">
+            \${printContent.innerHTML}
+          </div>
+          <script>
+            window.addEventListener('load', function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            });
+          </script>
+        </body>
+      </html>
+    `);
+    newWindow.document.close();
+  };
 
   // Deduplicate and aggregate all kegs that were envasados from this batch
   const envasadosKegs = useMemo(() => {
@@ -236,11 +315,11 @@ export default function MapaTraceabilitySheetModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+    <div className="mapa-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
       {/* Container Principal */}
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[95vh]">
+      <div className="mapa-print-card relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[95vh] print:max-w-none print:w-full print:m-0 print:p-0 print:border-none print:shadow-none print:bg-white print:max-h-none print:overflow-visible">
         {/* Top Action Bar (Ocultada na Impressão) */}
-        <div className="print:hidden p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div className="print:hidden p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5" />
@@ -248,30 +327,47 @@ export default function MapaTraceabilitySheetModal({
             <div>
               <h3 className="text-sm font-bold text-white">Dossiê Oficial de Rastreabilidade MAPA</h3>
               <p className="text-xs text-slate-400">
-                Lote {currentBatch.batchNumber} • Pronto para apresentação a fiscais e auditoria
+                Lote {currentBatch.batchNumber} • Pronto para apresentação a fiscais, auditoria e exportação em PDF
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
+              type="button"
               onClick={() => setIsEditModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-2 border border-slate-700 transition shadow-sm"
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition shadow-sm cursor-pointer"
               title="Atualizar dados cadastrais da cervejaria (CNPJ, Registro MAPA, Telefone, etc.)"
             >
               <Building2 className="w-4 h-4" />
               <span className="hidden sm:inline">Editar Cadastro</span>
             </button>
+
             <button
+              type="button"
+              onClick={handleOpenInNewTab}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition shadow-sm cursor-pointer"
+              title="Abrir este relatório em uma nova aba limpa para impressão ou download"
+            >
+              <ExternalLink className="w-4 h-4 text-slate-400" />
+              <span>Abrir em Nova Aba</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handlePrint}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-2 shadow-lg transition"
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-lg transition active:scale-95 cursor-pointer"
+              title="Gera o arquivo PDF oficial ou envia para a impressora sem elementos da tela"
             >
               <Printer className="w-4 h-4" />
-              <span>Imprimir Ficha Oficial (A4)</span>
+              <span>Salvar como PDF / Imprimir</span>
             </button>
+
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+              title="Fechar"
             >
               <X className="w-4 h-4" />
             </button>
@@ -279,82 +375,105 @@ export default function MapaTraceabilitySheetModal({
         </div>
 
         {/* ÁREA IMPRIMÍVEL (A4 FORMAL) */}
-        <div className="p-6 md:p-8 overflow-y-auto bg-white text-slate-900 font-sans print:p-0 print:m-0 print:overflow-visible text-xs leading-relaxed keep-white">
-          {/* 1. Cabeçalho Oficial */}
-          <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start">
-            <div className="flex-1 pr-4">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-base font-black tracking-tight text-slate-950 uppercase">
-                  {brewery?.name || 'Cervejaria PintTech'}
+        <div id="mapa-traceability-document" className="p-6 md:p-8 overflow-y-auto bg-white text-slate-900 font-sans print:p-0 print:m-0 print:overflow-visible text-xs leading-relaxed keep-white">
+          {/* 1. CABEÇALHO OFICIAL MAPA */}
+          <div className="border-b-2 border-slate-950 pb-4 mb-4 page-break-avoid print-avoid-break">
+            {/* Faixa Institucional Oficial */}
+            <div className="bg-slate-950 text-white px-3.5 py-2 rounded-md flex items-center justify-between mb-3 shadow-xs print:bg-slate-900 print:text-white print:rounded-none">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-400 print:text-white" />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  Ministério da Agricultura e Pecuária • MAPA / DIPOV
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-700">
-                  MAPA / DECRETO 6.871/2009
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(true)}
-                  className="print:hidden text-[10px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 ml-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded transition cursor-pointer"
-                  title="Clique para editar CNPJ, Registro MAPA, Telefone e Endereço"
-                >
-                  <Edit3 className="w-3 h-3 text-amber-600" />
-                  <span>Editar dados cadastrais</span>
-                </button>
               </div>
-              <p className="text-[11px] text-slate-600 mt-1">
-                <strong>CNPJ:</strong>{' '}
-                {brewery?.document || (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="text-amber-700 underline print:no-underline print:text-slate-400 font-medium cursor-pointer"
-                  >
-                    (Não cadastrado - clique aqui para editar)
-                  </button>
-                )}{' '}
-                • <strong>Registro Estabelecimento MAPA:</strong>{' '}
-                {brewery?.mapaEstablishment || (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="text-amber-700 underline print:no-underline print:text-slate-400 font-medium cursor-pointer"
-                  >
-                    (Não cadastrado - clique aqui para editar)
-                  </button>
-                )}
-              </p>
-              <p className="text-[11px] text-slate-600">
-                {brewery?.address ? `${brewery.address} • ` : ''}
-                {brewery?.city ? `${brewery.city}` : ''}
-                {brewery?.city && brewery?.state ? `/${brewery.state}` : (brewery?.state || '')}
-                {brewery?.phone ? (
-                  ` • Telefone: ${brewery.phone}`
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="text-amber-700 underline print:hidden ml-1 cursor-pointer"
-                  >
-                    • Telefone: não cadastrado
-                  </button>
-                )}
-              </p>
+              <span className="text-[9px] font-mono tracking-wider text-slate-300 print:text-slate-200">
+                Decreto Federal nº 6.871/2009 • IN MAPA nº 65/2019
+              </span>
             </div>
 
-            <div className="text-right">
-              <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 block">
-                Ficha de Rastreabilidade
-              </span>
-              <span className="text-xl font-black font-mono text-slate-950 block">
-                {currentBatch.batchNumber}
-              </span>
-              <span className="text-[10px] text-slate-500">
-                Emitido em: {new Date().toLocaleDateString('pt-BR')}
-              </span>
+            <div className="flex justify-between items-start gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex-1 min-w-[280px]">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h1 className="text-lg font-black tracking-tight text-slate-950 uppercase leading-none">
+                    {brewery?.name || 'Cervejaria PintTech'}
+                  </h1>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="print:hidden text-[10px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded transition cursor-pointer"
+                    title="Clique para editar CNPJ, Registro MAPA, Telefone e Endereço"
+                  >
+                    <Edit3 className="w-3 h-3 text-amber-600" />
+                    <span>Editar dados cadastrais</span>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-slate-700 space-y-0.5">
+                  <p>
+                    <strong>CNPJ:</strong>{' '}
+                    {brewery?.document ? (
+                      <span className="font-mono font-bold text-slate-950">{brewery.document}</span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditModalOpen(true)}
+                          className="text-amber-700 underline print:hidden font-medium cursor-pointer"
+                        >
+                          (Não cadastrado - clique aqui para editar)
+                        </button>
+                        <span className="hidden print:inline text-slate-500 italic font-mono">Não informado</span>
+                      </>
+                    )}{' '}
+                    • <strong>Registro Estabelecimento MAPA:</strong>{' '}
+                    {brewery?.mapaEstablishment ? (
+                      <span className="font-mono font-bold text-slate-950">{brewery.mapaEstablishment}</span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditModalOpen(true)}
+                          className="text-amber-700 underline print:hidden font-medium cursor-pointer"
+                        >
+                          (Não cadastrado - clique aqui para editar)
+                        </button>
+                        <span className="hidden print:inline text-slate-500 italic font-mono">Não informado</span>
+                      </>
+                    )}
+                  </p>
+
+                  <p>
+                    <strong>Endereço:</strong>{' '}
+                    {brewery?.address || brewery?.city ? (
+                      <>
+                        {brewery?.address ? `${brewery.address} • ` : ''}
+                        {brewery?.city ? `${brewery.city}` : ''}
+                        {brewery?.city && brewery?.state ? `/${brewery.state}` : (brewery?.state || '')}
+                      </>
+                    ) : (
+                      <span className="text-slate-500 italic">Endereço da fábrica</span>
+                    )}
+                    {brewery?.phone && ` • Tel: ${brewery.phone}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-right border-2 border-slate-950 rounded-lg p-2.5 bg-slate-50 min-w-[190px] shrink-0 print:bg-white print:border-slate-800">
+                <span className="text-[9px] uppercase font-black tracking-wider text-slate-600 block">
+                  Ficha de Rastreabilidade
+                </span>
+                <span className="text-2xl font-black font-mono text-slate-950 block my-0.5 tracking-tight">
+                  LOTE {currentBatch.batchNumber}
+                </span>
+                <span className="text-[9px] text-slate-600 font-mono block">
+                  Emissão: {new Date().toLocaleDateString('pt-BR')}
+                </span>
+              </div>
             </div>
           </div>
 
           {/* 2. Dados do Produto & Identificação do Lote */}
-          <div className="bg-slate-50 border border-slate-300 rounded-lg p-3 mb-4 space-y-2">
+          <div className="bg-slate-50 border border-slate-300 rounded-lg p-3 mb-4 space-y-2 page-break-avoid print-avoid-break print:bg-slate-50 print:border-slate-400">
             <h4 className="text-[11px] font-black uppercase text-slate-800 border-b border-slate-200 pb-1 flex items-center gap-1.5">
               <Beer className="w-3.5 h-3.5 text-slate-700" />
               <span>1. Identificação do Produto e Registro MAPA</span>
@@ -462,7 +581,7 @@ export default function MapaTraceabilitySheetModal({
           </div>
 
           {/* 4. Controle Físico-Químico e Parâmetros de Processo */}
-          <div className="border border-slate-300 rounded-lg p-3 mb-4 bg-slate-50 space-y-2">
+          <div className="border border-slate-300 rounded-lg p-3 mb-4 bg-slate-50 space-y-2 page-break-avoid print-avoid-break print:bg-slate-50 print:border-slate-400">
             <h4 className="text-[11px] font-black uppercase text-slate-800 border-b border-slate-200 pb-1">
               3. Parâmetros Físico-Químicos e Controle de Qualidade
             </h4>
@@ -783,7 +902,7 @@ export default function MapaTraceabilitySheetModal({
 
           {/* 5. Observações da Receita e Processo */}
           {(currentBatch.notes || recipe.description) && (
-            <div className="border border-slate-300 rounded-lg p-3 mb-4 bg-white text-[11px]">
+            <div className="border border-slate-300 rounded-lg p-3 mb-4 bg-white text-[11px] page-break-avoid print-avoid-break">
               <h4 className="text-[10px] font-black uppercase text-slate-700 mb-1">
                 5. Observações Técnicas da Receita & Lote
               </h4>
@@ -794,8 +913,8 @@ export default function MapaTraceabilitySheetModal({
           )}
 
           {/* 6. Declaração Legal e Assinatura */}
-          <div className="border-t-2 border-slate-900 pt-4 mt-6">
-            <p className="text-[9px] text-slate-500 text-justify mb-8">
+          <div className="border-t-2 border-slate-900 pt-4 mt-6 page-break-avoid print-avoid-break">
+            <p className="text-[9px] text-slate-600 text-justify mb-8 leading-relaxed">
               Declaro sob as penas da lei que o produto especificado neste dossiê foi elaborado em estrita conformidade com os
               padrões de identidade e qualidade estabelecidos pelo Ministério da Agricultura e Pecuária (MAPA), respeitando as
               boas práticas de fabricação e com matérias-primas devidamente inspecionadas e rastreadas por lote de fabricação.
@@ -803,20 +922,27 @@ export default function MapaTraceabilitySheetModal({
 
             <div className="grid grid-cols-2 gap-8 text-center pt-2">
               <div>
-                <div className="border-b border-slate-800 w-64 mx-auto mb-1" />
+                <div className="border-b border-slate-900 w-64 mx-auto mb-1.5" />
                 <span className="text-[10px] font-bold text-slate-950 block">
                   {currentBatch.technicalResponsible || 'Responsável Técnico / Cervejeiro'}
                 </span>
-                <span className="text-[9px] text-slate-500">Mestre Cervejeiro / CRQ</span>
+                <span className="text-[9px] text-slate-600">Mestre Cervejeiro / CRQ</span>
               </div>
 
               <div>
-                <div className="border-b border-slate-800 w-64 mx-auto mb-1" />
+                <div className="border-b border-slate-900 w-64 mx-auto mb-1.5" />
                 <span className="text-[10px] font-bold text-slate-950 block">
                   Controle de Qualidade & Liberação Sensorial
                 </span>
-                <span className="text-[9px] text-slate-500">Data: ____/____/________</span>
+                <span className="text-[9px] text-slate-600">Data de Liberação: ____/____/________</span>
               </div>
+            </div>
+
+            {/* Rodapé Oficial da Ficha (Exibido na impressão e exportação) */}
+            <div className="hidden print:flex items-center justify-between text-[8px] text-slate-500 pt-6 mt-6 border-t border-slate-300 font-mono">
+              <span>PintTech • Ficha Oficial de Rastreabilidade MAPA — Lote #{currentBatch.batchNumber}</span>
+              <span>Em conformidade com o Decreto Federal nº 6.871/2009 e IN MAPA nº 65/2019</span>
+              <span>Emitido em: {new Date().toLocaleDateString('pt-BR')}</span>
             </div>
           </div>
         </div>

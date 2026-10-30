@@ -49,7 +49,7 @@ export default function BrewNavbar({ user }: { user: CurrentUser | null }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white shadow-sm dark:shadow-lg transition-colors">
+    <header className="sticky top-0 z-40 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white shadow-sm dark:shadow-lg transition-colors print:hidden">
       <div className="flex items-center justify-between h-16 px-4 md:px-6 max-w-[1600px] mx-auto">
         {/* Brand & Subdomain Badge */}
         <div className="flex items-center gap-3">
