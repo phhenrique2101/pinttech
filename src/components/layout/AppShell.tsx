@@ -21,7 +21,7 @@ export default function AppShell({ user, isBrewSubdomain, children }: AppShellPr
   // Modo Imersivo de Chão de Fábrica (Tela cheia para tablets e celulares sem barras do ERP)
   if (isFabrica) {
     return (
-      <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100">
+      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
         <main className="flex-1 w-full overflow-y-auto">
           {children}
         </main>

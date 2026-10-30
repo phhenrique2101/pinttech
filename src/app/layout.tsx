@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0f172a',
+  themeColor: '#f8fafc',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -39,8 +39,8 @@ export default function RootLayout({
 
   const cookieStore = cookies();
   const savedTheme = cookieStore.get('pinttech_theme')?.value;
-  // Se houver tema salvo (dark ou light), usa ele; caso contrário, brew default dark e ERP default light
-  const isDark = savedTheme ? savedTheme === 'dark' : isBrewSubdomain;
+  // Padrão do sistema PintTech: Modo Claro refinado com alto contraste em todos os módulos e subdomínios
+  const isDark = savedTheme === 'dark';
 
   return (
     <html lang="pt-BR" className={isDark ? 'dark' : ''} suppressHydrationWarning>
@@ -59,7 +59,7 @@ export default function RootLayout({
                   var saved = localStorage.getItem('pinttech_theme');
                   if (saved === 'dark') {
                     document.documentElement.classList.add('dark');
-                  } else if (saved === 'light') {
+                  } else {
                     document.documentElement.classList.remove('dark');
                   }
                 } catch (e) {}

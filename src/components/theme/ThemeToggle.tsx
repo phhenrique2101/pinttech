@@ -4,23 +4,22 @@ import React, { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     // Verificar classe atual ou localStorage
-    const isDark = document.documentElement.classList.contains('dark');
     const stored = localStorage.getItem('pinttech_theme');
     
-    if (stored === 'light' || stored === 'dark') {
-      setTheme(stored);
-      if (stored === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+    if (stored === 'dark') {
+      setTheme('dark');
+      document.documentElement.classList.add('dark');
+    } else if (stored === 'light') {
+      setTheme('light');
+      document.documentElement.classList.remove('dark');
     } else {
+      const isDark = document.documentElement.classList.contains('dark');
       setTheme(isDark ? 'dark' : 'light');
     }
   }, []);
