@@ -14,6 +14,7 @@ import {
   Plus,
   Clock,
   Droplet,
+  Droplets,
   Thermometer,
   Activity,
   ArrowRight,
@@ -28,6 +29,8 @@ import {
   ShieldCheck,
   Search,
   LayoutGrid,
+  FileText,
+  Info,
   Layers,
   Beer,
   ChevronDown,
@@ -990,44 +993,68 @@ export default function FabricaChaoDeFabricaPage() {
   const [brewMode, setBrewMode] = useState<'ACTIVE' | 'NEW_RECIPE'>('ACTIVE');
   const [selectedBrewBatch, setSelectedBrewBatch] = useState<any | null>(null);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
+  const [showAllRecipes, setShowAllRecipes] = useState<boolean>(false);
+
+  // Receita em Branco
+  const [blankRecipeName, setBlankRecipeName] = useState<string>('');
+  const [blankRecipeStyle, setBlankRecipeStyle] = useState<string>('American IPA');
 
   const [brewBatchNumber, setBrewBatchNumber] = useState<string>('');
   const [brewTargetTankId, setBrewTargetTankId] = useState<string>('');
   const [brewOgInput, setBrewOgInput] = useState<string>('1.054');
-  const [brewPhMashInput, setBrewPhMashInput] = useState<string>('5.3');
-  const [brewPhBoilInput, setBrewPhBoilInput] = useState<string>('5.1');
-  const [brewTempMashInput, setBrewTempMashInput] = useState<string>('66');
+  const [brewPhMashList, setBrewPhMashList] = useState<string[]>(['5.3']);
+  const [brewPhBoilList, setBrewPhBoilList] = useState<string[]>(['5.1']);
   const [brewVolumeInput, setBrewVolumeInput] = useState<string>('500');
   const [brewNotesInput, setBrewNotesInput] = useState<string>('');
   const [isSavingBrew, setIsSavingBrew] = useState<boolean>(false);
 
-  // Cronômetro da panela
-  const [timerSeconds, setTimerSeconds] = useState<number>(0);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
-  const timerIntervalRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (isTimerRunning) {
-      timerIntervalRef.current = setInterval(() => {
-        setTimerSeconds((prev) => prev + 1);
-      }, 1000);
-    } else {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+  // Extrator inteligente de anotações do BeerXML
+  const extractXmlNotes = (rec: any): string | null => {
+    if (!rec) return null;
+    if (rec.recipeDataJson) {
+      try {
+        const data = typeof rec.recipeDataJson === 'string' ? JSON.parse(rec.recipeDataJson) : rec.recipeDataJson;
+        if (data?.notes && typeof data.notes === 'string' && data.notes.trim()) {
+          return data.notes.trim();
+        }
+        if (data?.tasteNotes && typeof data.tasteNotes === 'string' && data.tasteNotes.trim()) {
+          return data.tasteNotes.trim();
+        }
+      } catch {}
     }
-    return () => {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    };
-  }, [isTimerRunning]);
-
-  const formatTimer = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    if (rec.xmlContent && typeof rec.xmlContent === 'string') {
+      const notesMatch = rec.xmlContent.match(/<NOTES>([\s\S]*?)<\/NOTES>/i);
+      if (notesMatch && notesMatch[1] && notesMatch[1].trim()) {
+        return notesMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
+      }
+      const tasteMatch = rec.xmlContent.match(/<TASTE_NOTES>([\s\S]*?)<\/TASTE_NOTES>/i);
+      if (tasteMatch && tasteMatch[1] && tasteMatch[1].trim()) {
+        return tasteMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
+      }
+    }
+    if (rec.description && typeof rec.description === 'string') {
+      const desc = rec.description.trim();
+      if (desc && !desc.startsWith('Importada via BeerXML') && !desc.startsWith('Receita criada na Fábrica')) {
+        return desc;
+      }
+    }
+    return null;
   };
 
   const activeBrewBatches = useMemo(
     () => batches.filter((b) => b.status === 'BRASSAGEM' || b.status === 'PLANEJADO'),
     [batches]
+  );
+
+  // Filtra receitas que NÃO foram brassadas (XMLs disponíveis sem lote de produção gerado)
+  const unbrewedRecipes = useMemo(
+    () => recipes.filter((r) => (r._count?.batches ?? r.batches?.length ?? 0) === 0),
+    [recipes]
+  );
+
+  const displayedRecipes = useMemo(
+    () => (showAllRecipes ? recipes : unbrewedRecipes),
+    [recipes, unbrewedRecipes, showAllRecipes]
   );
 
   const selectedRecipeObj = useMemo(
@@ -1037,13 +1064,27 @@ export default function FabricaChaoDeFabricaPage() {
 
   const handleSelectRecipeForBrew = (recId: string) => {
     setSelectedRecipeId(recId);
+    if (recId === '__BLANK__') {
+      setBrewOgInput('1.050');
+      setBrewVolumeInput('500');
+      setBrewPhMashList(['5.3']);
+      setBrewPhBoilList(['5.1']);
+      setBlankRecipeName('');
+      setBlankRecipeStyle('American IPA');
+      const year = new Date().getFullYear().toString().slice(-2);
+      setBrewBatchNumber(`LOTE-${year}${String(batches.length + 1).padStart(2, '0')}`);
+      return;
+    }
     const rec = recipes.find((r) => r.id === recId);
     if (rec) {
       if (rec.og) setBrewOgInput(String(rec.og));
-      if (rec.targetPhMash) setBrewPhMashInput(String(rec.targetPhMash));
+      if (rec.targetPhMash) setBrewPhMashList([String(rec.targetPhMash)]);
+      else setBrewPhMashList(['5.3']);
+      setBrewPhBoilList(['5.1']);
       if (rec.batchYieldLiters) setBrewVolumeInput(String(rec.batchYieldLiters));
       const year = new Date().getFullYear().toString().slice(-2);
-      setBrewBatchNumber(`${rec.name.slice(0, 3).toUpperCase()}-${year}${String(batches.length + 1).padStart(2, '0')}`);
+      const prefix = rec.name ? rec.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() : 'REC';
+      setBrewBatchNumber(`${prefix || 'LOT'}-${year}${String(batches.length + 1).padStart(2, '0')}`);
     }
   };
 
@@ -1052,9 +1093,12 @@ export default function FabricaChaoDeFabricaPage() {
     try {
       const parsedOg = parseBreweryGravity(brewOgInput) || 1.050;
       const parsedVol = parseFloat(brewVolumeInput.replace(',', '.')) || 0;
-      const parsedTemp = parseFloat(brewTempMashInput.replace(',', '.')) || 66;
-      const parsedPhMash = brewPhMashInput ? parseFloat(brewPhMashInput.replace(',', '.')) : undefined;
-      const parsedPhBoil = brewPhBoilInput ? parseFloat(brewPhBoilInput.replace(',', '.')) : undefined;
+
+      const validPhMashList = brewPhMashList.map((v) => v.trim()).filter(Boolean);
+      const validPhBoilList = brewPhBoilList.map((v) => v.trim()).filter(Boolean);
+
+      const parsedPhMash = validPhMashList.length > 0 ? parseFloat(validPhMashList[0].replace(',', '.')) : undefined;
+      const parsedPhBoil = validPhBoilList.length > 0 ? parseFloat(validPhBoilList[0].replace(',', '.')) : undefined;
 
       if (brewMode === 'ACTIVE') {
         if (!selectedBrewBatch?.id) {
@@ -1062,15 +1106,29 @@ export default function FabricaChaoDeFabricaPage() {
           return;
         }
 
+        let existingCustom: any = {};
+        if (selectedBrewBatch.customRecipeDataJson) {
+          try {
+            existingCustom = typeof selectedBrewBatch.customRecipeDataJson === 'string'
+              ? JSON.parse(selectedBrewBatch.customRecipeDataJson)
+              : selectedBrewBatch.customRecipeDataJson;
+          } catch {}
+        }
+        const updatedCustom = {
+          ...existingCustom,
+          mashPhReadings: validPhMashList,
+          boilPhReadings: validPhBoilList,
+        };
+
         const res = await fetch(`/api/batches/${selectedBrewBatch.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             measuredOg: parsedOg,
             volumeProducedLiters: parsedVol > 0 ? parsedVol : undefined,
-            tempMash: parsedTemp,
             phMash: parsedPhMash,
             phBoil: parsedPhBoil,
+            customRecipeDataJson: JSON.stringify(updatedCustom),
             status: moveToFermentation ? 'FERMENTANDO' : selectedBrewBatch.status,
             fermentationStartDate: moveToFermentation ? new Date() : undefined,
             notes: brewNotesInput ? brewNotesInput.trim() : undefined,
@@ -1091,27 +1149,66 @@ export default function FabricaChaoDeFabricaPage() {
         }
       } else {
         if (!selectedRecipeId) {
-          showBanner('Selecione a receita desejada', 'error');
+          showBanner('Selecione uma receita do catálogo ou escolha Receita em Branco', 'error');
           return;
         }
+
+        let actualRecipeId = selectedRecipeId;
+
+        // Se for receita em branco, cria a receita primeiro
+        if (selectedRecipeId === '__BLANK__') {
+          if (!blankRecipeName.trim()) {
+            showBanner('Informe o nome da cerveja para a receita em branco', 'error');
+            return;
+          }
+
+          const recRes = await fetch('/api/recipes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: blankRecipeName.trim(),
+              style: blankRecipeStyle.trim() || 'Cerveja Especial',
+              og: parsedOg,
+              batchYieldLiters: parsedVol > 0 ? parsedVol : 500,
+              targetPhMash: parsedPhMash || 5.3,
+              description: 'Receita em branco criada no Chão de Fábrica. Aguardando importação do arquivo BeerXML correspondente.',
+            }),
+          });
+
+          if (!recRes.ok) {
+            const errData = await recRes.json();
+            showBanner(errData.error || 'Erro ao cadastrar receita em branco', 'error');
+            return;
+          }
+
+          const createdRec = await recRes.json();
+          actualRecipeId = createdRec.id;
+        }
+
         if (!brewBatchNumber.trim()) {
           showBanner('Informe o número do lote (Ex: IPA-2601)', 'error');
           return;
         }
 
+        const customData = {
+          mashPhReadings: validPhMashList,
+          boilPhReadings: validPhBoilList,
+          createdAsBlankRecipe: selectedRecipeId === '__BLANK__',
+        };
+
         const res = await fetch('/api/batches', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            recipeId: selectedRecipeId,
+            recipeId: actualRecipeId,
             batchNumber: brewBatchNumber.trim().toUpperCase(),
             tankId: brewTargetTankId || undefined,
-            volumePlannedLiters: parsedVol > 0 ? parsedVol : selectedRecipeObj?.batchYieldLiters || 500,
+            volumePlannedLiters: parsedVol > 0 ? parsedVol : (selectedRecipeObj?.batchYieldLiters || 500),
             volumeProducedLiters: parsedVol > 0 ? parsedVol : undefined,
             measuredOg: parsedOg,
-            tempMash: parsedTemp,
             phMash: parsedPhMash,
             phBoil: parsedPhBoil,
+            customRecipeDataJson: JSON.stringify(customData),
             status: moveToFermentation ? 'FERMENTANDO' : 'BRASSAGEM',
             notes: brewNotesInput ? brewNotesInput.trim() : undefined,
           }),
@@ -1129,6 +1226,7 @@ export default function FabricaChaoDeFabricaPage() {
           setBrewMode('ACTIVE');
           setSelectedRecipeId('');
           setBrewBatchNumber('');
+          setBlankRecipeName('');
         } else {
           showBanner(data.error || 'Erro ao iniciar brassagem da receita', 'error');
         }
@@ -2538,60 +2636,20 @@ export default function FabricaChaoDeFabricaPage() {
         {/* ========================================================= */}
         {activeTab === 'BRASSAGEM' && (
           <div className="space-y-4">
-            {/* Cronômetro Rápido da Panela */}
-            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4" /> Cronômetro de Fervura / Mostura
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTimerRunning(false);
-                    setTimerSeconds(0);
-                  }}
-                  className="text-xs font-bold text-slate-400 hover:text-white"
-                >
-                  Zerar
-                </button>
-              </div>
-
-              <div className="flex items-center justify-center py-2">
-                <span className="font-black text-5xl font-mono text-white tracking-widest">
-                  {formatTimer(timerSeconds)}
-                </span>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsTimerRunning(!isTimerRunning)}
-                  className={`flex-1 py-3.5 rounded-2xl font-black text-base flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${
-                    isTimerRunning
-                      ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                  }`}
-                >
-                  {isTimerRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                  {isTimerRunning ? 'Pausar' : 'Iniciar Contagem'}
-                </button>
-              </div>
-            </div>
-
             {/* SELEÇÃO: EM ANDAMENTO VS INICIAR DE RECEITA DO SISTEMA */}
-            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
+            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-black text-lg text-white flex items-center gap-2">
                   <Flame className="w-5 h-5 text-amber-500" />
                   Brassagem do Dia
                 </h2>
 
-                <div className="flex bg-slate-700 p-1.5 rounded-xl border-2 border-slate-500 shadow-inner">
+                <div className="flex bg-slate-800 p-1.5 rounded-xl border-2 border-slate-600 shadow-inner">
                   <button
                     type="button"
                     onClick={() => setBrewMode('ACTIVE')}
                     className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
-                      brewMode === 'ACTIVE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
+                      brewMode === 'ACTIVE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
                     }`}
                   >
                     Em Andamento
@@ -2600,7 +2658,7 @@ export default function FabricaChaoDeFabricaPage() {
                     type="button"
                     onClick={() => setBrewMode('NEW_RECIPE')}
                     className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
-                      brewMode === 'NEW_RECIPE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-200 hover:text-white'
+                      brewMode === 'NEW_RECIPE' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
                     }`}
                   >
                     + De Receita
@@ -2610,86 +2668,286 @@ export default function FabricaChaoDeFabricaPage() {
 
               {brewMode === 'ACTIVE' ? (
                 activeBrewBatches.length === 0 ? (
-                  <div className="text-center py-5 space-y-2.5">
-                    <p className="text-sm font-bold text-slate-300">
+                  <div className="text-center py-6 space-y-3 bg-slate-800/60 rounded-2xl border border-slate-700 p-4">
+                    <p className="text-sm font-bold text-slate-200">
                       Nenhuma brassagem marcada como &apos;BRASSAGEM&apos; ativa.
                     </p>
                     <button
                       type="button"
                       onClick={() => setBrewMode('NEW_RECIPE')}
-                      className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-xl shadow-md"
+                      className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-xl shadow-md transition-all active:scale-95"
                     >
                       Iniciar Brassagem a partir de Receita
                     </button>
                   </div>
                 ) : (
-                  <div>
-                    <label className="block text-xs font-black text-slate-100 mb-1.5 uppercase">
-                      Selecione a Brassagem Ativa:
-                    </label>
-                    <select
-                      value={selectedBrewBatch?.id || ''}
-                      onChange={(e) => {
-                        const found = activeBrewBatches.find((b) => b.id === e.target.value);
-                        setSelectedBrewBatch(found || null);
-                        if (found) {
-                          if (found.measuredOg) setBrewOgInput(String(found.measuredOg));
-                          else if (found.recipe?.og) setBrewOgInput(String(found.recipe.og));
-                          if (found.volumePlannedLiters) setBrewVolumeInput(String(found.volumePlannedLiters));
-                          if (found.phMash) setBrewPhMashInput(String(found.phMash));
-                          if (found.phBoil) setBrewPhBoilInput(String(found.phBoil));
-                          if (found.tempMash) setBrewTempMashInput(String(found.tempMash));
-                        }
-                      }}
-                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
-                    >
-                      <option value="">-- Escolha o Lote --</option>
-                      {activeBrewBatches.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.recipe?.name} (Lote #{b.batchNumber})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-black text-white mb-1.5 uppercase tracking-wider">
+                        Selecione a Brassagem Ativa:
+                      </label>
+                      <select
+                        value={selectedBrewBatch?.id || ''}
+                        onChange={(e) => {
+                          const found = activeBrewBatches.find((b) => b.id === e.target.value);
+                          setSelectedBrewBatch(found || null);
+                          if (found) {
+                            if (found.measuredOg) setBrewOgInput(String(found.measuredOg));
+                            else if (found.recipe?.og) setBrewOgInput(String(found.recipe.og));
+                            if (found.volumePlannedLiters) setBrewVolumeInput(String(found.volumePlannedLiters));
+
+                            let mashReadings: string[] = [];
+                            let boilReadings: string[] = [];
+                            if (found.customRecipeDataJson) {
+                              try {
+                                const custom = typeof found.customRecipeDataJson === 'string'
+                                  ? JSON.parse(found.customRecipeDataJson)
+                                  : found.customRecipeDataJson;
+                                if (Array.isArray(custom?.mashPhReadings) && custom.mashPhReadings.length > 0) {
+                                  mashReadings = custom.mashPhReadings.map(String);
+                                }
+                                if (Array.isArray(custom?.boilPhReadings) && custom.boilPhReadings.length > 0) {
+                                  boilReadings = custom.boilPhReadings.map(String);
+                                }
+                              } catch {}
+                            }
+
+                            if (mashReadings.length > 0) setBrewPhMashList(mashReadings);
+                            else if (found.phMash) setBrewPhMashList([String(found.phMash)]);
+                            else if (found.recipe?.targetPhMash) setBrewPhMashList([String(found.recipe.targetPhMash)]);
+                            else setBrewPhMashList(['5.3']);
+
+                            if (boilReadings.length > 0) setBrewPhBoilList(boilReadings);
+                            else if (found.phBoil) setBrewPhBoilList([String(found.phBoil)]);
+                            else setBrewPhBoilList(['5.1']);
+
+                            if (found.notes) setBrewNotesInput(found.notes);
+                          }
+                        }}
+                        className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
+                      >
+                        <option value="">-- Escolha o Lote --</option>
+                        {activeBrewBatches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.recipe?.name} (Lote #{b.batchNumber})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Exibe o Card da Receita com Anotações do XML também para a brassagem ativa */}
+                    {selectedBrewBatch?.recipe && (
+                      <div className="bg-slate-800 border-2 border-amber-500/60 p-4 rounded-2xl space-y-3 shadow-xl">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                          <div className="font-black text-lg text-amber-300 leading-snug">
+                            {selectedBrewBatch.recipe.name}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="bg-amber-950/70 text-amber-300 border border-amber-600/50 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                              {selectedBrewBatch.recipe.style}
+                            </span>
+                            <span className="bg-emerald-950/70 text-emerald-300 border border-emerald-600/50 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                              {selectedBrewBatch.volumePlannedLiters || selectedBrewBatch.recipe.batchYieldLiters || 500}L
+                            </span>
+                            <span className="bg-sky-950/70 text-sky-300 border border-sky-600/50 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black">
+                              Lote #{selectedBrewBatch.batchNumber}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Métricas Alvo em Tiles de Alto Contraste */}
+                        <div className="grid grid-cols-3 gap-2 pt-1">
+                          <div className="bg-slate-900 border border-slate-600 rounded-xl p-2.5 text-center shadow-inner">
+                            <div className="text-[10px] uppercase font-bold text-slate-400">OG Alvo</div>
+                            <div className="text-emerald-400 font-mono font-black text-base">
+                              {selectedBrewBatch.recipe.og || '—'}
+                            </div>
+                          </div>
+                          <div className="bg-slate-900 border border-slate-600 rounded-xl p-2.5 text-center shadow-inner">
+                            <div className="text-[10px] uppercase font-bold text-slate-400">FG Alvo</div>
+                            <div className="text-sky-400 font-mono font-black text-base">
+                              {selectedBrewBatch.recipe.fg || '—'}
+                            </div>
+                          </div>
+                          <div className="bg-slate-900 border border-slate-600 rounded-xl p-2.5 text-center shadow-inner">
+                            <div className="text-[10px] uppercase font-bold text-slate-400">pH Alvo</div>
+                            <div className="text-amber-400 font-mono font-black text-base">
+                              {selectedBrewBatch.recipe.targetPhMash || '5.3'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Anotações do BeerXML */}
+                        {(() => {
+                          const notes = extractXmlNotes(selectedBrewBatch.recipe);
+                          if (!notes) return null;
+                          return (
+                            <div className="mt-3 pt-3 border-t-2 border-slate-700/80 space-y-1.5">
+                              <div className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                                <FileText className="w-4 h-4 text-amber-400" />
+                                Anotações da Receita (BeerXML):
+                              </div>
+                              <div className="bg-slate-900 border border-slate-600 rounded-xl p-3 text-slate-100 text-xs font-medium leading-relaxed whitespace-pre-wrap shadow-inner max-h-48 overflow-y-auto">
+                                {notes}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 )
               ) : (
-                <div className="space-y-3.5">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-black text-slate-100 mb-1.5 uppercase">
-                      Escolha uma Receita do Catálogo:
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-black text-white uppercase tracking-wider">
+                        Escolha uma Receita do Catálogo:
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAllRecipes(!showAllRecipes)}
+                        className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline"
+                      >
+                        {showAllRecipes ? 'Ver apenas não brassadas' : `Mostrar todas (${recipes.length})`}
+                      </button>
+                    </div>
+
                     <select
                       value={selectedRecipeId}
                       onChange={(e) => handleSelectRecipeForBrew(e.target.value)}
-                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
+                      className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
                     >
-                      <option value="">-- Selecionar Receita --</option>
-                      {recipes.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} — {r.style} (OG: {r.og || '1.050'})
+                      <option value="">-- Selecionar Receita do Catálogo --</option>
+                      <option value="__BLANK__">➕ Receita em Branco (Sem XML - adicionar depois)</option>
+                      {displayedRecipes.length > 0 ? (
+                        <optgroup label={showAllRecipes ? "Todas as Receitas" : "Receitas Disponíveis (XMLs não brassados)"}>
+                          {displayedRecipes.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name} — {r.style} (OG: {r.og || '1.050'})
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : (
+                        <option disabled value="">
+                          Nenhuma receita sem lote brassado. Clique em &apos;Mostrar todas&apos; ou use &apos;Receita em Branco&apos;.
                         </option>
-                      ))}
+                      )}
                     </select>
                   </div>
 
+                  {/* FORMULÁRIO DE RECEITA EM BRANCO (CASO O CERVEJEIRO NÃO TENHA O XML AINDA) */}
+                  {selectedRecipeId === '__BLANK__' && (
+                    <div className="bg-slate-800 border-2 border-dashed border-amber-500/70 p-4 rounded-2xl space-y-3 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="font-black text-base text-amber-400 flex items-center gap-1.5">
+                          <Plus className="w-4 h-4 text-amber-400" />
+                          Receita em Branco (Sem XML no Sistema)
+                        </div>
+                        <span className="text-[10px] uppercase font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg">
+                          Novo Lote
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-200">
+                        Você está iniciando uma brassagem sem XML no sistema. Você poderá importar e vincular o arquivo XML da receita posteriormente na tela de Produção.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-xs font-black text-white mb-1 uppercase tracking-wide">
+                            Nome da Cerveja / Receita: *
+                          </label>
+                          <input
+                            type="text"
+                            value={blankRecipeName}
+                            onChange={(e) => {
+                              setBlankRecipeName(e.target.value);
+                              if (!brewBatchNumber || brewBatchNumber.startsWith('LOTE-') || brewBatchNumber.startsWith('REC-')) {
+                                const year = new Date().getFullYear().toString().slice(-2);
+                                const prefix = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'LOT';
+                                setBrewBatchNumber(`${prefix}-${year}${String(batches.length + 1).padStart(2, '0')}`);
+                              }
+                            }}
+                            placeholder="Ex: IPA Tropical, Pilsen..."
+                            className="w-full bg-slate-900 border-2 border-slate-500 focus:border-amber-400 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none shadow-inner placeholder:text-slate-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-white mb-1 uppercase tracking-wide">
+                            Estilo da Cerveja:
+                          </label>
+                          <input
+                            type="text"
+                            value={blankRecipeStyle}
+                            onChange={(e) => setBlankRecipeStyle(e.target.value)}
+                            placeholder="Ex: American IPA, Pilsen, Stout..."
+                            className="w-full bg-slate-900 border-2 border-slate-500 focus:border-amber-400 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none shadow-inner placeholder:text-slate-400"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CARD DE DETALHES DA RECEITA COM ALTO CONTRASTE & ANOTAÇÕES DO XML */}
                   {selectedRecipeObj && (
-                    <div className="bg-slate-700/90 p-4 rounded-2xl border-2 border-slate-500 text-xs space-y-1.5 shadow-md">
-                      <div className="font-black text-base text-amber-300">{selectedRecipeObj.name}</div>
-                      <div className="text-slate-200 font-bold">
-                        Estilo: {selectedRecipeObj.style} • Rendimento:{' '}
-                        {selectedRecipeObj.batchYieldLiters || 500}L
+                    <div className="bg-slate-800 border-2 border-amber-500/60 p-4 rounded-2xl space-y-3 shadow-xl">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                        <div className="font-black text-lg text-amber-300 leading-snug">
+                          {selectedRecipeObj.name}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="bg-amber-950/70 text-amber-300 border border-amber-600/50 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                            {selectedRecipeObj.style}
+                          </span>
+                          <span className="bg-emerald-950/70 text-emerald-300 border border-emerald-600/50 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                            {selectedRecipeObj.batchYieldLiters || 500}L
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex gap-4 pt-1 font-mono text-xs text-white font-bold">
-                        <span>OG Alvo: {selectedRecipeObj.og || '—'}</span>
-                        <span>FG Alvo: {selectedRecipeObj.fg || '—'}</span>
-                        <span>pH Mostura: {selectedRecipeObj.targetPhMash || '5.3'}</span>
+
+                      {/* Métricas Alvo em Tiles de Alto Contraste */}
+                      <div className="grid grid-cols-3 gap-2 pt-1">
+                        <div className="bg-slate-900 border border-slate-600 rounded-xl p-2.5 text-center shadow-inner">
+                          <div className="text-[10px] uppercase font-bold text-slate-400">OG Alvo</div>
+                          <div className="text-emerald-400 font-mono font-black text-base">
+                            {selectedRecipeObj.og || '—'}
+                          </div>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-600 rounded-xl p-2.5 text-center shadow-inner">
+                          <div className="text-[10px] uppercase font-bold text-slate-400">FG Alvo</div>
+                          <div className="text-sky-400 font-mono font-black text-base">
+                            {selectedRecipeObj.fg || '—'}
+                          </div>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-600 rounded-xl p-2.5 text-center shadow-inner">
+                          <div className="text-[10px] uppercase font-bold text-slate-400">pH Alvo</div>
+                          <div className="text-amber-400 font-mono font-black text-base">
+                            {selectedRecipeObj.targetPhMash || '5.3'}
+                          </div>
+                        </div>
                       </div>
+
+                      {/* Anotações do BeerXML */}
+                      {(() => {
+                        const notes = extractXmlNotes(selectedRecipeObj);
+                        if (!notes) return null;
+                        return (
+                          <div className="mt-3 pt-3 border-t-2 border-slate-700/80 space-y-1.5">
+                            <div className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                              <FileText className="w-4 h-4 text-amber-400" />
+                              Anotações da Receita (BeerXML):
+                            </div>
+                            <div className="bg-slate-900 border border-slate-600 rounded-xl p-3 text-slate-100 text-xs font-medium leading-relaxed whitespace-pre-wrap shadow-inner max-h-48 overflow-y-auto">
+                              {notes}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-black text-slate-100 mb-1 uppercase">
+                      <label className="block text-xs font-black text-white mb-1 uppercase tracking-wider">
                         Número do Lote:
                       </label>
                       <input
@@ -2697,18 +2955,18 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewBatchNumber}
                         onChange={(e) => setBrewBatchNumber(e.target.value.toUpperCase())}
                         placeholder="Ex: IPA-2601"
-                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-300"
+                        className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-3 py-3 text-base font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-400"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-black text-slate-100 mb-1 uppercase">
+                      <label className="block text-xs font-black text-white mb-1 uppercase tracking-wider">
                         Tanque Destino:
                       </label>
                       <select
                         value={brewTargetTankId}
                         onChange={(e) => setBrewTargetTankId(e.target.value)}
-                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-bold text-white outline-none shadow-inner"
+                        className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-bold text-white outline-none shadow-inner"
                       >
                         <option value="">Sem tanque (Panela)</option>
                         {tanks.map((t) => (
@@ -2722,16 +2980,16 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
               )}
 
-              {/* FORMULÁRIO DE MEDIÇÕES DA BRASSAGEM COM ALTA LEGIBILIDADE */}
+              {/* FORMULÁRIO DE MEDIÇÕES DA BRASSAGEM COM ALTA LEGIBILIDADE & MÚLTIPLAS MEDIÇÕES DE PH */}
               {(selectedBrewBatch || (brewMode === 'NEW_RECIPE' && selectedRecipeId)) && (
-                <div className="pt-3 border-t-2 border-slate-700 space-y-3.5">
-                  <h4 className="font-black text-xs uppercase tracking-wider text-amber-400">
+                <div className="pt-4 border-t-2 border-slate-700/80 space-y-4">
+                  <h4 className="font-black text-sm uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                     🔬 Medições & Parâmetros da Brassagem
                   </h4>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-black text-slate-100 mb-1">
+                      <label className="block text-xs font-black text-white mb-1">
                         OG Medida (Pós-Fervura):
                       </label>
                       <input
@@ -2739,12 +2997,12 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewOgInput}
                         onChange={(e) => setBrewOgInput(e.target.value)}
                         placeholder="1.054"
-                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-300"
+                        className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-3 py-3 text-2xl font-black text-emerald-400 text-center font-mono outline-none shadow-inner placeholder:text-slate-400"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-black text-slate-100 mb-1">
+                      <label className="block text-xs font-black text-white mb-1">
                         Volume no Fermentador (L):
                       </label>
                       <input
@@ -2752,62 +3010,114 @@ export default function FabricaChaoDeFabricaPage() {
                         value={brewVolumeInput}
                         onChange={(e) => setBrewVolumeInput(e.target.value)}
                         placeholder="520"
-                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-xl font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-300"
+                        className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-3 py-3 text-2xl font-black text-white text-center font-mono outline-none shadow-inner placeholder:text-slate-400"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-xs font-black text-slate-100 mb-1">
-                        pH Mostura:
-                      </label>
-                      <input
-                        type="text"
-                        value={brewPhMashInput}
-                        onChange={(e) => setBrewPhMashInput(e.target.value)}
-                        placeholder="5.3"
-                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
-                      />
+                  {/* BLOCO DE MEDIÇÕES DE PH (MOSTURA & FERVURA COM BOTÃO +) */}
+                  <div className="space-y-3 pt-1">
+                    {/* pH Mostura com + */}
+                    <div className="bg-slate-800/90 border-2 border-slate-600 rounded-2xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                          <Droplets className="w-4 h-4 text-amber-400" />
+                          pH da Mostura:
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setBrewPhMashList([...brewPhMashList, ''])}
+                          className="inline-flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 transition-all active:scale-95 shadow-sm"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Adicionar Medição
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {brewPhMashList.map((val, idx) => (
+                          <div key={`mash-${idx}`} className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={(e) => {
+                                const updated = [...brewPhMashList];
+                                updated[idx] = e.target.value;
+                                setBrewPhMashList(updated);
+                              }}
+                              placeholder={idx === 0 ? '5.3 (Inicial)' : `pH #${idx + 1}`}
+                              className="w-full bg-slate-900 border-2 border-slate-500 focus:border-amber-400 rounded-xl px-2.5 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-400"
+                            />
+                            {brewPhMashList.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setBrewPhMashList(brewPhMashList.filter((_, i) => i !== idx))}
+                                className="absolute right-2 text-slate-400 hover:text-rose-400 p-1 transition-colors"
+                                title="Remover medição"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-black text-slate-100 mb-1">
-                        pH Fervura:
-                      </label>
-                      <input
-                        type="text"
-                        value={brewPhBoilInput}
-                        onChange={(e) => setBrewPhBoilInput(e.target.value)}
-                        placeholder="5.1"
-                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
-                      />
-                    </div>
+                    {/* pH Fervura com + */}
+                    <div className="bg-slate-800/90 border-2 border-slate-600 rounded-2xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                          <Flame className="w-4 h-4 text-amber-400" />
+                          pH da Fervura:
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setBrewPhBoilList([...brewPhBoilList, ''])}
+                          className="inline-flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 transition-all active:scale-95 shadow-sm"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Adicionar Medição
+                        </button>
+                      </div>
 
-                    <div>
-                      <label className="block text-xs font-black text-slate-100 mb-1">
-                        Temp Mostura (°C):
-                      </label>
-                      <input
-                        type="text"
-                        value={brewTempMashInput}
-                        onChange={(e) => setBrewTempMashInput(e.target.value)}
-                        placeholder="66.5"
-                        className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-2 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
-                      />
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {brewPhBoilList.map((val, idx) => (
+                          <div key={`boil-${idx}`} className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={(e) => {
+                                const updated = [...brewPhBoilList];
+                                updated[idx] = e.target.value;
+                                setBrewPhBoilList(updated);
+                              }}
+                              placeholder={idx === 0 ? '5.1 (Inicial)' : `pH #${idx + 1}`}
+                              className="w-full bg-slate-900 border-2 border-slate-500 focus:border-amber-400 rounded-xl px-2.5 py-2.5 text-base font-black text-white text-center outline-none shadow-inner placeholder:text-slate-400"
+                            />
+                            {brewPhBoilList.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setBrewPhBoilList(brewPhBoilList.filter((_, i) => i !== idx))}
+                                className="absolute right-2 text-slate-400 hover:text-rose-400 p-1 transition-colors"
+                                title="Remover medição"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-black text-slate-100 mb-1">
+                    <label className="block text-xs font-black text-white mb-1 uppercase tracking-wider">
                       Anotações da Brassagem:
                     </label>
                     <input
                       type="text"
                       value={brewNotesInput}
                       onChange={(e) => setBrewNotesInput(e.target.value)}
-                      placeholder="Ex: Whirlpool a 80°C, mosto límpido..."
-                      className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-sm text-white outline-none shadow-inner placeholder:text-slate-300"
+                      placeholder="Ex: Whirlpool a 80°C, mosto límpido, dry hopping planejado..."
+                      className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-4 py-3 text-sm font-medium text-white outline-none shadow-inner placeholder:text-slate-400"
                     />
                   </div>
 
@@ -2816,7 +3126,7 @@ export default function FabricaChaoDeFabricaPage() {
                       type="button"
                       onClick={() => handleSaveBreweryData(false)}
                       disabled={isSavingBrew}
-                      className="flex-1 py-4 bg-slate-700 hover:bg-slate-650 text-white font-black text-sm rounded-2xl border-2 border-slate-500 transition-all active:scale-95 shadow-md"
+                      className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white font-black text-sm rounded-2xl border-2 border-slate-500 transition-all active:scale-95 shadow-md"
                     >
                       Salvar Medições
                     </button>
@@ -2825,7 +3135,7 @@ export default function FabricaChaoDeFabricaPage() {
                       type="button"
                       onClick={() => handleSaveBreweryData(true)}
                       disabled={isSavingBrew}
-                      className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                      className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 border-2 border-amber-400"
                     >
                       <Check className="w-5 h-5" />
                       Enviar para Fermentador
