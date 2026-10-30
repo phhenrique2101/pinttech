@@ -798,17 +798,6 @@ export default function MapaTraceabilitySheetModal({
             )}
           </div>
 
-          {/* 5. Observações da Receita e Processo */}
-          {(currentBatch.notes || recipe.description) && (
-            <div className="border border-slate-300 rounded-lg p-3 mb-4 bg-white text-[11px] page-break-avoid print-avoid-break">
-              <h4 className="text-[10px] font-black uppercase text-slate-700 mb-1">
-                5. Observações Técnicas da Receita & Lote
-              </h4>
-              <p className="text-slate-800 whitespace-pre-wrap leading-relaxed">
-                {currentBatch.notes || recipe.description}
-              </p>
-            </div>
-          )}
 
           {/* 6. Declaração Legal e Assinatura */}
           <div className="border-t-2 border-slate-900 pt-4 mt-6 page-break-avoid print-avoid-break">
