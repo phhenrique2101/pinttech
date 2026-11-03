@@ -106,6 +106,16 @@ export default function ProducaoPage() {
   const [brewNotes, setBrewNotes] = useState<string>('');
   const [startingBrew, setStartingBrew] = useState<boolean>(false);
 
+  // Recupera preferência de unidade de OG salva no dispositivo
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pinttech_brew_og_unit');
+      if (saved === 'SG' || saved === 'BRIX') {
+        setBrewOgUnit(saved);
+      }
+    } catch {}
+  }, []);
+
   const handleBrewOgUnitChange = (newUnit: 'SG' | 'BRIX') => {
     if (newUnit === brewOgUnit) return;
     if (newUnit === 'BRIX') {
@@ -120,6 +130,9 @@ export default function ProducaoPage() {
       }
     }
     setBrewOgUnit(newUnit);
+    try {
+      localStorage.setItem('pinttech_brew_og_unit', newUnit);
+    } catch {}
   };
 
   const brewOgConvertedPreview = useMemo(() => {
@@ -862,8 +875,21 @@ export default function ProducaoPage() {
     setBrewVolume(String(recipe.batchYieldLiters || 500));
     setBrewTankId('');
     setBrewStatus('BRASSAGEM');
-    setBrewOgUnit('SG');
-    setBrewOg(recipe.og ? String(recipe.og.toFixed(3)) : '1.050');
+    let currentUnit: 'SG' | 'BRIX' = brewOgUnit;
+    try {
+      const saved = localStorage.getItem('pinttech_brew_og_unit');
+      if (saved === 'SG' || saved === 'BRIX') currentUnit = saved;
+    } catch {}
+    setBrewOgUnit(currentUnit);
+    if (recipe.og) {
+      if (currentUnit === 'BRIX') {
+        setBrewOg((Math.round(sgToBrix(recipe.og) * 10) / 10).toFixed(1));
+      } else {
+        setBrewOg(String(recipe.og.toFixed(3)));
+      }
+    } else {
+      setBrewOg(currentUnit === 'BRIX' ? '12.4' : '1.050');
+    }
     setBrewNotes(`Brassagem iniciada a partir da receita: ${recipe.name}`);
   };
 

@@ -1004,6 +1004,20 @@ export default function FabricaChaoDeFabricaPage() {
   const [brewOgInput, setBrewOgInput] = useState<string>('1.054');
   const [brewOgUnit, setBrewOgUnit] = useState<'SG' | 'BRIX'>('SG');
 
+  // Recupera preferência de unidade de OG salva no dispositivo
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pinttech_brew_og_unit');
+      if (saved === 'SG' || saved === 'BRIX') {
+        setBrewOgUnit(saved);
+        if (saved === 'BRIX' && brewOgInput === '1.054') {
+          const b = sgToBrix(1.054);
+          setBrewOgInput((Math.round(b * 10) / 10).toFixed(1));
+        }
+      }
+    } catch {}
+  }, []);
+
   const handleBrewOgUnitChange = (newUnit: 'SG' | 'BRIX') => {
     if (newUnit === brewOgUnit) return;
     if (newUnit === 'BRIX') {
@@ -1018,6 +1032,9 @@ export default function FabricaChaoDeFabricaPage() {
       }
     }
     setBrewOgUnit(newUnit);
+    try {
+      localStorage.setItem('pinttech_brew_og_unit', newUnit);
+    } catch {}
   };
 
   const brewOgConvertedPreview = useMemo(() => {
