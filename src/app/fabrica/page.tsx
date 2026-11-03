@@ -1953,6 +1953,21 @@ export default function FabricaChaoDeFabricaPage() {
   const [calcAbvFg, setCalcAbvFg] = useState<string>('1.012');
   const [calcAbvUnit, setCalcAbvUnit] = useState<'SG' | 'BRIX'>('SG');
 
+  const findRefractometerBrix = (ogSg: number, fgSg: number): number => {
+    let low = 0;
+    let high = 35;
+    for (let i = 0; i < 20; i++) {
+      const mid = (low + high) / 2;
+      const res = correctRefractometerBrix(ogSg, mid);
+      if (res.fgSg < fgSg) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return (low + high) / 2;
+  };
+
   // Recupera preferência de unidade de cálculo de ABV salva no dispositivo
   useEffect(() => {
     try {
@@ -1961,7 +1976,7 @@ export default function FabricaChaoDeFabricaPage() {
         setCalcAbvUnit(saved);
         if (saved === 'BRIX') {
           setCalcAbvOg((Math.round(sgToBrix(1.054) * 10) / 10).toFixed(1));
-          setCalcAbvFg((Math.round(sgToBrix(1.012) * 10) / 10).toFixed(1));
+          setCalcAbvFg((Math.round(findRefractometerBrix(1.054, 1.012) * 10) / 10).toFixed(1));
         }
       }
     } catch {}
@@ -1975,17 +1990,23 @@ export default function FabricaChaoDeFabricaPage() {
         setCalcAbvOg((Math.round(sgToBrix(ogSg) * 10) / 10).toFixed(1));
       }
       const fgSg = parseBreweryGravity(calcAbvFg);
-      if (fgSg && fgSg >= 0.990) {
+      if (fgSg && fgSg >= 0.990 && ogSg) {
+        const brixReading = findRefractometerBrix(ogSg, fgSg);
+        setCalcAbvFg((Math.round(brixReading * 10) / 10).toFixed(1));
+      } else if (fgSg && fgSg >= 0.990) {
         setCalcAbvFg((Math.round(sgToBrix(fgSg) * 10) / 10).toFixed(1));
       }
     } else {
       const numOgBrix = parseFloat(calcAbvOg.replace(',', '.'));
-      if (!isNaN(numOgBrix) && numOgBrix > 0) {
-        setCalcAbvOg((Math.round(brixToSg(numOgBrix) * 1000) / 1000).toFixed(3));
-      }
       const numFgBrix = parseFloat(calcAbvFg.replace(',', '.'));
+      let ogSg = 1.050;
+      if (!isNaN(numOgBrix) && numOgBrix > 0) {
+        ogSg = Math.round(brixToSg(numOgBrix) * 1000) / 1000;
+        setCalcAbvOg(ogSg.toFixed(3));
+      }
       if (!isNaN(numFgBrix) && numFgBrix > 0) {
-        setCalcAbvFg((Math.round(brixToSg(numFgBrix) * 1000) / 1000).toFixed(3));
+        const corr = correctRefractometerBrix(ogSg, numFgBrix);
+        setCalcAbvFg(corr.fgSg.toFixed(3));
       }
     }
     setCalcAbvUnit(newUnit);
@@ -2027,19 +2048,32 @@ export default function FabricaChaoDeFabricaPage() {
   const abvDirectResult = useMemo(() => {
     let og = 1.050;
     let fg = 1.010;
+    let abv = 0;
+    let attenuation = 0;
 
     if (calcAbvUnit === 'BRIX') {
       const numOgBrix = parseFloat(calcAbvOg.replace(',', '.')) || 0;
       const numFgBrix = parseFloat(calcAbvFg.replace(',', '.')) || 0;
       og = numOgBrix > 0 ? brixToSg(numOgBrix) : 1.050;
-      fg = numFgBrix > 0 ? brixToSg(numFgBrix) : 1.010;
+
+      if (numFgBrix > 0 && numOgBrix > 0) {
+        // Correção de refração de álcool no refratômetro durante a fermentação (Equação Sean Terrill)
+        const corrected = correctRefractometerBrix(og, numFgBrix);
+        fg = corrected.fgSg;
+        abv = corrected.abv;
+        attenuation = corrected.attenuationPercent;
+      } else {
+        fg = numFgBrix > 0 ? brixToSg(numFgBrix) : 1.010;
+        abv = calculateAbv(og, fg);
+        attenuation = og > 1 ? Math.round(((og - fg) / (og - 1.0)) * 100) : 0;
+      }
     } else {
       og = parseBreweryGravity(calcAbvOg) || 1.050;
       fg = parseBreweryGravity(calcAbvFg) || 1.010;
+      abv = calculateAbv(og, fg);
+      attenuation = og > 1 ? Math.round(((og - fg) / (og - 1.0)) * 100) : 0;
     }
 
-    const abv = calculateAbv(og, fg);
-    const attenuation = og > 1 ? Math.round(((og - fg) / (og - 1.0)) * 100) : 0;
     return { abv, attenuation, og, fg };
   }, [calcAbvOg, calcAbvFg, calcAbvUnit]);
 
@@ -5033,18 +5067,18 @@ export default function FabricaChaoDeFabricaPage() {
 
                   <div>
                     <label className="block text-xs font-black text-slate-100 mb-1">
-                      {calcAbvUnit === 'BRIX' ? 'FG Final (°Bx):' : 'FG Final (SG):'}
+                      {calcAbvUnit === 'BRIX' ? 'FG Final (°Bx Refratômetro):' : 'FG Final (SG):'}
                     </label>
                     <input
                       type="text"
                       value={calcAbvFg}
                       onChange={(e) => setCalcAbvFg(e.target.value)}
-                      placeholder={calcAbvUnit === 'BRIX' ? '3.1' : '1.012'}
+                      placeholder={calcAbvUnit === 'BRIX' ? '5.0' : '1.012'}
                       className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
                     <div className="mt-1 text-[11px] font-bold text-center text-slate-400">
                       {calcAbvUnit === 'BRIX'
-                        ? `≈ ${abvDirectResult.fg.toFixed(3)} SG`
+                        ? `≈ ${abvDirectResult.fg.toFixed(3)} SG Real (Corrigido)`
                         : `≈ ${sgToBrix(abvDirectResult.fg).toFixed(1)}°Bx`}
                     </div>
                   </div>
@@ -5064,9 +5098,14 @@ export default function FabricaChaoDeFabricaPage() {
                     </span>
                     <span>•</span>
                     <span>
-                      FG: <strong className="text-white font-mono">{abvDirectResult.fg.toFixed(3)} SG</strong> ({sgToBrix(abvDirectResult.fg).toFixed(1)}°Bx)
+                      FG Real: <strong className="text-white font-mono">{abvDirectResult.fg.toFixed(3)} SG</strong> {calcAbvUnit === 'BRIX' ? `(${calcAbvFg}°Bx lido)` : `(${sgToBrix(abvDirectResult.fg).toFixed(1)}°Bx)`}
                     </span>
                   </div>
+                  {calcAbvUnit === 'BRIX' && (
+                    <div className="mt-2 pt-1.5 border-t border-slate-600/70 text-[11px] text-amber-300 font-medium flex items-center justify-center gap-1.5">
+                      <span>✓ Corrigido para refração de álcool no refratômetro (Sean Terrill)</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
