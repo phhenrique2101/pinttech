@@ -219,7 +219,9 @@ export default function FabricaChaoDeFabricaPage() {
   // -------------------------------------------------------------
   // 2. MÓDULO DE BARRIS (CADASTRO RÁPIDO & LAVAGEM / CIP)
   // -------------------------------------------------------------
-  const [kegSubMode, setKegSubMode] = useState<'WASH' | 'REGISTER' | 'MAINTENANCE' | 'LOOKUP'>('WASH');
+  const [kegSubMode, setKegSubMode] = useState<'WASH' | 'RETURN' | 'REGISTER' | 'MAINTENANCE' | 'LOOKUP'>('WASH');
+  const [kegReturnCondition, setKegReturnCondition] = useState<'VAZIO_SUJO' | 'PARCIALMENTE_CHEIO' | 'CHEIO_RETORNADO'>('VAZIO_SUJO');
+  const [kegReturnLiters, setKegReturnLiters] = useState<string>('20');
   const [newKegCode, setNewKegCode] = useState('');
   const [newKegCapacity, setNewKegCapacity] = useState<number>(50);
   const [isRegisteringKeg, setIsRegisteringKeg] = useState(false);
@@ -239,7 +241,41 @@ export default function FabricaChaoDeFabricaPage() {
     }
 
     try {
-      if (kegSubMode === 'WASH') {
+      if (kegSubMode === 'RETURN') {
+        const payload: any = {
+          code,
+          action: 'RETURN',
+          returnCondition: kegReturnCondition,
+          returnVolumeLiters:
+            kegReturnCondition === 'PARCIALMENTE_CHEIO' ? parseFloat(kegReturnLiters) || 20 : undefined,
+        };
+
+        const res = await fetch('/api/kegs/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const detail =
+            kegReturnCondition === 'PARCIALMENTE_CHEIO'
+              ? `Retorno c/ sobra (${kegReturnLiters}L)`
+              : kegReturnCondition === 'CHEIO_RETORNADO'
+              ? 'Retorno Cheio'
+              : 'Retorno Vazio/Sujo';
+          showBanner(data.message || `🔄 Barril ${code} retornado com sucesso!`, 'success');
+          setKegSessionActions((prev) => [
+            {
+              code,
+              action: detail,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+            ...prev.slice(0, 29),
+          ]);
+        } else {
+          showBanner(data.error || `Erro ao registrar retorno do barril ${code}`, 'error');
+        }
+      } else if (kegSubMode === 'WASH') {
         const res = await fetch('/api/kegs/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1601,13 +1637,25 @@ export default function FabricaChaoDeFabricaPage() {
         {/* ========================================================= */}
         {activeTab === 'BARRIS' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <button
+                onClick={() => setKegSubMode('RETURN')}
+                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
+                  kegSubMode === 'RETURN'
+                    ? 'bg-amber-600 border-amber-400 text-white font-black ring-2 ring-amber-300/40'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold hover:border-slate-600'
+                }`}
+              >
+                <div className="text-2xl">🔄</div>
+                <span className="text-sm text-center">Retorno de Barril</span>
+              </button>
+
               <button
                 onClick={() => setKegSubMode('WASH')}
                 className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
                   kegSubMode === 'WASH'
-                    ? 'bg-emerald-600 border-emerald-400 text-white font-black'
-                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
+                    ? 'bg-emerald-600 border-emerald-400 text-white font-black ring-2 ring-emerald-300/40'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold hover:border-slate-600'
                 }`}
               >
                 <div className="text-2xl">🧼</div>
@@ -1618,8 +1666,8 @@ export default function FabricaChaoDeFabricaPage() {
                 onClick={() => setKegSubMode('REGISTER')}
                 className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
                   kegSubMode === 'REGISTER'
-                    ? 'bg-amber-500 border-amber-300 text-slate-950 font-black'
-                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
+                    ? 'bg-amber-500 border-amber-300 text-slate-950 font-black ring-2 ring-amber-300/40'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold hover:border-slate-600'
                 }`}
               >
                 <div className="text-2xl">➕</div>
@@ -1630,8 +1678,8 @@ export default function FabricaChaoDeFabricaPage() {
                 onClick={() => setKegSubMode('LOOKUP')}
                 className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
                   kegSubMode === 'LOOKUP'
-                    ? 'bg-blue-600 border-blue-400 text-white font-black'
-                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
+                    ? 'bg-blue-600 border-blue-400 text-white font-black ring-2 ring-blue-300/40'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold hover:border-slate-600'
                 }`}
               >
                 <div className="text-2xl">🔍</div>
@@ -1640,16 +1688,96 @@ export default function FabricaChaoDeFabricaPage() {
 
               <button
                 onClick={() => setKegSubMode('MAINTENANCE')}
-                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md ${
+                className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 shadow-md col-span-2 sm:col-span-1 lg:col-span-1 ${
                   kegSubMode === 'MAINTENANCE'
-                    ? 'bg-rose-600 border-rose-400 text-white font-black'
-                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold'
+                    ? 'bg-rose-600 border-rose-400 text-white font-black ring-2 ring-rose-300/40'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 font-bold hover:border-slate-600'
                 }`}
               >
                 <div className="text-2xl">🛠️</div>
                 <span className="text-sm text-center">Manutenção</span>
               </button>
             </div>
+
+            {kegSubMode === 'RETURN' && (
+              <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl p-5 shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <h3 className="font-black text-base text-amber-400 flex items-center gap-2">
+                    <RotateCcw className="w-5 h-5 text-amber-400" />
+                    Recebimento de Retorno de Barril (Pátio)
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">
+                    Defina a condição e bipe os barris recebidos
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-200 mb-2 uppercase tracking-wide">
+                    Condição do Barril no Retorno:
+                  </label>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setKegReturnCondition('VAZIO_SUJO')}
+                      className={`py-3 px-2 rounded-2xl font-black text-xs sm:text-sm border-2 transition-all active:scale-95 shadow ${
+                        kegReturnCondition === 'VAZIO_SUJO'
+                          ? 'bg-amber-500 border-amber-300 text-slate-950 shadow-md scale-102'
+                          : 'bg-slate-800 hover:bg-slate-750 border-slate-600 text-slate-200'
+                      }`}
+                    >
+                      <span className="block text-xl mb-0.5">🪣</span>
+                      Vazio / Sujo (Padrão)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setKegReturnCondition('PARCIALMENTE_CHEIO')}
+                      className={`py-3 px-2 rounded-2xl font-black text-xs sm:text-sm border-2 transition-all active:scale-95 shadow ${
+                        kegReturnCondition === 'PARCIALMENTE_CHEIO'
+                          ? 'bg-amber-500 border-amber-300 text-slate-950 shadow-md scale-102'
+                          : 'bg-slate-800 hover:bg-slate-750 border-slate-600 text-slate-200'
+                      }`}
+                    >
+                      <span className="block text-xl mb-0.5">🍺</span>
+                      Com Sobra (Parcial)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setKegReturnCondition('CHEIO_RETORNADO')}
+                      className={`py-3 px-2 rounded-2xl font-black text-xs sm:text-sm border-2 transition-all active:scale-95 shadow ${
+                        kegReturnCondition === 'CHEIO_RETORNADO'
+                          ? 'bg-amber-500 border-amber-300 text-slate-950 shadow-md scale-102'
+                          : 'bg-slate-800 hover:bg-slate-750 border-slate-600 text-slate-200'
+                      }`}
+                    >
+                      <span className="block text-xl mb-0.5">📦</span>
+                      Cheio (Não Aberto)
+                    </button>
+                  </div>
+                </div>
+
+                {kegReturnCondition === 'PARCIALMENTE_CHEIO' && (
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
+                    <label className="text-xs font-black text-slate-200 uppercase tracking-wide">
+                      Estimativa de Litros Restantes no Barril:
+                    </label>
+                    <div className="flex items-center gap-2 w-32">
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        step="1"
+                        value={kegReturnLiters}
+                        onChange={(e) => setKegReturnLiters(e.target.value)}
+                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3 py-2 text-center text-lg font-black text-white font-mono outline-none"
+                      />
+                      <span className="text-sm font-black text-amber-400">L</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {kegSubMode === 'REGISTER' && (
               <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
@@ -1705,6 +1833,7 @@ export default function FabricaChaoDeFabricaPage() {
             <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
               <h3 className="font-black text-base text-white flex items-center gap-2">
                 <QrCode className="w-5 h-5 text-amber-400" />
+                {kegSubMode === 'RETURN' && 'Bipar Barril para RETORNO / RECOLHA'}
                 {kegSubMode === 'WASH' && 'Bipar Barril para HIGIENIZAR'}
                 {kegSubMode === 'REGISTER' && 'Bipar Código para Preencher'}
                 {kegSubMode === 'MAINTENANCE' && 'Bipar Barril com DEFEITO'}
@@ -1739,6 +1868,39 @@ export default function FabricaChaoDeFabricaPage() {
                       {kegLookupResult.currentBeerName || 'Vazio / Nenhum'}
                     </span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {kegSessionActions.length > 0 && (
+              <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-sm uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-400" /> Histórico Desta Sessão de Barris ({kegSessionActions.length})
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setKegSessionActions([])}
+                    className="text-xs font-bold text-slate-400 hover:text-rose-400 transition"
+                  >
+                    Limpar
+                  </button>
+                </div>
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                  {kegSessionActions.map((log, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/80 border border-slate-700 text-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-black font-mono text-amber-300 text-base">{log.code}</span>
+                        <span className="text-xs font-bold text-slate-200 px-2.5 py-0.5 rounded-lg bg-slate-700 border border-slate-600">
+                          {log.action}
+                        </span>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-slate-400">{log.time}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
