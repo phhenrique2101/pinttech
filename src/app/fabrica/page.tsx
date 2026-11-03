@@ -5149,7 +5149,7 @@ export default function FabricaChaoDeFabricaPage() {
                     .filter((d) => d.targetType === 'TANK')
                     .map((d) => (
                       <option key={d.id} value={d.id} className="bg-slate-900 text-white font-bold">
-                        🏺 {d.label}
+                        {d.label}
                       </option>
                     ))}
                 </select>
