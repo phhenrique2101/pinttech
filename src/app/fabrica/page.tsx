@@ -222,6 +222,7 @@ export default function FabricaChaoDeFabricaPage() {
   const [kegSubMode, setKegSubMode] = useState<'WASH' | 'RETURN' | 'REGISTER' | 'MAINTENANCE' | 'LOOKUP'>('WASH');
   const [kegReturnCondition, setKegReturnCondition] = useState<'VAZIO_SUJO' | 'PARCIALMENTE_CHEIO' | 'CHEIO_RETORNADO'>('VAZIO_SUJO');
   const [kegReturnLiters, setKegReturnLiters] = useState<string>('20');
+  const [kegReturnBillingMode, setKegReturnBillingMode] = useState<'FULL' | 'PARTIAL'>('FULL');
   const [newKegCode, setNewKegCode] = useState('');
   const [newKegCapacity, setNewKegCapacity] = useState<number>(50);
   const [isRegisteringKeg, setIsRegisteringKeg] = useState(false);
@@ -246,6 +247,7 @@ export default function FabricaChaoDeFabricaPage() {
           code,
           action: 'RETURN',
           returnCondition: kegReturnCondition,
+          billingMode: kegReturnBillingMode,
           returnVolumeLiters:
             kegReturnCondition === 'PARCIALMENTE_CHEIO' ? parseFloat(kegReturnLiters) || 20 : undefined,
         };
@@ -257,11 +259,14 @@ export default function FabricaChaoDeFabricaPage() {
         });
         const data = await res.json();
         if (res.ok) {
+          const billingTag = kegReturnCondition !== 'VAZIO_SUJO'
+            ? (kegReturnBillingMode === 'FULL' ? ' • Cobrar 100%' : ' • Cobrar Parcial')
+            : '';
           const detail =
             kegReturnCondition === 'PARCIALMENTE_CHEIO'
-              ? `Retorno c/ sobra (${kegReturnLiters}L)`
+              ? `Retorno c/ sobra (${kegReturnLiters}L)${billingTag}`
               : kegReturnCondition === 'CHEIO_RETORNADO'
-              ? 'Retorno Cheio'
+              ? `Retorno Cheio${billingTag}`
               : 'Retorno Vazio/Sujo';
           showBanner(data.message || `🔄 Barril ${code} retornado com sucesso!`, 'success');
           setKegSessionActions((prev) => [
@@ -1758,21 +1763,110 @@ export default function FabricaChaoDeFabricaPage() {
                 </div>
 
                 {kegReturnCondition === 'PARCIALMENTE_CHEIO' && (
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
-                    <label className="text-xs font-black text-slate-200 uppercase tracking-wide">
-                      Estimativa de Litros Restantes no Barril:
-                    </label>
-                    <div className="flex items-center gap-2 w-32">
-                      <input
-                        type="number"
-                        min="1"
-                        max="50"
-                        step="1"
-                        value={kegReturnLiters}
-                        onChange={(e) => setKegReturnLiters(e.target.value)}
-                        className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3 py-2 text-center text-lg font-black text-white font-mono outline-none"
-                      />
-                      <span className="text-sm font-black text-amber-400">L</span>
+                  <div className="pt-3 border-t border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
+                      <div>
+                        <label className="text-xs font-black text-slate-200 uppercase tracking-wide block">
+                          Sobra de Chopp no Barril:
+                        </label>
+                        <span className="text-[11px] text-slate-400">Volume restante estimado</span>
+                      </div>
+                      <div className="flex items-center gap-2 w-32">
+                        <input
+                          type="number"
+                          min="1"
+                          max="50"
+                          step="1"
+                          value={kegReturnLiters}
+                          onChange={(e) => setKegReturnLiters(e.target.value)}
+                          className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3 py-2 text-center text-lg font-black text-white font-mono outline-none"
+                        />
+                        <span className="text-sm font-black text-amber-400">L</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 block">
+                        💳 Cobrança no Pedido do Cliente:
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setKegReturnBillingMode('FULL')}
+                          className={`p-3 rounded-2xl text-left border-2 transition-all active:scale-95 ${
+                            kegReturnBillingMode === 'FULL'
+                              ? 'bg-amber-500/20 border-amber-400 text-white shadow-md ring-2 ring-amber-400/30'
+                              : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          <span className="font-black text-xs sm:text-sm text-amber-300 block mb-0.5">
+                            🧾 Cobrar Barril Inteiro (100%)
+                          </span>
+                          <span className="text-[11px] text-slate-400 block leading-tight">
+                            Mantém o valor integral no pedido (padrão em eventos/festas onde foi aberto).
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setKegReturnBillingMode('PARTIAL')}
+                          className={`p-3 rounded-2xl text-left border-2 transition-all active:scale-95 ${
+                            kegReturnBillingMode === 'PARTIAL'
+                              ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-md ring-2 ring-emerald-400/30'
+                              : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          <span className="font-black text-xs sm:text-sm text-emerald-400 block mb-0.5">
+                            💰 Cobrar Consumo Parcial
+                          </span>
+                          <span className="text-[11px] text-slate-400 block leading-tight">
+                            Calcula os litros consumidos e desconta a sobra no total do pedido.
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {kegReturnCondition === 'CHEIO_RETORNADO' && (
+                  <div className="pt-3 border-t border-slate-800 space-y-1.5">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 block">
+                      💳 Cobrança no Pedido do Cliente:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setKegReturnBillingMode('PARTIAL')}
+                        className={`p-3 rounded-2xl text-left border-2 transition-all active:scale-95 ${
+                          kegReturnBillingMode === 'PARTIAL'
+                            ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-md ring-2 ring-emerald-400/30'
+                            : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <span className="font-black text-xs sm:text-sm text-emerald-400 block mb-0.5">
+                          💰 Não Cobrar / Descontar 100%
+                        </span>
+                        <span className="text-[11px] text-slate-400 block leading-tight">
+                          O barril não foi consumido, estornando o valor integral no pedido.
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setKegReturnBillingMode('FULL')}
+                        className={`p-3 rounded-2xl text-left border-2 transition-all active:scale-95 ${
+                          kegReturnBillingMode === 'FULL'
+                            ? 'bg-amber-500/20 border-amber-400 text-white shadow-md ring-2 ring-amber-400/30'
+                            : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <span className="font-black text-xs sm:text-sm text-amber-300 block mb-0.5">
+                          🧾 Cobrar Barril Inteiro
+                        </span>
+                        <span className="text-[11px] text-slate-400 block leading-tight">
+                          Mantém a cobrança no pedido mesmo com o barril lacrado.
+                        </span>
+                      </button>
                     </div>
                   </div>
                 )}
