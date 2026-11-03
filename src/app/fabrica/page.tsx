@@ -1501,6 +1501,7 @@ export default function FabricaChaoDeFabricaPage() {
       recipeStyle?: string;
       tankName: string;
       tankId?: string;
+      targetType?: 'FABRICA' | 'TANK';
       title: string;
       type: string;
       dueDate: string;
@@ -1541,16 +1542,24 @@ export default function FabricaChaoDeFabricaPage() {
               urgency = 'FUTURE';
             }
 
-            const tankName = b.tank?.name || tanks.find((tk) => tk.id === b.tankId)?.name || 'Sem tanque';
+            const isFabrica = t.targetType === 'FABRICA' || t.tankName === 'Fábrica';
+            const tankName = isFabrica
+              ? 'Fábrica'
+              : t.tankName || b.tank?.name || tanks.find((tk) => tk.id === (t.tankId || b.tankId))?.name || 'Tanque';
+
+            const recipeName = isFabrica
+              ? 'Rotina da Fábrica'
+              : t.recipeName || b.recipe?.name || 'Cerveja';
 
             list.push({
               id: t.id,
               batchId: b.id,
-              batchNumber: b.batchNumber || 'S/N',
-              recipeName: b.recipe?.name || 'Cerveja',
-              recipeStyle: b.recipe?.style || '',
+              batchNumber: isFabrica ? '' : (b.batchNumber || 'S/N'),
+              recipeName,
+              recipeStyle: isFabrica ? '' : (b.recipe?.style || ''),
               tankName,
-              tankId: b.tankId,
+              tankId: t.tankId || b.tankId,
+              targetType: isFabrica ? 'FABRICA' : 'TANK',
               title: t.title,
               type: t.type || 'OTHER',
               dueDate: dueDateStr,
@@ -1606,15 +1615,62 @@ export default function FabricaChaoDeFabricaPage() {
     });
   }, [fabricaTasks, fabricaTaskFilter, fabricaTaskSearch]);
 
-  const activeBatchesForTasks = useMemo(
-    () => batches.filter((b) => !['FINALIZADO', 'CANCELADO'].includes(b.status)),
-    [batches]
-  );
+  const taskDestinations = useMemo(() => {
+    const list: Array<{
+      id: string;
+      label: string;
+      targetType: 'FABRICA' | 'TANK';
+      tankId?: string;
+      tankName: string;
+      batchId?: string;
+      recipeName?: string;
+      batchNumber?: string;
+    }> = [];
+
+    // 1. Fábrica Geral (Rotinas Operacionais)
+    list.push({
+      id: 'FABRICA',
+      label: 'Fábrica (Rotina da Fábrica)',
+      targetType: 'FABRICA',
+      tankName: 'Fábrica',
+      recipeName: 'Rotina da Fábrica',
+    });
+
+    // 2. Apenas os Tanques da Cervejaria
+    tanks.forEach((tank) => {
+      const activeBatch = batches.find(
+        (b) => b.tankId === tank.id && !['FINALIZADO', 'CANCELADO'].includes(b.status)
+      );
+
+      if (activeBatch) {
+        list.push({
+          id: `tank_${tank.id}`,
+          label: `${tank.name}${activeBatch.recipe?.name ? ` - ${activeBatch.recipe.name}` : ''}`,
+          targetType: 'TANK',
+          tankId: tank.id,
+          tankName: tank.name,
+          batchId: activeBatch.id,
+          recipeName: activeBatch.recipe?.name || 'Cerveja',
+          batchNumber: activeBatch.batchNumber || 'S/N',
+        });
+      } else {
+        list.push({
+          id: `tank_${tank.id}`,
+          label: `${tank.name} (Livre)`,
+          targetType: 'TANK',
+          tankId: tank.id,
+          tankName: tank.name,
+        });
+      }
+    });
+
+    return list;
+  }, [tanks, batches]);
 
   // Estados do Modal de Tarefa
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTaskItem, setEditingTaskItem] = useState<any | null>(null);
-  const [taskFormBatchId, setTaskFormBatchId] = useState<string>('');
+  const [taskFormDestination, setTaskFormDestination] = useState<string>('FABRICA');
   const [taskFormTitle, setTaskFormTitle] = useState<string>('');
   const [taskFormType, setTaskFormType] = useState<string>('DRY_HOPPING');
   const [taskFormDueDate, setTaskFormDueDate] = useState<string>(getLocalDateString());
@@ -1674,7 +1730,12 @@ export default function FabricaChaoDeFabricaPage() {
 
   const handleOpenCreateTask = (preset?: any) => {
     setEditingTaskItem(null);
-    setTaskFormBatchId(activeBatchesForTasks[0]?.id || '');
+    if (preset?.defaultTitle?.includes('CIP') || preset?.defaultTitle?.includes('Limpeza')) {
+      setTaskFormDestination('FABRICA');
+    } else {
+      const firstOccupied = taskDestinations.find((d) => d.targetType === 'TANK' && d.batchId);
+      setTaskFormDestination(firstOccupied?.id || taskDestinations[1]?.id || 'FABRICA');
+    }
     setTaskFormTitle(preset?.defaultTitle || '');
     setTaskFormType(preset?.type || 'DRY_HOPPING');
     setTaskFormDueDate(getLocalDateString());
@@ -1686,7 +1747,13 @@ export default function FabricaChaoDeFabricaPage() {
 
   const handleOpenEditTask = (taskItem: any) => {
     setEditingTaskItem(taskItem);
-    setTaskFormBatchId(taskItem.batchId);
+    if (taskItem.targetType === 'FABRICA' || taskItem.tankName === 'Fábrica') {
+      setTaskFormDestination('FABRICA');
+    } else if (taskItem.tankId) {
+      setTaskFormDestination(`tank_${taskItem.tankId}`);
+    } else {
+      setTaskFormDestination('FABRICA');
+    }
     setTaskFormTitle(taskItem.title);
     setTaskFormType(taskItem.type || 'OTHER');
     setTaskFormDueDate(taskItem.dueDate || getLocalDateString());
@@ -1710,16 +1777,22 @@ export default function FabricaChaoDeFabricaPage() {
       showBanner('Informe o título da tarefa', 'error');
       return;
     }
-    if (!taskFormBatchId) {
-      showBanner('Selecione o lote / tanque de destino para a tarefa', 'error');
+
+    const selectedDest = taskDestinations.find((d) => d.id === taskFormDestination) || taskDestinations[0];
+    if (!selectedDest) {
+      showBanner('Selecione o tanque ou fábrica de destino', 'error');
       return;
     }
 
     setIsSavingTask(true);
     try {
-      const targetBatch = batches.find((b) => b.id === taskFormBatchId);
+      let targetBatch = selectedDest.batchId ? batches.find((b) => b.id === selectedDest.batchId) : null;
       if (!targetBatch) {
-        showBanner('Lote não encontrado', 'error');
+        targetBatch = batches.find((b) => !['FINALIZADO', 'CANCELADO'].includes(b.status)) || batches[0];
+      }
+
+      if (!targetBatch) {
+        showBanner('Nenhum lote disponível para salvar a tarefa', 'error');
         return;
       }
 
@@ -1732,11 +1805,14 @@ export default function FabricaChaoDeFabricaPage() {
           : [];
       } catch {}
 
+      const isFabrica = selectedDest.targetType === 'FABRICA';
+      const tankName = isFabrica ? 'Fábrica' : selectedDest.tankName;
+      const recipeName = isFabrica ? 'Rotina da Fábrica' : selectedDest.recipeName;
+
       let updatedTasks: any[];
 
       if (editingTaskItem) {
-        // Se mudou de lote, remove do antigo e insere no novo
-        if (editingTaskItem.batchId !== taskFormBatchId) {
+        if (editingTaskItem.batchId !== targetBatch.id) {
           const oldBatch = batches.find((b) => b.id === editingTaskItem.batchId);
           if (oldBatch) {
             let oldTasks: any[] = [];
@@ -1757,32 +1833,28 @@ export default function FabricaChaoDeFabricaPage() {
               prev.map((b) => (b.id === oldBatch.id ? { ...b, tankTasksJson: JSON.stringify(filteredOld) } : b))
             );
           }
-          const taskObj = {
-            id: editingTaskItem.id,
-            title: taskFormTitle.trim(),
-            type: taskFormType,
-            dueDate: taskFormDueDate,
-            completed: editingTaskItem.completed,
-            completedAt: editingTaskItem.completedAt,
-            amount: taskFormAmount ? parseFloat(taskFormAmount) : undefined,
-            unit: taskFormUnit,
-            notes: taskFormNotes.trim() || undefined,
-          };
-          updatedTasks = [...currentTasks, taskObj];
+        }
+
+        const taskObj = {
+          id: editingTaskItem.id,
+          title: taskFormTitle.trim(),
+          type: taskFormType,
+          dueDate: taskFormDueDate,
+          completed: editingTaskItem.completed,
+          completedAt: editingTaskItem.completedAt,
+          amount: taskFormAmount ? parseFloat(taskFormAmount) : undefined,
+          unit: taskFormUnit,
+          notes: taskFormNotes.trim() || undefined,
+          targetType: selectedDest.targetType,
+          tankId: selectedDest.tankId,
+          tankName,
+          recipeName,
+        };
+
+        if (editingTaskItem.batchId === targetBatch.id) {
+          updatedTasks = currentTasks.map((t: any) => (t.id === editingTaskItem.id ? taskObj : t));
         } else {
-          updatedTasks = currentTasks.map((t: any) =>
-            t.id === editingTaskItem.id
-              ? {
-                  ...t,
-                  title: taskFormTitle.trim(),
-                  type: taskFormType,
-                  dueDate: taskFormDueDate,
-                  amount: taskFormAmount ? parseFloat(taskFormAmount) : undefined,
-                  unit: taskFormUnit,
-                  notes: taskFormNotes.trim() || undefined,
-                }
-              : t
-          );
+          updatedTasks = [...currentTasks, taskObj];
         }
       } else {
         const newTask = {
@@ -1794,6 +1866,10 @@ export default function FabricaChaoDeFabricaPage() {
           amount: taskFormAmount ? parseFloat(taskFormAmount) : undefined,
           unit: taskFormUnit,
           notes: taskFormNotes.trim() || undefined,
+          targetType: selectedDest.targetType,
+          tankId: selectedDest.tankId,
+          tankName,
+          recipeName,
         };
         updatedTasks = [...currentTasks, newTask];
       }
@@ -1814,7 +1890,7 @@ export default function FabricaChaoDeFabricaPage() {
       if (res.ok) {
         playFeedback('success');
         showBanner(
-          editingTaskItem ? '✅ Tarefa atualizada com sucesso!' : '📋 Nova tarefa adicionada com sucesso!',
+          editingTaskItem ? '✅ Tarefa atualizada com sucesso!' : '📋 Nova tarefa criada com sucesso!',
           'success'
         );
         setIsTaskModalOpen(false);
@@ -4575,23 +4651,35 @@ export default function FabricaChaoDeFabricaPage() {
                         </div>
                       </div>
 
-                      {/* CORPO: TANQUE & LOTE DE CERVEJA */}
+                      {/* CORPO: TANQUE & LOTE DE CERVEJA OU FÁBRICA */}
                       <div className="bg-slate-800/80 rounded-2xl p-2.5 space-y-1.5 border border-slate-700/60 text-xs">
                         <div className="flex items-center justify-between text-slate-200 font-bold">
                           <span className="flex items-center gap-1.5 truncate">
-                            <Cylinder className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            {t.targetType === 'FABRICA' ? (
+                              <span className="text-sm leading-none">🏭</span>
+                            ) : (
+                              <Cylinder className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            )}
                             <strong className="text-white">{t.tankName}</strong>
                           </span>
-                          <span className="text-[11px] font-mono text-slate-400">
-                            Lote #{t.batchNumber}
-                          </span>
+                          {t.targetType !== 'FABRICA' && t.batchNumber && (
+                            <span className="text-[11px] font-mono text-slate-400">
+                              Lote #{t.batchNumber}
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-black truncate">
-                          <Beer className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                          <span className="truncate">{t.recipeName}</span>
-                          {t.recipeStyle && (
-                            <span className="text-slate-400 font-normal">({t.recipeStyle})</span>
+                          {t.targetType === 'FABRICA' ? (
+                            <span className="text-slate-300 font-bold">Rotina Operacional da Fábrica</span>
+                          ) : (
+                            <>
+                              <Beer className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                              <span className="truncate">{t.recipeName}</span>
+                              {t.recipeStyle && (
+                                <span className="text-slate-400 font-normal">({t.recipeStyle})</span>
+                              )}
+                            </>
                           )}
                         </div>
 
@@ -5044,31 +5132,27 @@ export default function FabricaChaoDeFabricaPage() {
 
             {/* FORMULÁRIO */}
             <div className="space-y-3">
-              {/* SELEÇÃO DO LOTE / TANQUE */}
+              {/* SELEÇÃO DO TANQUE OU FÁBRICA */}
               <div>
                 <label className="block text-xs font-black text-slate-200 mb-1">
-                  Tanque & Lote de Destino: *
+                  Tanque ou Fábrica: *
                 </label>
-                {activeBatchesForTasks.length === 0 ? (
-                  <div className="p-3 bg-red-950/30 border border-red-500/50 rounded-xl text-xs text-red-300 font-bold">
-                    Nenhum lote ativo em fermentação ou maturação encontrado.
-                  </div>
-                ) : (
-                  <select
-                    value={taskFormBatchId}
-                    onChange={(e) => setTaskFormBatchId(e.target.value)}
-                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-black text-white outline-none shadow-inner"
-                  >
-                    {activeBatchesForTasks.map((b) => {
-                      const tk = b.tank?.name || tanks.find((t) => t.id === b.tankId)?.name || 'Sem tanque';
-                      return (
-                        <option key={b.id} value={b.id} className="bg-slate-900 text-white">
-                          [{tk}] {b.recipe?.name || 'Lote'} (Lote #{b.batchNumber || 'S/N'})
-                        </option>
-                      );
-                    })}
-                  </select>
-                )}
+                <select
+                  value={taskFormDestination}
+                  onChange={(e) => setTaskFormDestination(e.target.value)}
+                  className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-black text-white outline-none shadow-inner"
+                >
+                  <option value="FABRICA" className="bg-slate-900 text-amber-300 font-bold">
+                    🏭 Fábrica (Rotina da Fábrica)
+                  </option>
+                  {taskDestinations
+                    .filter((d) => d.targetType === 'TANK')
+                    .map((d) => (
+                      <option key={d.id} value={d.id} className="bg-slate-900 text-white font-bold">
+                        🏺 {d.label}
+                      </option>
+                    ))}
+                </select>
               </div>
 
               {/* TÍTULO DA TAREFA */}
