@@ -1951,6 +1951,48 @@ export default function FabricaChaoDeFabricaPage() {
   const [calcRawBrix, setCalcRawBrix] = useState<string>('13.0');
   const [calcAbvOg, setCalcAbvOg] = useState<string>('1.054');
   const [calcAbvFg, setCalcAbvFg] = useState<string>('1.012');
+  const [calcAbvUnit, setCalcAbvUnit] = useState<'SG' | 'BRIX'>('SG');
+
+  // Recupera preferência de unidade de cálculo de ABV salva no dispositivo
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pinttech_calc_abv_unit');
+      if (saved === 'SG' || saved === 'BRIX') {
+        setCalcAbvUnit(saved);
+        if (saved === 'BRIX') {
+          setCalcAbvOg((Math.round(sgToBrix(1.054) * 10) / 10).toFixed(1));
+          setCalcAbvFg((Math.round(sgToBrix(1.012) * 10) / 10).toFixed(1));
+        }
+      }
+    } catch {}
+  }, []);
+
+  const handleCalcAbvUnitChange = (newUnit: 'SG' | 'BRIX') => {
+    if (newUnit === calcAbvUnit) return;
+    if (newUnit === 'BRIX') {
+      const ogSg = parseBreweryGravity(calcAbvOg);
+      if (ogSg && ogSg >= 0.990) {
+        setCalcAbvOg((Math.round(sgToBrix(ogSg) * 10) / 10).toFixed(1));
+      }
+      const fgSg = parseBreweryGravity(calcAbvFg);
+      if (fgSg && fgSg >= 0.990) {
+        setCalcAbvFg((Math.round(sgToBrix(fgSg) * 10) / 10).toFixed(1));
+      }
+    } else {
+      const numOgBrix = parseFloat(calcAbvOg.replace(',', '.'));
+      if (!isNaN(numOgBrix) && numOgBrix > 0) {
+        setCalcAbvOg((Math.round(brixToSg(numOgBrix) * 1000) / 1000).toFixed(3));
+      }
+      const numFgBrix = parseFloat(calcAbvFg.replace(',', '.'));
+      if (!isNaN(numFgBrix) && numFgBrix > 0) {
+        setCalcAbvFg((Math.round(brixToSg(numFgBrix) * 1000) / 1000).toFixed(3));
+      }
+    }
+    setCalcAbvUnit(newUnit);
+    try {
+      localStorage.setItem('pinttech_calc_abv_unit', newUnit);
+    } catch {}
+  };
 
   const refractometerResults = useMemo(() => {
     const og = parseBreweryGravity(calcOgSg) || 1.050;
@@ -1983,12 +2025,23 @@ export default function FabricaChaoDeFabricaPage() {
   }, [calcRawBrix]);
 
   const abvDirectResult = useMemo(() => {
-    const og = parseBreweryGravity(calcAbvOg) || 1.050;
-    const fg = parseBreweryGravity(calcAbvFg) || 1.010;
+    let og = 1.050;
+    let fg = 1.010;
+
+    if (calcAbvUnit === 'BRIX') {
+      const numOgBrix = parseFloat(calcAbvOg.replace(',', '.')) || 0;
+      const numFgBrix = parseFloat(calcAbvFg.replace(',', '.')) || 0;
+      og = numOgBrix > 0 ? brixToSg(numOgBrix) : 1.050;
+      fg = numFgBrix > 0 ? brixToSg(numFgBrix) : 1.010;
+    } else {
+      og = parseBreweryGravity(calcAbvOg) || 1.050;
+      fg = parseBreweryGravity(calcAbvFg) || 1.010;
+    }
+
     const abv = calculateAbv(og, fg);
     const attenuation = og > 1 ? Math.round(((og - fg) / (og - 1.0)) * 100) : 0;
-    return { abv, attenuation };
-  }, [calcAbvOg, calcAbvFg]);
+    return { abv, attenuation, og, fg };
+  }, [calcAbvOg, calcAbvFg, calcAbvUnit]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-28 select-none">
@@ -4926,42 +4979,93 @@ export default function FabricaChaoDeFabricaPage() {
 
             {calcTab === 'ABV' && (
               <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl space-y-4">
-                <h3 className="font-black text-base text-white flex items-center gap-2">
-                  <Beer className="w-5 h-5 text-amber-400" />
-                  Cálculo Direto de Teor Alcoólico (ABV)
-                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-800">
+                  <h3 className="font-black text-base text-white flex items-center gap-2">
+                    <Beer className="w-5 h-5 text-amber-400" />
+                    Cálculo Direto de Teor Alcoólico (ABV)
+                  </h3>
+
+                  {/* SELETOR TOUCH DE UNIDADE SG / BRIX */}
+                  <div className="inline-flex bg-slate-800 p-1 rounded-2xl border-2 border-slate-700 shadow self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleCalcAbvUnitChange('SG')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                        calcAbvUnit === 'SG'
+                          ? 'bg-amber-500 text-slate-950 shadow-md scale-105'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      SG (Densidade)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCalcAbvUnitChange('BRIX')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                        calcAbvUnit === 'BRIX'
+                          ? 'bg-amber-500 text-slate-950 shadow-md scale-105'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      Brix (°Bx)
+                    </button>
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-black text-slate-100 mb-1">OG (Densidade Inicial):</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">
+                      {calcAbvUnit === 'BRIX' ? 'OG Inicial (°Bx):' : 'OG Inicial (SG):'}
+                    </label>
                     <input
                       type="text"
                       value={calcAbvOg}
                       onChange={(e) => setCalcAbvOg(e.target.value)}
-                      placeholder="1.054"
+                      placeholder={calcAbvUnit === 'BRIX' ? '13.3' : '1.054'}
                       className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
+                    <div className="mt-1 text-[11px] font-bold text-center text-slate-400">
+                      {calcAbvUnit === 'BRIX'
+                        ? `≈ ${abvDirectResult.og.toFixed(3)} SG`
+                        : `≈ ${sgToBrix(abvDirectResult.og).toFixed(1)}°Bx`}
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-black text-slate-100 mb-1">FG (Densidade Final):</label>
+                    <label className="block text-xs font-black text-slate-100 mb-1">
+                      {calcAbvUnit === 'BRIX' ? 'FG Final (°Bx):' : 'FG Final (SG):'}
+                    </label>
                     <input
                       type="text"
                       value={calcAbvFg}
                       onChange={(e) => setCalcAbvFg(e.target.value)}
-                      placeholder="1.012"
+                      placeholder={calcAbvUnit === 'BRIX' ? '3.1' : '1.012'}
                       className="w-full bg-slate-700 border-2 border-slate-400 focus:border-amber-400 rounded-2xl px-3 py-3 text-lg font-black text-white text-center outline-none shadow-inner placeholder:text-slate-300"
                     />
+                    <div className="mt-1 text-[11px] font-bold text-center text-slate-400">
+                      {calcAbvUnit === 'BRIX'
+                        ? `≈ ${abvDirectResult.fg.toFixed(3)} SG`
+                        : `≈ ${sgToBrix(abvDirectResult.fg).toFixed(1)}°Bx`}
+                    </div>
                   </div>
                 </div>
 
-                <div className="bg-slate-700 border-2 border-amber-400 p-4 rounded-2xl text-center space-y-1 shadow-md">
+                <div className="bg-slate-700 border-2 border-amber-400 p-4 rounded-2xl text-center space-y-1.5 shadow-md">
                   <span className="text-xs font-black uppercase text-amber-300 block">Teor Alcoólico Estimado</span>
                   <span className="font-black text-4xl text-amber-300 font-mono">
                     {abvDirectResult.abv.toFixed(2)}%
                   </span>
                   <div className="text-xs font-bold text-slate-200">
                     Atenuação Aparente: <strong className="text-white font-mono">{abvDirectResult.attenuation}%</strong>
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-300 pt-1.5 border-t border-slate-600 flex items-center justify-center gap-2 flex-wrap">
+                    <span>
+                      OG: <strong className="text-white font-mono">{abvDirectResult.og.toFixed(3)} SG</strong> ({sgToBrix(abvDirectResult.og).toFixed(1)}°Bx)
+                    </span>
+                    <span>•</span>
+                    <span>
+                      FG: <strong className="text-white font-mono">{abvDirectResult.fg.toFixed(3)} SG</strong> ({sgToBrix(abvDirectResult.fg).toFixed(1)}°Bx)
+                    </span>
                   </div>
                 </div>
               </div>
