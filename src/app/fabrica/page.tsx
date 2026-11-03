@@ -72,22 +72,24 @@ export default function FabricaChaoDeFabricaPage() {
   const [batches, setBatches] = useState<any[]>([]);
   const [tanks, setTanks] = useState<any[]>([]);
   const [recipes, setRecipes] = useState<any[]>([]);
+  const [mapaProducts, setMapaProducts] = useState<any[]>([]);
   const [sessionUser, setSessionUser] = useState<any>(null);
 
   // Status feedback banner
   const [banner, setBanner] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // -------------------------------------------------------------
-  // CARREGAR DADOS ESSENCIAIS (BATCHES, TANKS, RECIPES, USER)
+  // CARREGAR DADOS ESSENCIAIS (BATCHES, TANKS, RECIPES, USER, MAPA)
   // -------------------------------------------------------------
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [batchesRes, tanksRes, recipesRes, userRes] = await Promise.all([
+      const [batchesRes, tanksRes, recipesRes, userRes, mapaRes] = await Promise.all([
         fetch('/api/batches'),
         fetch('/api/tanks'),
         fetch('/api/recipes'),
         fetch('/api/auth/me'),
+        fetch('/api/mapa-products'),
       ]);
 
       if (batchesRes.ok) {
@@ -105,6 +107,10 @@ export default function FabricaChaoDeFabricaPage() {
       if (userRes.ok) {
         const data = await userRes.json();
         setSessionUser(data?.user || null);
+      }
+      if (mapaRes && mapaRes.ok) {
+        const data = await mapaRes.json();
+        setMapaProducts(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Erro ao carregar dados da fábrica:', err);
@@ -1119,6 +1125,13 @@ export default function FabricaChaoDeFabricaPage() {
   const [brewNotesInput, setBrewNotesInput] = useState<string>('');
   const [isSavingBrew, setIsSavingBrew] = useState<boolean>(false);
 
+  // Estados para Registro & Rótulo MAPA na Brassagem
+  const [brewMapaRegistration, setBrewMapaRegistration] = useState<string>('');
+  const [brewCommercialDenomination, setBrewCommercialDenomination] = useState<string>('');
+  const [brewMapaProductId, setBrewMapaProductId] = useState<string | null>(null);
+  const [saveMapaToRecipe, setSaveMapaToRecipe] = useState<boolean>(true);
+  const [isSavingQuickMapa, setIsSavingQuickMapa] = useState<boolean>(false);
+
   // Extrator inteligente de anotações do BeerXML
   const extractXmlNotes = (rec: any): string | null => {
     if (!rec) return null;
@@ -1182,6 +1195,9 @@ export default function FabricaChaoDeFabricaPage() {
       setBrewPhBoilList([{ ph: '5.1', notes: '' }]);
       setBlankRecipeName('');
       setBlankRecipeStyle('American IPA');
+      setBrewMapaRegistration('');
+      setBrewCommercialDenomination('Cerveja Especial');
+      setBrewMapaProductId(null);
       const year = new Date().getFullYear().toString().slice(-2);
       setBrewBatchNumber(`LOTE-${year}${String(batches.length + 1).padStart(2, '0')}`);
       return;
@@ -1202,6 +1218,67 @@ export default function FabricaChaoDeFabricaPage() {
       const year = new Date().getFullYear().toString().slice(-2);
       const prefix = rec.name ? rec.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() : 'REC';
       setBrewBatchNumber(`${prefix || 'LOT'}-${year}${String(batches.length + 1).padStart(2, '0')}`);
+
+      // Preenchimento e correspondência inteligente de MAPA
+      const reg = (rec.mapaRegistration || rec.mapaProduct?.mapaRegistration || '').trim();
+      const denom = (rec.commercialDenomination || rec.mapaProduct?.commercialDenomination || `Cerveja Puro Malte Tipo ${rec.style || 'Ale'}`).trim();
+      const prodId = rec.mapaProductId || rec.mapaProduct?.id || null;
+
+      let matchedProd = null;
+      if (prodId) {
+        matchedProd = mapaProducts.find((p) => p.id === prodId);
+      } else if (reg) {
+        matchedProd = mapaProducts.find((p) => p.mapaRegistration.trim().toLowerCase() === reg.toLowerCase());
+      } else if (rec.name) {
+        // Tenta encontrar pelo nome da receita no catálogo MAPA
+        const recNameClean = rec.name.trim().toLowerCase();
+        matchedProd = mapaProducts.find((p) => p.name.trim().toLowerCase() === recNameClean || recNameClean.includes(p.name.trim().toLowerCase()));
+      }
+
+      if (matchedProd) {
+        setBrewMapaRegistration(matchedProd.mapaRegistration || reg);
+        setBrewCommercialDenomination(matchedProd.commercialDenomination || denom);
+        setBrewMapaProductId(matchedProd.id);
+      } else {
+        setBrewMapaRegistration(reg);
+        setBrewCommercialDenomination(denom);
+        setBrewMapaProductId(prodId);
+      }
+    }
+  };
+
+  const handleQuickSaveMapaProduct = async () => {
+    if (!brewMapaRegistration.trim()) {
+      showBanner('Informe o número de registro MAPA para cadastrar', 'error');
+      return;
+    }
+    setIsSavingQuickMapa(true);
+    try {
+      const prodName = selectedRecipeObj?.name || blankRecipeName || 'Nova Cerveja';
+      const prodStyle = selectedRecipeObj?.style || blankRecipeStyle || 'Cerveja Especial';
+      const res = await fetch('/api/mapa-products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: prodName,
+          mapaRegistration: brewMapaRegistration.trim(),
+          commercialDenomination: brewCommercialDenomination.trim() || `Cerveja Puro Malte Tipo ${prodStyle}`,
+          style: prodStyle,
+          status: 'ATIVO',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showBanner(`✅ Rótulo ${prodName} cadastrado no catálogo MAPA!`, 'success');
+        setMapaProducts((prev) => [...prev.filter((p) => p.id !== data.id), data]);
+        setBrewMapaProductId(data.id);
+      } else {
+        showBanner(data.error || 'Erro ao salvar no catálogo MAPA', 'error');
+      }
+    } catch {
+      showBanner('Erro de conexão ao salvar MAPA', 'error');
+    } finally {
+      setIsSavingQuickMapa(false);
     }
   };
 
@@ -1262,8 +1339,23 @@ export default function FabricaChaoDeFabricaPage() {
             status: moveToFermentation ? 'FERMENTANDO' : selectedBrewBatch.status,
             fermentationStartDate: moveToFermentation ? new Date() : undefined,
             notes: brewNotesInput ? brewNotesInput.trim() : undefined,
+            mapaRegistration: brewMapaRegistration.trim() || undefined,
+            commercialDenomination: brewCommercialDenomination.trim() || undefined,
           }),
         });
+
+        // Opcional: Atualiza o registro MAPA permanente da receita vinculada
+        if (saveMapaToRecipe && selectedBrewBatch.recipeId && brewMapaRegistration.trim()) {
+          fetch(`/api/recipes/${selectedBrewBatch.recipeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mapaRegistration: brewMapaRegistration.trim(),
+              commercialDenomination: brewCommercialDenomination.trim() || null,
+              mapaProductId: brewMapaProductId || null,
+            }),
+          }).catch(() => {});
+        }
 
         if (res.ok) {
           showBanner(
@@ -1301,6 +1393,9 @@ export default function FabricaChaoDeFabricaPage() {
               og: parsedOg,
               batchYieldLiters: parsedVol > 0 ? parsedVol : 500,
               targetPhMash: parsedPhMash || 5.3,
+              mapaRegistration: brewMapaRegistration.trim() || null,
+              commercialDenomination: brewCommercialDenomination.trim() || null,
+              mapaProductId: brewMapaProductId || null,
               description: 'Receita em branco criada no Chão de Fábrica. Aguardando importação do arquivo BeerXML correspondente.',
             }),
           });
@@ -1343,8 +1438,23 @@ export default function FabricaChaoDeFabricaPage() {
             customRecipeDataJson: JSON.stringify(customData),
             status: moveToFermentation ? 'FERMENTANDO' : 'BRASSAGEM',
             notes: brewNotesInput ? brewNotesInput.trim() : undefined,
+            mapaRegistration: brewMapaRegistration.trim() || undefined,
+            commercialDenomination: brewCommercialDenomination.trim() || undefined,
           }),
         });
+
+        // Atualiza a receita permanente com o MAPA selecionado
+        if (saveMapaToRecipe && actualRecipeId && brewMapaRegistration.trim() && selectedRecipeId !== '__BLANK__') {
+          fetch(`/api/recipes/${actualRecipeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mapaRegistration: brewMapaRegistration.trim(),
+              commercialDenomination: brewCommercialDenomination.trim() || null,
+              mapaProductId: brewMapaProductId || null,
+            }),
+          }).catch(() => {});
+        }
 
         const data = await res.json();
         if (res.ok) {
@@ -3088,6 +3198,14 @@ export default function FabricaChaoDeFabricaPage() {
                             else setBrewPhBoilList([{ ph: '5.1', notes: '' }]);
 
                             if (found.notes) setBrewNotesInput(found.notes);
+
+                            // Preenche MAPA do lote ativo
+                            const reg = (found.mapaRegistration || found.recipe?.mapaRegistration || found.recipe?.mapaProduct?.mapaRegistration || '').trim();
+                            const denom = (found.commercialDenomination || found.recipe?.commercialDenomination || '').trim();
+                            const prodId = found.recipe?.mapaProductId || found.recipe?.mapaProduct?.id || null;
+                            setBrewMapaRegistration(reg);
+                            setBrewCommercialDenomination(denom);
+                            setBrewMapaProductId(prodId);
                           }
                         }}
                         className="w-full bg-slate-800 border-2 border-slate-500 focus:border-amber-400 rounded-2xl px-4 py-3.5 text-base font-bold text-white outline-none shadow-inner"
@@ -3118,6 +3236,12 @@ export default function FabricaChaoDeFabricaPage() {
                             <span className="bg-sky-950/70 text-sky-300 border border-sky-600/50 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black">
                               Lote #{selectedBrewBatch.batchNumber}
                             </span>
+                            {(selectedBrewBatch.mapaRegistration || selectedBrewBatch.recipe?.mapaRegistration || selectedBrewBatch.recipe?.mapaProduct?.mapaRegistration) && (
+                              <span className="bg-indigo-950/70 text-indigo-300 border border-indigo-600/50 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black flex items-center gap-1">
+                                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                                MAPA: {selectedBrewBatch.mapaRegistration || selectedBrewBatch.recipe?.mapaRegistration || selectedBrewBatch.recipe?.mapaProduct?.mapaRegistration}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -3161,6 +3285,116 @@ export default function FabricaChaoDeFabricaPage() {
                         })()}
                       </div>
                     )}
+
+                    {/* SELETOR DE REGISTRO MAPA PARA O LOTE ATIVO */}
+                    {selectedBrewBatch && (
+                      <div className="bg-slate-800 border-2 border-amber-500/60 p-4 rounded-2xl space-y-3 shadow-xl">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-sm font-black text-amber-300 uppercase tracking-wide">
+                            <ShieldCheck className="w-5 h-5 text-amber-400" />
+                            <span>Registro MAPA & Rótulo (Lote #{selectedBrewBatch.batchNumber})</span>
+                          </div>
+                          {brewMapaRegistration ? (
+                            <span className="bg-emerald-950 text-emerald-300 border border-emerald-500/50 text-xs font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                              <Check className="w-3.5 h-3.5 text-emerald-400" /> MAPA Vinculado
+                            </span>
+                          ) : (
+                            <span className="bg-amber-950/80 text-amber-300 border border-amber-500/40 text-xs font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Sem MAPA no Lote
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black text-white mb-1.5 uppercase tracking-wide">
+                            Selecione do Catálogo MAPA:
+                          </label>
+                          <select
+                            value={brewMapaProductId || (brewMapaRegistration ? '__MANUAL__' : '')}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '__MANUAL__') {
+                                setBrewMapaProductId(null);
+                              } else if (val) {
+                                setBrewMapaProductId(val);
+                                const matched = mapaProducts.find((p) => p.id === val);
+                                if (matched) {
+                                  setBrewMapaRegistration(matched.mapaRegistration || '');
+                                  if (matched.commercialDenomination) {
+                                    setBrewCommercialDenomination(matched.commercialDenomination);
+                                  }
+                                }
+                              } else {
+                                setBrewMapaProductId(null);
+                                setBrewMapaRegistration('');
+                                setBrewCommercialDenomination('');
+                              }
+                            }}
+                            className="w-full bg-slate-900 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3.5 py-3 text-sm font-bold text-white outline-none shadow-inner"
+                          >
+                            <option value="">-- Escolha um Registro MAPA Cadastrado ({mapaProducts.length} disponíveis) --</option>
+                            {mapaProducts.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} — Reg: {p.mapaRegistration} {p.style ? `(${p.style})` : ''}
+                              </option>
+                            ))}
+                            <option value="__MANUAL__">✍️ Digitar Nº de Registro Manualmente</option>
+                          </select>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1 uppercase tracking-wide">
+                              Nº de Registro MAPA:
+                            </label>
+                            <input
+                              type="text"
+                              value={brewMapaRegistration}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setBrewMapaRegistration(val);
+                                const match = mapaProducts.find(
+                                  (p) => p.mapaRegistration.trim().toLowerCase() === val.trim().toLowerCase()
+                                );
+                                setBrewMapaProductId(match ? match.id : null);
+                              }}
+                              placeholder="Ex: SP 001234-5.000001"
+                              className="w-full bg-slate-900 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm font-mono font-black text-amber-300 outline-none shadow-inner placeholder:text-slate-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1 uppercase tracking-wide">
+                              Denominação Legal / Comercial:
+                            </label>
+                            <input
+                              type="text"
+                              value={brewCommercialDenomination}
+                              onChange={(e) => setBrewCommercialDenomination(e.target.value)}
+                              placeholder="Ex: Cerveja Clara Puro Malte"
+                              className="w-full bg-slate-900 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white outline-none shadow-inner placeholder:text-slate-500"
+                            />
+                          </div>
+                        </div>
+
+                        {selectedBrewBatch.recipe && brewMapaRegistration && (
+                          <div className="flex items-center justify-between bg-slate-900/80 p-2.5 rounded-xl border border-slate-700 text-xs">
+                            <span className="text-slate-300">
+                              Vincular também este MAPA à receita original ({selectedBrewBatch.recipe.name}):
+                            </span>
+                            <label className="inline-flex items-center gap-2 cursor-pointer font-bold text-amber-400">
+                              <input
+                                type="checkbox"
+                                checked={saveMapaToRecipe}
+                                onChange={(e) => setSaveMapaToRecipe(e.target.checked)}
+                                className="w-4 h-4 accent-amber-500 rounded"
+                              />
+                              <span>Vincular</span>
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               ) : (
@@ -3188,11 +3422,14 @@ export default function FabricaChaoDeFabricaPage() {
                       <option value="__BLANK__">➕ Receita em Branco (Sem XML - adicionar depois)</option>
                       {displayedRecipes.length > 0 ? (
                         <optgroup label={showAllRecipes ? "Todas as Receitas" : "Receitas Disponíveis (XMLs não brassados)"}>
-                          {displayedRecipes.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name} — {r.style} (OG: {r.og || '1.050'})
-                            </option>
-                          ))}
+                          {displayedRecipes.map((r) => {
+                            const reg = r.mapaRegistration || r.mapaProduct?.mapaRegistration;
+                            return (
+                              <option key={r.id} value={r.id}>
+                                {r.name} — {r.style} (OG: {r.og || '1.050'}) {reg ? `[MAPA: ${reg}]` : '[Sem MAPA]'}
+                              </option>
+                            );
+                          })}
                         </optgroup>
                       ) : (
                         <option disabled value="">
@@ -3267,6 +3504,17 @@ export default function FabricaChaoDeFabricaPage() {
                           <span className="bg-emerald-950/70 text-emerald-300 border border-emerald-600/50 px-2.5 py-0.5 rounded-lg text-xs font-black">
                             {selectedRecipeObj.batchYieldLiters || 500}L
                           </span>
+                          {(selectedRecipeObj.mapaRegistration || selectedRecipeObj.mapaProduct?.mapaRegistration) ? (
+                            <span className="bg-indigo-950/70 text-indigo-300 border border-indigo-600/50 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black flex items-center gap-1">
+                              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                              MAPA: {selectedRecipeObj.mapaRegistration || selectedRecipeObj.mapaProduct?.mapaRegistration}
+                            </span>
+                          ) : (
+                            <span className="bg-amber-950/60 text-amber-300 border border-amber-600/40 px-2.5 py-0.5 rounded-lg text-xs font-black flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                              Sem MAPA vinculado
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -3308,6 +3556,140 @@ export default function FabricaChaoDeFabricaPage() {
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+
+                  {/* SELETOR DE REGISTRO MAPA & RÓTULO DA CERVEJA */}
+                  {(selectedRecipeObj || selectedRecipeId === '__BLANK__') && (
+                    <div className="bg-slate-800 border-2 border-amber-500/60 p-4 rounded-2xl space-y-3 shadow-xl">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-sm font-black text-amber-300 uppercase tracking-wide">
+                          <ShieldCheck className="w-5 h-5 text-amber-400" />
+                          <span>Registro MAPA & Rótulo Regulatório</span>
+                        </div>
+                        {brewMapaRegistration ? (
+                          <span className="bg-emerald-950 text-emerald-300 border border-emerald-500/50 text-xs font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                            <Check className="w-3.5 h-3.5 text-emerald-400" /> MAPA Selecionado
+                          </span>
+                        ) : (
+                          <span className="bg-amber-950/80 text-amber-300 border border-amber-500/40 text-xs font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Selecione o Registro MAPA
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Dropdown do Catálogo MAPA */}
+                      <div>
+                        <label className="block text-xs font-black text-white mb-1.5 uppercase tracking-wide">
+                          Selecione o Rótulo no Catálogo MAPA:
+                        </label>
+                        <select
+                          value={brewMapaProductId || (brewMapaRegistration ? '__MANUAL__' : '')}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '__MANUAL__') {
+                              setBrewMapaProductId(null);
+                            } else if (val) {
+                              setBrewMapaProductId(val);
+                              const matched = mapaProducts.find((p) => p.id === val);
+                              if (matched) {
+                                setBrewMapaRegistration(matched.mapaRegistration || '');
+                                if (matched.commercialDenomination) {
+                                  setBrewCommercialDenomination(matched.commercialDenomination);
+                                }
+                              }
+                            } else {
+                              setBrewMapaProductId(null);
+                              setBrewMapaRegistration('');
+                              setBrewCommercialDenomination('');
+                            }
+                          }}
+                          className="w-full bg-slate-900 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3.5 py-3 text-sm font-bold text-white outline-none shadow-inner"
+                        >
+                          <option value="">-- Escolha um Registro MAPA Cadastrado ({mapaProducts.length} disponíveis) --</option>
+                          {mapaProducts.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} — Reg: {p.mapaRegistration} {p.style ? `(${p.style})` : ''}
+                            </option>
+                          ))}
+                          <option value="__MANUAL__">✍️ Digitar Nº de Registro Manualmente</option>
+                        </select>
+                      </div>
+
+                      {/* Campos Editáveis de Registro e Denominação */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1 uppercase tracking-wide">
+                            Nº de Registro MAPA:
+                          </label>
+                          <input
+                            type="text"
+                            value={brewMapaRegistration}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBrewMapaRegistration(val);
+                              const match = mapaProducts.find(
+                                (p) => p.mapaRegistration.trim().toLowerCase() === val.trim().toLowerCase()
+                              );
+                              setBrewMapaProductId(match ? match.id : null);
+                            }}
+                            placeholder="Ex: SP 001234-5.000001"
+                            className="w-full bg-slate-900 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm font-mono font-black text-amber-300 outline-none shadow-inner placeholder:text-slate-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1 uppercase tracking-wide">
+                            Denominação Legal / Comercial:
+                          </label>
+                          <input
+                            type="text"
+                            value={brewCommercialDenomination}
+                            onChange={(e) => setBrewCommercialDenomination(e.target.value)}
+                            placeholder="Ex: Cerveja Clara Puro Malte"
+                            className="w-full bg-slate-900 border-2 border-slate-600 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white outline-none shadow-inner placeholder:text-slate-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botão para cadastrar no catálogo se for novo */}
+                      {brewMapaRegistration.trim().length > 3 &&
+                        !mapaProducts.some(
+                          (p) => p.mapaRegistration.trim().toLowerCase() === brewMapaRegistration.trim().toLowerCase()
+                        ) && (
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs">
+                            <span className="text-amber-200">
+                              Este número MAPA ainda não está no catálogo da cervejaria.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleQuickSaveMapaProduct}
+                              disabled={isSavingQuickMapa}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs flex items-center justify-center gap-1 transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              {isSavingQuickMapa ? 'Salvando...' : 'Salvar no Catálogo MAPA'}
+                            </button>
+                          </div>
+                        )}
+
+                      {/* Vincular permanentemente à receita */}
+                      {selectedRecipeObj && brewMapaRegistration && (
+                        <div className="flex items-center justify-between bg-slate-900/80 p-2.5 rounded-xl border border-slate-700 text-xs">
+                          <span className="text-slate-300">
+                            Vincular este registro MAPA permanentemente na receita:
+                          </span>
+                          <label className="inline-flex items-center gap-2 cursor-pointer font-bold text-amber-400">
+                            <input
+                              type="checkbox"
+                              checked={saveMapaToRecipe}
+                              onChange={(e) => setSaveMapaToRecipe(e.target.checked)}
+                              className="w-4 h-4 accent-amber-500 rounded"
+                            />
+                            <span>Vincular à Receita</span>
+                          </label>
+                        </div>
+                      )}
                     </div>
                   )}
 
