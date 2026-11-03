@@ -48,6 +48,7 @@ import EditRecipeModal from '@/components/brew/EditRecipeModal';
 import MapaProductModal, { MapaProduct } from '@/components/brew/MapaProductModal';
 import BoardPhotoReaderModal from '@/components/brew/BoardPhotoReaderModal';
 import { formatDate, formatDateShort, formatCurrency, getLocalDateString } from '@/lib/utils';
+import { brixToSg, sgToBrix, parseBreweryGravity } from '@/lib/brewing/calculations';
 
 export default function ProducaoPage() {
   const [batches, setBatches] = useState<any[]>([]);
@@ -101,8 +102,43 @@ export default function ProducaoPage() {
   const [brewTankId, setBrewTankId] = useState<string>('');
   const [brewStatus, setBrewStatus] = useState<string>('BRASSAGEM');
   const [brewOg, setBrewOg] = useState<string>('');
+  const [brewOgUnit, setBrewOgUnit] = useState<'SG' | 'BRIX'>('SG');
   const [brewNotes, setBrewNotes] = useState<string>('');
   const [startingBrew, setStartingBrew] = useState<boolean>(false);
+
+  const handleBrewOgUnitChange = (newUnit: 'SG' | 'BRIX') => {
+    if (newUnit === brewOgUnit) return;
+    if (newUnit === 'BRIX') {
+      const parsedOg = parseBreweryGravity(brewOg);
+      if (parsedOg && parsedOg >= 0.990) {
+        setBrewOg((Math.round(sgToBrix(parsedOg) * 10) / 10).toFixed(1));
+      }
+    } else {
+      const numBrix = parseFloat(brewOg.replace(',', '.'));
+      if (!isNaN(numBrix) && numBrix > 0) {
+        setBrewOg((Math.round(brixToSg(numBrix) * 1000) / 1000).toFixed(3));
+      }
+    }
+    setBrewOgUnit(newUnit);
+  };
+
+  const brewOgConvertedPreview = useMemo(() => {
+    if (!brewOg || !brewOg.trim()) return null;
+    if (brewOgUnit === 'BRIX') {
+      const numBrix = parseFloat(brewOg.replace(',', '.'));
+      if (!isNaN(numBrix) && numBrix > 0) {
+        const sg = Math.round(brixToSg(numBrix) * 1000) / 1000;
+        return `${sg.toFixed(3)} SG`;
+      }
+    } else {
+      const parsedOg = parseBreweryGravity(brewOg);
+      if (parsedOg && parsedOg >= 0.990) {
+        const brix = Math.round(sgToBrix(parsedOg) * 10) / 10;
+        return `${brix.toFixed(1)} °Bx`;
+      }
+    }
+    return null;
+  }, [brewOgUnit, brewOg]);
 
   // Modal de Tanque (Criar / Editar)
   const [tankModalOpen, setTankModalOpen] = useState<boolean>(false);
@@ -826,6 +862,7 @@ export default function ProducaoPage() {
     setBrewVolume(String(recipe.batchYieldLiters || 500));
     setBrewTankId('');
     setBrewStatus('BRASSAGEM');
+    setBrewOgUnit('SG');
     setBrewOg(recipe.og ? String(recipe.og.toFixed(3)) : '1.050');
     setBrewNotes(`Brassagem iniciada a partir da receita: ${recipe.name}`);
   };
@@ -835,6 +872,20 @@ export default function ProducaoPage() {
     if (!selectedRecipeForBrew || !brewBatchNumber.trim()) return;
     setStartingBrew(true);
     try {
+      let finalOgSg: number = selectedRecipeForBrew.og || 1.050;
+      if (brewOg && brewOg.trim()) {
+        if (brewOgUnit === 'BRIX') {
+          const numBrix = parseFloat(brewOg.replace(',', '.'));
+          if (!isNaN(numBrix) && numBrix > 0) {
+            finalOgSg = Math.round(brixToSg(numBrix) * 1000) / 1000;
+          } else {
+            finalOgSg = parseBreweryGravity(brewOg) || 1.050;
+          }
+        } else {
+          finalOgSg = parseBreweryGravity(brewOg) || 1.050;
+        }
+      }
+
       const payload: any = {
         recipeId: selectedRecipeForBrew.id,
         batchNumber: brewBatchNumber.trim().toUpperCase(),
@@ -843,7 +894,11 @@ export default function ProducaoPage() {
         volumeProducedLiters: parseFloat(brewVolume) || selectedRecipeForBrew.batchYieldLiters || 500,
         tankId: brewTankId || null,
         status: brewStatus || 'BRASSAGEM',
-        measuredOg: brewOg ? parseFloat(brewOg) : selectedRecipeForBrew.og || 1.050,
+        measuredOg: finalOgSg,
+        customRecipeDataJson: JSON.stringify({
+          ogUnit: brewOgUnit,
+          originalOgInput: brewOg,
+        }),
         notes: brewNotes.trim() || undefined,
         mapaRegistration: selectedRecipeForBrew.mapaRegistration || brewery?.mapaRegistration || undefined,
         commercialDenomination: `Cerveja Puro Malte Tipo ${selectedRecipeForBrew.style || 'Ale'}`,
@@ -3606,15 +3661,43 @@ export default function ProducaoPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">OG Medida (Panela)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-300 font-bold text-xs">
+                      OG Medida ({brewOgUnit === 'BRIX' ? '°Brix' : 'Panela'})
+                    </label>
+                    <div className="flex bg-slate-700 p-0.5 rounded-lg border border-slate-600">
+                      <button
+                        type="button"
+                        onClick={() => handleBrewOgUnitChange('SG')}
+                        className={`px-2 py-0.5 text-[10px] font-black rounded transition-all ${
+                          brewOgUnit === 'SG' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        SG
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBrewOgUnitChange('BRIX')}
+                        className={`px-2 py-0.5 text-[10px] font-black rounded transition-all ${
+                          brewOgUnit === 'BRIX' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        °Bx
+                      </button>
+                    </div>
+                  </div>
                   <input
-                    type="number"
-                    step="0.001"
+                    type="text"
                     value={brewOg}
                     onChange={(e) => setBrewOg(e.target.value)}
-                    placeholder="1.050"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:ring-1 focus:ring-amber-500 outline-none"
+                    placeholder={brewOgUnit === 'BRIX' ? '12.4' : '1.050'}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:ring-1 focus:ring-amber-500 outline-none text-sm"
                   />
+                  {brewOgConvertedPreview && (
+                    <span className="text-[10px] font-bold text-amber-400 block mt-1">
+                      ≈ {brewOgConvertedPreview}
+                    </span>
+                  )}
                 </div>
               </div>
 

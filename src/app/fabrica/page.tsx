@@ -1002,6 +1002,49 @@ export default function FabricaChaoDeFabricaPage() {
   const [brewBatchNumber, setBrewBatchNumber] = useState<string>('');
   const [brewTargetTankId, setBrewTargetTankId] = useState<string>('');
   const [brewOgInput, setBrewOgInput] = useState<string>('1.054');
+  const [brewOgUnit, setBrewOgUnit] = useState<'SG' | 'BRIX'>('SG');
+
+  const handleBrewOgUnitChange = (newUnit: 'SG' | 'BRIX') => {
+    if (newUnit === brewOgUnit) return;
+    if (newUnit === 'BRIX') {
+      const parsedOg = parseBreweryGravity(brewOgInput);
+      if (parsedOg && parsedOg >= 0.990) {
+        setBrewOgInput((Math.round(sgToBrix(parsedOg) * 10) / 10).toFixed(1));
+      }
+    } else {
+      const numBrix = parseFloat(brewOgInput.replace(',', '.'));
+      if (!isNaN(numBrix) && numBrix > 0) {
+        setBrewOgInput((Math.round(brixToSg(numBrix) * 1000) / 1000).toFixed(3));
+      }
+    }
+    setBrewOgUnit(newUnit);
+  };
+
+  const brewOgConvertedPreview = useMemo(() => {
+    if (!brewOgInput || !brewOgInput.trim()) return null;
+    if (brewOgUnit === 'BRIX') {
+      const numBrix = parseFloat(brewOgInput.replace(',', '.'));
+      if (!isNaN(numBrix) && numBrix > 0) {
+        const sg = Math.round(brixToSg(numBrix) * 1000) / 1000;
+        return {
+          otherUnit: 'SG',
+          convertedText: `${sg.toFixed(3)} SG`,
+          sgValue: sg,
+        };
+      }
+    } else {
+      const parsedOg = parseBreweryGravity(brewOgInput);
+      if (parsedOg && parsedOg >= 0.990) {
+        const brix = Math.round(sgToBrix(parsedOg) * 10) / 10;
+        return {
+          otherUnit: '°Bx',
+          convertedText: `${brix.toFixed(1)} °Bx`,
+          sgValue: parsedOg,
+        };
+      }
+    }
+    return null;
+  }, [brewOgUnit, brewOgInput]);
 
   interface PhReadingItem {
     ph: string;
@@ -1075,7 +1118,7 @@ export default function FabricaChaoDeFabricaPage() {
   const handleSelectRecipeForBrew = (recId: string) => {
     setSelectedRecipeId(recId);
     if (recId === '__BLANK__') {
-      setBrewOgInput('1.050');
+      setBrewOgInput(brewOgUnit === 'BRIX' ? '12.4' : '1.050');
       setBrewVolumeInput('500');
       setBrewPhMashList([{ ph: '5.3', notes: '' }]);
       setBrewPhBoilList([{ ph: '5.1', notes: '' }]);
@@ -1087,7 +1130,13 @@ export default function FabricaChaoDeFabricaPage() {
     }
     const rec = recipes.find((r) => r.id === recId);
     if (rec) {
-      if (rec.og) setBrewOgInput(String(rec.og));
+      if (rec.og) {
+        if (brewOgUnit === 'BRIX') {
+          setBrewOgInput((Math.round(sgToBrix(rec.og) * 10) / 10).toFixed(1));
+        } else {
+          setBrewOgInput(String(rec.og));
+        }
+      }
       if (rec.targetPhMash) setBrewPhMashList([{ ph: String(rec.targetPhMash), notes: 'Alvo' }]);
       else setBrewPhMashList([{ ph: '5.3', notes: '' }]);
       setBrewPhBoilList([{ ph: '5.1', notes: '' }]);
@@ -1101,7 +1150,18 @@ export default function FabricaChaoDeFabricaPage() {
   const handleSaveBreweryData = async (moveToFermentation: boolean = false) => {
     setIsSavingBrew(true);
     try {
-      const parsedOg = parseBreweryGravity(brewOgInput) || 1.050;
+      let parsedOg: number = 1.050;
+      if (brewOgUnit === 'BRIX') {
+        const numBrix = parseFloat(brewOgInput.replace(',', '.'));
+        if (!isNaN(numBrix) && numBrix > 0) {
+          parsedOg = Math.round(brixToSg(numBrix) * 1000) / 1000;
+        } else {
+          parsedOg = parseBreweryGravity(brewOgInput) || 1.050;
+        }
+      } else {
+        parsedOg = parseBreweryGravity(brewOgInput) || 1.050;
+      }
+
       const parsedVol = parseFloat(brewVolumeInput.replace(',', '.')) || 0;
 
       const validPhMashList = brewPhMashList.filter((item) => item.ph.trim() !== '');
@@ -1128,6 +1188,8 @@ export default function FabricaChaoDeFabricaPage() {
           ...existingCustom,
           mashPhReadings: validPhMashList,
           boilPhReadings: validPhBoilList,
+          ogUnit: brewOgUnit,
+          originalOgInput: brewOgInput,
         };
 
         const res = await fetch(`/api/batches/${selectedBrewBatch.id}`, {
@@ -1204,6 +1266,8 @@ export default function FabricaChaoDeFabricaPage() {
           mashPhReadings: validPhMashList,
           boilPhReadings: validPhBoilList,
           createdAsBlankRecipe: selectedRecipeId === '__BLANK__',
+          ogUnit: brewOgUnit,
+          originalOgInput: brewOgInput,
         };
 
         const res = await fetch('/api/batches', {
@@ -2702,8 +2766,19 @@ export default function FabricaChaoDeFabricaPage() {
                           const found = activeBrewBatches.find((b) => b.id === e.target.value);
                           setSelectedBrewBatch(found || null);
                           if (found) {
-                            if (found.measuredOg) setBrewOgInput(String(found.measuredOg));
-                            else if (found.recipe?.og) setBrewOgInput(String(found.recipe.og));
+                            if (found.measuredOg) {
+                              if (brewOgUnit === 'BRIX') {
+                                setBrewOgInput((Math.round(sgToBrix(found.measuredOg) * 10) / 10).toFixed(1));
+                              } else {
+                                setBrewOgInput(String(found.measuredOg));
+                              }
+                            } else if (found.recipe?.og) {
+                              if (brewOgUnit === 'BRIX') {
+                                setBrewOgInput((Math.round(sgToBrix(found.recipe.og) * 10) / 10).toFixed(1));
+                              } else {
+                                setBrewOgInput(String(found.recipe.og));
+                              }
+                            }
                             if (found.volumePlannedLiters) setBrewVolumeInput(String(found.volumePlannedLiters));
 
                             let mashReadings: PhReadingItem[] = [];
@@ -3007,16 +3082,49 @@ export default function FabricaChaoDeFabricaPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-black text-slate-700 mb-1 uppercase tracking-wide">
-                        OG Medida (Pós-Fervura):
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-black text-slate-700 uppercase tracking-wide">
+                          OG Medida {brewOgUnit === 'BRIX' ? '(°Brix)' : '(Pós-Fervura)'}:
+                        </label>
+                        <div className="flex bg-slate-200 p-0.5 rounded-xl border border-slate-300 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => handleBrewOgUnitChange('SG')}
+                            className={`px-2.5 py-0.5 text-xs font-black rounded-lg transition-all ${
+                              brewOgUnit === 'SG'
+                                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            SG
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBrewOgUnitChange('BRIX')}
+                            className={`px-2.5 py-0.5 text-xs font-black rounded-lg transition-all ${
+                              brewOgUnit === 'BRIX'
+                                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            °Brix
+                          </button>
+                        </div>
+                      </div>
                       <input
                         type="text"
                         value={brewOgInput}
                         onChange={(e) => setBrewOgInput(e.target.value)}
-                        placeholder="1.054"
+                        placeholder={brewOgUnit === 'BRIX' ? '12.4' : '1.054'}
                         className="w-full bg-white border-2 border-slate-300 focus:border-amber-500 rounded-2xl px-3 py-3 text-2xl font-black text-slate-900 text-center font-mono outline-none shadow-sm placeholder:text-slate-400"
                       />
+                      {brewOgConvertedPreview && (
+                        <div className="mt-1.5 flex items-center justify-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-bold shadow-2xs">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Conversão automática:</span>
+                          <strong className="font-mono text-sm text-amber-950">{brewOgConvertedPreview.convertedText}</strong>
+                        </div>
+                      )}
                     </div>
 
                     <div>
