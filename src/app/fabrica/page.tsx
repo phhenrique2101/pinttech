@@ -64,7 +64,7 @@ import {
 } from '@/lib/brewing/calculations';
 import { formatDateShort, getLocalDateString } from '@/lib/utils';
 
-type FabricaTab = 'ENVASE' | 'BARRIS' | 'TANQUES' | 'BRASSAGEM' | 'CALCULADORA';
+type FabricaTab = 'ENVASE' | 'BARRIS' | 'TANQUES' | 'BRASSAGEM' | 'TAREFAS' | 'CALCULADORA';
 
 export default function FabricaChaoDeFabricaPage() {
   const [activeTab, setActiveTab] = useState<FabricaTab>('ENVASE');
@@ -1481,7 +1481,390 @@ export default function FabricaChaoDeFabricaPage() {
   };
 
   // -------------------------------------------------------------
-  // 5. CALCULADORA CERVEJEIRA TOUCH
+  // 5. MÓDULO TAREFAS DA FÁBRICA & ADEGA
+  // -------------------------------------------------------------
+  const QUICK_TASK_PRESETS = [
+    { label: '🌿 Dry Hopping', type: 'DRY_HOPPING', defaultTitle: 'Dry Hopping', unit: 'KG', defaultAmount: 2.0 },
+    { label: '🪣 Purga Levedura', type: 'PURGE', defaultTitle: 'Purga de Levedura / Sedimento', unit: 'L' },
+    { label: '❄️ Cold Crash (0°C)', type: 'COLD_CRASH', defaultTitle: 'Baixar Temperatura para Cold Crash (0°C)' },
+    { label: '🧪 Medição Densidade', type: 'MEASUREMENT', defaultTitle: 'Medição Diária de Densidade & pH' },
+    { label: '💨 Carbonatação', type: 'OTHER', defaultTitle: 'Subir Pressão / Carbonatação no Tanque' },
+    { label: '🧼 Limpeza CIP', type: 'OTHER', defaultTitle: 'Higienização CIP de Linhas / Válvulas' },
+  ];
+
+  const fabricaTasks = useMemo(() => {
+    const list: Array<{
+      id: string;
+      batchId: string;
+      batchNumber: string;
+      recipeName: string;
+      recipeStyle?: string;
+      tankName: string;
+      tankId?: string;
+      title: string;
+      type: string;
+      dueDate: string;
+      completed: boolean;
+      completedAt?: string;
+      amount?: number;
+      unit?: string;
+      notes?: string;
+      urgency: 'LATE' | 'TODAY' | 'FUTURE' | 'COMPLETED';
+      daysDiff: number;
+    }> = [];
+
+    const todayStr = getLocalDateString();
+    const today = new Date(todayStr + 'T00:00:00');
+
+    batches.forEach((b) => {
+      if (!b.tankTasksJson) return;
+      try {
+        const parsed = typeof b.tankTasksJson === 'string' ? JSON.parse(b.tankTasksJson) : b.tankTasksJson;
+        if (Array.isArray(parsed)) {
+          parsed.forEach((t: any) => {
+            if (!t || !t.id || !t.title) return;
+
+            const dueDateStr = t.dueDate || todayStr;
+            let urgency: 'LATE' | 'TODAY' | 'FUTURE' | 'COMPLETED' = 'FUTURE';
+
+            const taskDate = new Date(dueDateStr + 'T00:00:00');
+            const diffTime = taskDate.getTime() - today.getTime();
+            const daysDiff = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+            if (t.completed) {
+              urgency = 'COMPLETED';
+            } else if (dueDateStr < todayStr) {
+              urgency = 'LATE';
+            } else if (dueDateStr === todayStr) {
+              urgency = 'TODAY';
+            } else {
+              urgency = 'FUTURE';
+            }
+
+            const tankName = b.tank?.name || tanks.find((tk) => tk.id === b.tankId)?.name || 'Sem tanque';
+
+            list.push({
+              id: t.id,
+              batchId: b.id,
+              batchNumber: b.batchNumber || 'S/N',
+              recipeName: b.recipe?.name || 'Cerveja',
+              recipeStyle: b.recipe?.style || '',
+              tankName,
+              tankId: b.tankId,
+              title: t.title,
+              type: t.type || 'OTHER',
+              dueDate: dueDateStr,
+              completed: !!t.completed,
+              completedAt: t.completedAt,
+              amount: t.amount,
+              unit: t.unit,
+              notes: t.notes,
+              urgency,
+              daysDiff,
+            });
+          });
+        }
+      } catch {}
+    });
+
+    return list;
+  }, [batches, tanks]);
+
+  const lateTasksCount = useMemo(() => fabricaTasks.filter((t) => t.urgency === 'LATE').length, [fabricaTasks]);
+  const todayTasksCount = useMemo(() => fabricaTasks.filter((t) => t.urgency === 'TODAY').length, [fabricaTasks]);
+  const pendingTasksCount = useMemo(() => fabricaTasks.filter((t) => !t.completed).length, [fabricaTasks]);
+
+  const [fabricaTaskFilter, setFabricaTaskFilter] = useState<'PENDING' | 'TODAY' | 'LATE' | 'ALL' | 'COMPLETED'>('PENDING');
+  const [fabricaTaskSearch, setFabricaTaskSearch] = useState<string>('');
+
+  const filteredFabricaTasks = useMemo(() => {
+    return fabricaTasks.filter((t) => {
+      if (fabricaTaskFilter === 'TODAY' && t.urgency !== 'TODAY') return false;
+      if (fabricaTaskFilter === 'LATE' && t.urgency !== 'LATE') return false;
+      if (fabricaTaskFilter === 'PENDING' && t.completed) return false;
+      if (fabricaTaskFilter === 'COMPLETED' && !t.completed) return false;
+
+      if (fabricaTaskSearch.trim()) {
+        const q = fabricaTaskSearch.trim().toLowerCase();
+        const matches =
+          t.title.toLowerCase().includes(q) ||
+          t.tankName.toLowerCase().includes(q) ||
+          t.batchNumber.toLowerCase().includes(q) ||
+          t.recipeName.toLowerCase().includes(q) ||
+          (t.notes && t.notes.toLowerCase().includes(q)) ||
+          t.type.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      const priority: Record<string, number> = { LATE: 1, TODAY: 2, FUTURE: 3, COMPLETED: 4 };
+      const pA = priority[a.urgency] || 99;
+      const pB = priority[b.urgency] || 99;
+      if (pA !== pB) return pA - pB;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+  }, [fabricaTasks, fabricaTaskFilter, fabricaTaskSearch]);
+
+  const activeBatchesForTasks = useMemo(
+    () => batches.filter((b) => !['FINALIZADO', 'CANCELADO'].includes(b.status)),
+    [batches]
+  );
+
+  // Estados do Modal de Tarefa
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingTaskItem, setEditingTaskItem] = useState<any | null>(null);
+  const [taskFormBatchId, setTaskFormBatchId] = useState<string>('');
+  const [taskFormTitle, setTaskFormTitle] = useState<string>('');
+  const [taskFormType, setTaskFormType] = useState<string>('DRY_HOPPING');
+  const [taskFormDueDate, setTaskFormDueDate] = useState<string>(getLocalDateString());
+  const [taskFormAmount, setTaskFormAmount] = useState<string>('');
+  const [taskFormUnit, setTaskFormUnit] = useState<string>('KG');
+  const [taskFormNotes, setTaskFormNotes] = useState<string>('');
+  const [isSavingTask, setIsSavingTask] = useState(false);
+
+  const handleToggleFabricaTask = async (taskItem: any) => {
+    const targetBatch = batches.find((b) => b.id === taskItem.batchId);
+    if (!targetBatch) return;
+
+    let currentTasks: any[] = [];
+    try {
+      currentTasks = targetBatch.tankTasksJson
+        ? typeof targetBatch.tankTasksJson === 'string'
+          ? JSON.parse(targetBatch.tankTasksJson)
+          : targetBatch.tankTasksJson
+        : [];
+    } catch {}
+
+    const newCompleted = !taskItem.completed;
+    const updatedTasks = currentTasks.map((t: any) =>
+      t.id === taskItem.id
+        ? {
+            ...t,
+            completed: newCompleted,
+            completedAt: newCompleted ? new Date().toISOString() : undefined,
+          }
+        : t
+    );
+
+    const updatedJson = JSON.stringify(updatedTasks);
+
+    // Atualização otimista
+    setBatches((prev) =>
+      prev.map((b) => (b.id === targetBatch.id ? { ...b, tankTasksJson: updatedJson } : b))
+    );
+
+    if (newCompleted) {
+      playFeedback('success');
+      showBanner(`✅ Tarefa "${taskItem.title}" concluída com sucesso!`, 'success');
+    } else {
+      showBanner(`🔄 Tarefa "${taskItem.title}" reaberta.`, 'info');
+    }
+
+    try {
+      await fetch(`/api/batches/${targetBatch.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankTasksJson: updatedJson }),
+      });
+    } catch {
+      showBanner('Erro ao sincronizar tarefa com o servidor', 'error');
+    }
+  };
+
+  const handleOpenCreateTask = (preset?: any) => {
+    setEditingTaskItem(null);
+    setTaskFormBatchId(activeBatchesForTasks[0]?.id || '');
+    setTaskFormTitle(preset?.defaultTitle || '');
+    setTaskFormType(preset?.type || 'DRY_HOPPING');
+    setTaskFormDueDate(getLocalDateString());
+    setTaskFormAmount(preset?.defaultAmount ? String(preset.defaultAmount) : '');
+    setTaskFormUnit(preset?.unit || 'KG');
+    setTaskFormNotes('');
+    setIsTaskModalOpen(true);
+  };
+
+  const handleOpenEditTask = (taskItem: any) => {
+    setEditingTaskItem(taskItem);
+    setTaskFormBatchId(taskItem.batchId);
+    setTaskFormTitle(taskItem.title);
+    setTaskFormType(taskItem.type || 'OTHER');
+    setTaskFormDueDate(taskItem.dueDate || getLocalDateString());
+    setTaskFormAmount(taskItem.amount ? String(taskItem.amount) : '');
+    setTaskFormUnit(taskItem.unit || 'KG');
+    setTaskFormNotes(taskItem.notes || '');
+    setIsTaskModalOpen(true);
+  };
+
+  const handleSetQuickDate = (daysToAdd: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysToAdd);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setTaskFormDueDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const handleSaveTask = async () => {
+    if (!taskFormTitle.trim()) {
+      showBanner('Informe o título da tarefa', 'error');
+      return;
+    }
+    if (!taskFormBatchId) {
+      showBanner('Selecione o lote / tanque de destino para a tarefa', 'error');
+      return;
+    }
+
+    setIsSavingTask(true);
+    try {
+      const targetBatch = batches.find((b) => b.id === taskFormBatchId);
+      if (!targetBatch) {
+        showBanner('Lote não encontrado', 'error');
+        return;
+      }
+
+      let currentTasks: any[] = [];
+      try {
+        currentTasks = targetBatch.tankTasksJson
+          ? typeof targetBatch.tankTasksJson === 'string'
+            ? JSON.parse(targetBatch.tankTasksJson)
+            : targetBatch.tankTasksJson
+          : [];
+      } catch {}
+
+      let updatedTasks: any[];
+
+      if (editingTaskItem) {
+        // Se mudou de lote, remove do antigo e insere no novo
+        if (editingTaskItem.batchId !== taskFormBatchId) {
+          const oldBatch = batches.find((b) => b.id === editingTaskItem.batchId);
+          if (oldBatch) {
+            let oldTasks: any[] = [];
+            try {
+              oldTasks = oldBatch.tankTasksJson
+                ? typeof oldBatch.tankTasksJson === 'string'
+                  ? JSON.parse(oldBatch.tankTasksJson)
+                  : oldBatch.tankTasksJson
+                : [];
+            } catch {}
+            const filteredOld = oldTasks.filter((t) => t.id !== editingTaskItem.id);
+            fetch(`/api/batches/${oldBatch.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tankTasksJson: JSON.stringify(filteredOld) }),
+            }).catch(() => {});
+            setBatches((prev) =>
+              prev.map((b) => (b.id === oldBatch.id ? { ...b, tankTasksJson: JSON.stringify(filteredOld) } : b))
+            );
+          }
+          const taskObj = {
+            id: editingTaskItem.id,
+            title: taskFormTitle.trim(),
+            type: taskFormType,
+            dueDate: taskFormDueDate,
+            completed: editingTaskItem.completed,
+            completedAt: editingTaskItem.completedAt,
+            amount: taskFormAmount ? parseFloat(taskFormAmount) : undefined,
+            unit: taskFormUnit,
+            notes: taskFormNotes.trim() || undefined,
+          };
+          updatedTasks = [...currentTasks, taskObj];
+        } else {
+          updatedTasks = currentTasks.map((t: any) =>
+            t.id === editingTaskItem.id
+              ? {
+                  ...t,
+                  title: taskFormTitle.trim(),
+                  type: taskFormType,
+                  dueDate: taskFormDueDate,
+                  amount: taskFormAmount ? parseFloat(taskFormAmount) : undefined,
+                  unit: taskFormUnit,
+                  notes: taskFormNotes.trim() || undefined,
+                }
+              : t
+          );
+        }
+      } else {
+        const newTask = {
+          id: `task-${Date.now()}`,
+          title: taskFormTitle.trim(),
+          type: taskFormType,
+          dueDate: taskFormDueDate,
+          completed: false,
+          amount: taskFormAmount ? parseFloat(taskFormAmount) : undefined,
+          unit: taskFormUnit,
+          notes: taskFormNotes.trim() || undefined,
+        };
+        updatedTasks = [...currentTasks, newTask];
+      }
+
+      const updatedJson = JSON.stringify(updatedTasks);
+
+      // Otimista
+      setBatches((prev) =>
+        prev.map((b) => (b.id === targetBatch.id ? { ...b, tankTasksJson: updatedJson } : b))
+      );
+
+      const res = await fetch(`/api/batches/${targetBatch.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankTasksJson: updatedJson }),
+      });
+
+      if (res.ok) {
+        playFeedback('success');
+        showBanner(
+          editingTaskItem ? '✅ Tarefa atualizada com sucesso!' : '📋 Nova tarefa adicionada com sucesso!',
+          'success'
+        );
+        setIsTaskModalOpen(false);
+      } else {
+        showBanner('Erro ao salvar tarefa no banco de dados', 'error');
+      }
+    } catch {
+      showBanner('Falha de rede ao salvar tarefa', 'error');
+    } finally {
+      setIsSavingTask(false);
+    }
+  };
+
+  const handleDeleteTask = async (taskItem: any) => {
+    if (!window.confirm(`Deseja realmente excluir a tarefa "${taskItem.title}"?`)) return;
+
+    const targetBatch = batches.find((b) => b.id === taskItem.batchId);
+    if (!targetBatch) return;
+
+    let currentTasks: any[] = [];
+    try {
+      currentTasks = targetBatch.tankTasksJson
+        ? typeof targetBatch.tankTasksJson === 'string'
+          ? JSON.parse(targetBatch.tankTasksJson)
+          : targetBatch.tankTasksJson
+        : [];
+    } catch {}
+
+    const updatedTasks = currentTasks.filter((t: any) => t.id !== taskItem.id);
+    const updatedJson = JSON.stringify(updatedTasks);
+
+    setBatches((prev) =>
+      prev.map((b) => (b.id === targetBatch.id ? { ...b, tankTasksJson: updatedJson } : b))
+    );
+
+    showBanner('🗑️ Tarefa excluída.', 'info');
+
+    try {
+      await fetch(`/api/batches/${targetBatch.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tankTasksJson: updatedJson }),
+      });
+    } catch {
+      showBanner('Erro ao sincronizar exclusão com o servidor', 'error');
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 6. CALCULADORA CERVEJEIRA TOUCH
   // -------------------------------------------------------------
   const [calcTab, setCalcTab] = useState<'REFRACTOMETER' | 'HYDROMETER' | 'BRIX_SG' | 'ABV'>('REFRACTOMETER');
   const [calcOgSg, setCalcOgSg] = useState<string>('1.054');
@@ -3963,7 +4346,298 @@ export default function FabricaChaoDeFabricaPage() {
         )}
 
         {/* ========================================================= */}
-        {/* 5. MÓDULO CALCULADORA CERVEJEIRA TOUCH */}
+        {/* 5. MÓDULO TAREFAS DA FÁBRICA & ADEGA TOUCH */}
+        {/* ========================================================= */}
+        {activeTab === 'TAREFAS' && (
+          <div className="space-y-4">
+            {/* CABEÇALHO COM TÍTULO E BOTÃO DE CRIAR */}
+            <div className="bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-white flex items-center gap-2">
+                  <CheckSquare className="w-6 h-6 text-amber-400" />
+                  Tarefas da Fábrica & Adega
+                </h2>
+                <p className="text-xs font-bold text-slate-300 mt-0.5">
+                  Controle de adições, purgas, cold crash, medições e rotinas dos tanques
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleOpenCreateTask()}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm px-5 py-3.5 rounded-2xl shadow-lg border border-amber-300 active:scale-95 transition-all"
+              >
+                <Plus className="w-5 h-5 stroke-[2.5]" />
+                Nova Tarefa
+              </button>
+            </div>
+
+            {/* ATALHOS RÁPIDOS DE PRESETS */}
+            <div className="bg-slate-900/80 border-2 border-slate-800 rounded-2xl p-3 shadow-md">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-2 px-1">
+                Atalhos Rápidos de Ação:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_TASK_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => handleOpenCreateTask(preset)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-black text-amber-300 active:scale-95 transition-all shadow-sm"
+                  >
+                    <span>{preset.label}</span>
+                    <Plus className="w-3.5 h-3.5 text-amber-400" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* BARRA DE FILTROS E BUSCA */}
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setFabricaTaskFilter('PENDING')}
+                  className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-xs font-black transition-all border-2 active:scale-95 shadow ${
+                    fabricaTaskFilter === 'PENDING'
+                      ? 'bg-amber-500 border-amber-300 text-slate-950'
+                      : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white'
+                  }`}
+                >
+                  Pendentes ({pendingTasksCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFabricaTaskFilter('TODAY')}
+                  className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-xs font-black transition-all border-2 active:scale-95 shadow ${
+                    fabricaTaskFilter === 'TODAY'
+                      ? 'bg-amber-400 border-amber-200 text-slate-950'
+                      : todayTasksCount > 0
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30'
+                      : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white'
+                  }`}
+                >
+                  ⚡ Hoje ({todayTasksCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFabricaTaskFilter('LATE')}
+                  className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-xs font-black transition-all border-2 active:scale-95 shadow ${
+                    fabricaTaskFilter === 'LATE'
+                      ? 'bg-red-500 border-red-300 text-white'
+                      : lateTasksCount > 0
+                      ? 'bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30'
+                      : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white'
+                  }`}
+                >
+                  🚨 Atrasadas ({lateTasksCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFabricaTaskFilter('ALL')}
+                  className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-xs font-black transition-all border-2 active:scale-95 shadow ${
+                    fabricaTaskFilter === 'ALL'
+                      ? 'bg-amber-500 border-amber-300 text-slate-950'
+                      : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white'
+                  }`}
+                >
+                  Todas ({fabricaTasks.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFabricaTaskFilter('COMPLETED')}
+                  className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-xs font-black transition-all border-2 active:scale-95 shadow ${
+                    fabricaTaskFilter === 'COMPLETED'
+                      ? 'bg-emerald-500 border-emerald-300 text-slate-950'
+                      : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white'
+                  }`}
+                >
+                  Concluídas ({fabricaTasks.length - pendingTasksCount})
+                </button>
+              </div>
+
+              {/* CAMPO DE BUSCA */}
+              <div className="relative">
+                <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={fabricaTaskSearch}
+                  onChange={(e) => setFabricaTaskSearch(e.target.value)}
+                  placeholder="Filtrar por tarefa, cerveja, tanque, anotação..."
+                  className="w-full bg-slate-900 border-2 border-slate-700 focus:border-amber-400 rounded-2xl pl-11 pr-10 py-3 text-sm font-bold text-white placeholder:text-slate-400 outline-none shadow-inner"
+                />
+                {fabricaTaskSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setFabricaTaskSearch('')}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* LISTAGEM DE TAREFAS */}
+            {filteredFabricaTasks.length === 0 ? (
+              <div className="bg-slate-900 border-2 border-dashed border-slate-700 rounded-3xl p-10 text-center space-y-3">
+                <CheckCircle2 className="w-12 h-12 text-slate-400 mx-auto" />
+                <h3 className="text-base font-black text-white">Nenhuma tarefa encontrada</h3>
+                <p className="text-xs text-slate-300 font-bold max-w-sm mx-auto">
+                  {fabricaTaskSearch
+                    ? 'Nenhuma tarefa corresponde aos termos pesquisados.'
+                    : fabricaTaskFilter === 'PENDING'
+                    ? 'Tudo em dia na fábrica! Nenhuma tarefa pendente no momento.'
+                    : 'Não há tarefas cadastradas nesta categoria.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreateTask()}
+                  className="inline-flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-4 py-2.5 rounded-xl font-black text-xs transition-all active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  Criar Nova Tarefa
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {filteredFabricaTasks.map((t) => {
+                  const isLate = t.urgency === 'LATE';
+                  const isToday = t.urgency === 'TODAY';
+                  const isDone = t.completed;
+
+                  return (
+                    <div
+                      key={t.id}
+                      className={`relative rounded-3xl p-4 transition-all shadow-lg border-2 flex flex-col justify-between gap-3 ${
+                        isDone
+                          ? 'bg-slate-900/60 border-slate-800 opacity-70'
+                          : isLate
+                          ? 'bg-gradient-to-br from-red-950/40 via-slate-900 to-slate-900 border-red-500/80 shadow-red-950/30'
+                          : isToday
+                          ? 'bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border-amber-400 shadow-amber-950/30'
+                          : 'bg-slate-900 border-slate-700'
+                      }`}
+                    >
+                      {/* TOPO: BOTÃO CHECK GIGANTE + TÍTULO E STATUS */}
+                      <div className="flex items-start gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFabricaTask(t)}
+                          aria-label={isDone ? 'Marcar como pendente' : 'Marcar como concluída'}
+                          className={`flex-shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center border-2 transition-all active:scale-90 shadow-md ${
+                            isDone
+                              ? 'bg-emerald-500 border-emerald-300 text-slate-950 scale-100'
+                              : 'bg-slate-800 border-slate-600 hover:border-amber-400 text-slate-400 hover:text-amber-400'
+                          }`}
+                        >
+                          <Check className={`w-6 h-6 stroke-[3] ${isDone ? 'opacity-100' : 'opacity-20'}`} />
+                        </button>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            {isDone ? (
+                              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Concluída
+                              </span>
+                            ) : isLate ? (
+                              <span className="bg-red-500/20 text-red-300 border border-red-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                <AlertTriangle className="w-3 h-3" /> Atrasada ({Math.abs(t.daysDiff)}d)
+                              </span>
+                            ) : isToday ? (
+                              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> Hoje
+                              </span>
+                            ) : (
+                              <span className="bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Calendar className="w-3 h-3" /> em {t.daysDiff}d
+                              </span>
+                            )}
+
+                            {t.amount !== undefined && (
+                              <span className="bg-slate-800 text-amber-300 border border-amber-500/30 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                {t.amount} {t.unit || ''}
+                              </span>
+                            )}
+                          </div>
+
+                          <h4
+                            className={`font-black text-sm leading-snug break-words ${
+                              isDone ? 'line-through text-slate-400' : 'text-white'
+                            }`}
+                          >
+                            {t.title}
+                          </h4>
+                        </div>
+                      </div>
+
+                      {/* CORPO: TANQUE & LOTE DE CERVEJA */}
+                      <div className="bg-slate-800/80 rounded-2xl p-2.5 space-y-1.5 border border-slate-700/60 text-xs">
+                        <div className="flex items-center justify-between text-slate-200 font-bold">
+                          <span className="flex items-center gap-1.5 truncate">
+                            <Cylinder className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            <strong className="text-white">{t.tankName}</strong>
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            Lote #{t.batchNumber}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-black truncate">
+                          <Beer className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                          <span className="truncate">{t.recipeName}</span>
+                          {t.recipeStyle && (
+                            <span className="text-slate-400 font-normal">({t.recipeStyle})</span>
+                          )}
+                        </div>
+
+                        {t.notes && (
+                          <div className="text-[11px] font-medium text-slate-300 bg-slate-900/60 p-2 rounded-xl border border-slate-700/50 break-words italic">
+                            &ldquo;{t.notes}&rdquo;
+                          </div>
+                        )}
+                      </div>
+
+                      {/* RODAPÉ DO CARD: DATA DE VENCIMENTO E AÇÕES TOUCH */}
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-xs">
+                        <span className="text-[11px] font-mono font-bold text-slate-400 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-slate-400" />
+                          {t.dueDate}
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditTask(t)}
+                            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-400 border border-slate-600 active:scale-95 transition-all"
+                            title="Editar tarefa"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTask(t)}
+                            className="p-2 rounded-xl bg-slate-800 hover:bg-red-950/40 text-slate-200 hover:text-red-400 border border-slate-600 hover:border-red-500/50 active:scale-95 transition-all"
+                            title="Excluir tarefa"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* 6. MÓDULO CALCULADORA CERVEJEIRA TOUCH */}
         {/* ========================================================= */}
         {activeTab === 'CALCULADORA' && (
           <div className="space-y-4">
@@ -4275,6 +4949,31 @@ export default function FabricaChaoDeFabricaPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab('TAREFAS')}
+          className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl transition-all active:scale-95 relative ${
+            activeTab === 'TAREFAS' ? 'text-amber-400 font-black' : 'text-slate-300 hover:text-white'
+          }`}
+        >
+          <div
+            className={`p-2 rounded-2xl transition-all relative ${
+              activeTab === 'TAREFAS' ? 'bg-amber-500/20 text-amber-400 scale-110 shadow-lg' : ''
+            }`}
+          >
+            <CheckSquare className="w-5 h-5" />
+            {(lateTasksCount > 0 || todayTasksCount > 0) && (
+              <span
+                className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[10px] font-black text-white rounded-full flex items-center justify-center border-2 border-slate-900 shadow ${
+                  lateTasksCount > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'
+                }`}
+              >
+                {lateTasksCount > 0 ? lateTasksCount : todayTasksCount}
+              </span>
+            )}
+          </div>
+          <span className="text-xs font-bold tracking-tight">Tarefas</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('CALCULADORA')}
           className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl transition-all active:scale-95 ${
             activeTab === 'CALCULADORA' ? 'text-amber-400 font-black' : 'text-slate-300 hover:text-white'
@@ -4290,6 +4989,256 @@ export default function FabricaChaoDeFabricaPage() {
           <span className="text-xs font-bold tracking-tight">Calculadora</span>
         </button>
       </nav>
+
+      {/* MODAL DE CRIAÇÃO / EDIÇÃO DE TAREFA */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="bg-slate-900 border-2 border-amber-400 rounded-3xl p-5 sm:p-6 max-w-lg w-full shadow-2xl space-y-4 my-auto">
+            {/* TOPO DO MODAL */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <span className="text-base font-black text-white flex items-center gap-2">
+                {editingTaskItem ? (
+                  <>
+                    <Edit2 className="w-5 h-5 text-amber-400" /> Editar Tarefa
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-5 h-5 text-amber-400" /> Nova Tarefa de Fábrica
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsTaskModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* PRESETS RÁPIDOS SE FOR NOVA TAREFA */}
+            {!editingTaskItem && (
+              <div>
+                <span className="text-[11px] font-black uppercase text-slate-400 block mb-1.5">
+                  Preencher com modelo rápido:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_TASK_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setTaskFormTitle(preset.defaultTitle);
+                        setTaskFormType(preset.type);
+                        if (preset.defaultAmount) setTaskFormAmount(String(preset.defaultAmount));
+                        if (preset.unit) setTaskFormUnit(preset.unit);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 hover:border-amber-400 text-[11px] font-black text-slate-200 hover:text-amber-300 active:scale-95 transition-all"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* FORMULÁRIO */}
+            <div className="space-y-3">
+              {/* SELEÇÃO DO LOTE / TANQUE */}
+              <div>
+                <label className="block text-xs font-black text-slate-200 mb-1">
+                  Tanque & Lote de Destino: *
+                </label>
+                {activeBatchesForTasks.length === 0 ? (
+                  <div className="p-3 bg-red-950/30 border border-red-500/50 rounded-xl text-xs text-red-300 font-bold">
+                    Nenhum lote ativo em fermentação ou maturação encontrado.
+                  </div>
+                ) : (
+                  <select
+                    value={taskFormBatchId}
+                    onChange={(e) => setTaskFormBatchId(e.target.value)}
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-3 text-sm font-black text-white outline-none shadow-inner"
+                  >
+                    {activeBatchesForTasks.map((b) => {
+                      const tk = b.tank?.name || tanks.find((t) => t.id === b.tankId)?.name || 'Sem tanque';
+                      return (
+                        <option key={b.id} value={b.id} className="bg-slate-900 text-white">
+                          [{tk}] {b.recipe?.name || 'Lote'} (Lote #{b.batchNumber || 'S/N'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
+
+              {/* TÍTULO DA TAREFA */}
+              <div>
+                <label className="block text-xs font-black text-slate-200 mb-1">
+                  Título / Ação: *
+                </label>
+                <input
+                  type="text"
+                  value={taskFormTitle}
+                  onChange={(e) => setTaskFormTitle(e.target.value)}
+                  placeholder="Ex: Dry Hopping Citra + Mosaic"
+                  className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3.5 py-3 text-sm font-black text-white outline-none shadow-inner placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* TIPO DE TAREFA */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-black text-slate-200 mb-1">Tipo:</label>
+                  <select
+                    value={taskFormType}
+                    onChange={(e) => setTaskFormType(e.target.value)}
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-xs font-black text-white outline-none shadow-inner"
+                  >
+                    <option value="DRY_HOPPING" className="bg-slate-900">🌿 Dry Hopping</option>
+                    <option value="PURGE" className="bg-slate-900">🪣 Purga de Levedura</option>
+                    <option value="COLD_CRASH" className="bg-slate-900">❄️ Cold Crash</option>
+                    <option value="MEASUREMENT" className="bg-slate-900">🧪 Medição / Coleta</option>
+                    <option value="CLARIFIER" className="bg-slate-900">✨ Clarificante / Gelatina</option>
+                    <option value="ANTIOXIDANT" className="bg-slate-900">🛡️ Antioxidante</option>
+                    <option value="OTHER" className="bg-slate-900">📋 Outro Procedimento</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-200 mb-1">
+                    Data Programada:
+                  </label>
+                  <input
+                    type="date"
+                    value={taskFormDueDate}
+                    onChange={(e) => setTaskFormDueDate(e.target.value)}
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-xs font-black text-white outline-none shadow-inner"
+                  />
+                </div>
+              </div>
+
+              {/* ATALHOS RÁPIDOS DE DATA */}
+              <div>
+                <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                  Atalhos de data:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickDate(0)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[11px] font-bold text-amber-300"
+                  >
+                    Hoje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickDate(1)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[11px] font-bold text-slate-200"
+                  >
+                    Amanhã
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickDate(2)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[11px] font-bold text-slate-200"
+                  >
+                    +2 dias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickDate(5)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[11px] font-bold text-slate-200"
+                  >
+                    +5 dias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickDate(7)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[11px] font-bold text-slate-200"
+                  >
+                    +7 dias
+                  </button>
+                </div>
+              </div>
+
+              {/* QUANTIDADE E UNIDADE */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-black text-slate-200 mb-1">
+                    Quantidade (Opcional):
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={taskFormAmount}
+                    onChange={(e) => setTaskFormAmount(e.target.value)}
+                    placeholder="Ex: 2.5"
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-sm font-black text-white outline-none shadow-inner placeholder:text-slate-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-200 mb-1">Unidade:</label>
+                  <select
+                    value={taskFormUnit}
+                    onChange={(e) => setTaskFormUnit(e.target.value)}
+                    className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl px-3 py-2.5 text-xs font-black text-white outline-none shadow-inner"
+                  >
+                    <option value="KG" className="bg-slate-900">Quilos (KG)</option>
+                    <option value="G" className="bg-slate-900">Gramas (G)</option>
+                    <option value="L" className="bg-slate-900">Litros (L)</option>
+                    <option value="ML" className="bg-slate-900">Mililitros (ML)</option>
+                    <option value="UN" className="bg-slate-900">Unidades (UN)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* OBSERVAÇÕES */}
+              <div>
+                <label className="block text-xs font-black text-slate-200 mb-1">
+                  Observações / Instruções Operacionais:
+                </label>
+                <textarea
+                  rows={2}
+                  value={taskFormNotes}
+                  onChange={(e) => setTaskFormNotes(e.target.value)}
+                  placeholder="Ex: Purgar lúpulo após 48h, manter pressão em 0.5 bar..."
+                  className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl p-3 text-xs font-bold text-white outline-none shadow-inner placeholder:text-slate-400 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* BOTÕES DE AÇÃO */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsTaskModalOpen(false)}
+                className="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs active:scale-95 transition-all"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveTask}
+                disabled={isSavingTask}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg border border-amber-300 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {isSavingTask ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    {editingTaskItem ? 'Salvar Alterações' : 'Salvar Tarefa'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
