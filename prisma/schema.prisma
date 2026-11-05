@@ -27,6 +27,7 @@ model Brewery {
   billingStatus         String                    @default("EM_DIA") // EM_DIA, PENDENTE, ATRASADO, CANCELADO, TRIAL
   nextBillingDate       DateTime?
   active                Boolean                   @default(true)
+  taskShortcutsJson     String?                   // Atalhos rápidos customizados de tarefas da fábrica/adega (JSON)
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
 

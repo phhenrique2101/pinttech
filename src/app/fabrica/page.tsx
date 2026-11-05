@@ -50,8 +50,11 @@ import {
   Trash2,
   History,
   Percent,
+  SlidersHorizontal,
 } from 'lucide-react';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
+import TaskShortcutManagerModal from '@/components/brew/TaskShortcutManagerModal';
+import { TaskShortcut, DEFAULT_TASK_PRESETS } from '@/types/shortcuts';
 import { playFeedback } from '@/lib/sound';
 import {
   brixToSg,
@@ -74,22 +77,25 @@ export default function FabricaChaoDeFabricaPage() {
   const [recipes, setRecipes] = useState<any[]>([]);
   const [mapaProducts, setMapaProducts] = useState<any[]>([]);
   const [sessionUser, setSessionUser] = useState<any>(null);
+  const [taskShortcuts, setTaskShortcuts] = useState<TaskShortcut[]>(DEFAULT_TASK_PRESETS);
+  const [isShortcutManagerOpen, setIsShortcutManagerOpen] = useState(false);
 
   // Status feedback banner
   const [banner, setBanner] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // -------------------------------------------------------------
-  // CARREGAR DADOS ESSENCIAIS (BATCHES, TANKS, RECIPES, USER, MAPA)
+  // CARREGAR DADOS ESSENCIAIS (BATCHES, TANKS, RECIPES, USER, MAPA, ATALHOS)
   // -------------------------------------------------------------
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [batchesRes, tanksRes, recipesRes, userRes, mapaRes] = await Promise.all([
+      const [batchesRes, tanksRes, recipesRes, userRes, mapaRes, shortcutsRes] = await Promise.all([
         fetch('/api/batches'),
         fetch('/api/tanks'),
         fetch('/api/recipes'),
         fetch('/api/auth/me'),
         fetch('/api/mapa-products'),
+        fetch('/api/brewery/shortcuts'),
       ]);
 
       if (batchesRes.ok) {
@@ -111,6 +117,12 @@ export default function FabricaChaoDeFabricaPage() {
       if (mapaRes && mapaRes.ok) {
         const data = await mapaRes.json();
         setMapaProducts(Array.isArray(data) ? data : []);
+      }
+      if (shortcutsRes && shortcutsRes.ok) {
+        const data = await shortcutsRes.json();
+        if (data?.shortcuts && Array.isArray(data.shortcuts)) {
+          setTaskShortcuts(data.shortcuts);
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar dados da fábrica:', err);
@@ -1483,14 +1495,7 @@ export default function FabricaChaoDeFabricaPage() {
   // -------------------------------------------------------------
   // 5. MÓDULO TAREFAS DA FÁBRICA & ADEGA
   // -------------------------------------------------------------
-  const QUICK_TASK_PRESETS = [
-    { label: '🌿 Dry Hopping', type: 'DRY_HOPPING', defaultTitle: 'Dry Hopping', unit: 'KG', defaultAmount: 2.0 },
-    { label: '🪣 Purga Levedura', type: 'PURGE', defaultTitle: 'Purga de Levedura / Sedimento', unit: 'L' },
-    { label: '❄️ Cold Crash (0°C)', type: 'COLD_CRASH', defaultTitle: 'Baixar Temperatura para Cold Crash (0°C)' },
-    { label: '🧪 Medição Densidade', type: 'MEASUREMENT', defaultTitle: 'Medição Diária de Densidade & pH' },
-    { label: '💨 Carbonatação', type: 'OTHER', defaultTitle: 'Subir Pressão / Carbonatação no Tanque' },
-    { label: '🧼 Limpeza CIP', type: 'OTHER', defaultTitle: 'Higienização CIP de Linhas / Válvulas' },
-  ];
+  const QUICK_TASK_PRESETS = taskShortcuts;
 
   const fabricaTasks = useMemo(() => {
     const list: Array<{
@@ -1730,7 +1735,7 @@ export default function FabricaChaoDeFabricaPage() {
 
   const handleOpenCreateTask = (preset?: any) => {
     setEditingTaskItem(null);
-    if (preset?.defaultTitle?.includes('CIP') || preset?.defaultTitle?.includes('Limpeza')) {
+    if (preset?.targetType === 'FABRICA' || preset?.defaultTitle?.includes('CIP') || preset?.defaultTitle?.includes('Limpeza')) {
       setTaskFormDestination('FABRICA');
     } else {
       const firstOccupied = taskDestinations.find((d) => d.targetType === 'TANK' && d.batchId);
@@ -4537,13 +4542,23 @@ export default function FabricaChaoDeFabricaPage() {
 
             {/* ATALHOS RÁPIDOS DE PRESETS */}
             <div className="bg-slate-900/80 border-2 border-slate-800 rounded-2xl p-3 shadow-md">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-2 px-1">
-                Atalhos Rápidos de Ação:
-              </span>
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                  Atalhos Rápidos de Ação:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsShortcutManagerOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition-all bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-xl border border-amber-500/20 active:scale-95 shadow-sm"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Personalizar Atalhos</span>
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {QUICK_TASK_PRESETS.map((preset) => (
+                {taskShortcuts.map((preset) => (
                   <button
-                    key={preset.label}
+                    key={preset.id || preset.label}
                     type="button"
                     onClick={() => handleOpenCreateTask(preset)}
                     className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-black text-amber-300 active:scale-95 transition-all shadow-sm"
@@ -4552,6 +4567,15 @@ export default function FabricaChaoDeFabricaPage() {
                     <Plus className="w-3.5 h-3.5 text-amber-400" />
                   </button>
                 ))}
+                {taskShortcuts.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsShortcutManagerOpen(true)}
+                    className="text-xs text-slate-400 hover:text-amber-300 flex items-center gap-1 py-1 px-2.5 border border-dashed border-slate-700 rounded-xl"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-amber-400" /> Nenhum atalho configurado. Clique para adicionar.
+                  </button>
+                )}
               </div>
             </div>
 
@@ -5250,15 +5274,31 @@ export default function FabricaChaoDeFabricaPage() {
             {/* PRESETS RÁPIDOS SE FOR NOVA TAREFA */}
             {!editingTaskItem && (
               <div>
-                <span className="text-[11px] font-black uppercase text-slate-400 block mb-1.5">
-                  Preencher com modelo rápido:
-                </span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-black uppercase text-slate-400">
+                    Preencher com modelo rápido:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTaskModalOpen(false);
+                      setIsShortcutManagerOpen(true);
+                    }}
+                    className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline"
+                  >
+                    <SlidersHorizontal className="w-3 h-3" />
+                    Editar Atalhos
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {QUICK_TASK_PRESETS.map((preset) => (
+                  {taskShortcuts.map((preset) => (
                     <button
-                      key={preset.label}
+                      key={preset.id || preset.label}
                       type="button"
                       onClick={() => {
+                        if (preset.targetType === 'FABRICA' || preset.defaultTitle?.includes('CIP') || preset.defaultTitle?.includes('Limpeza')) {
+                          setTaskFormDestination('FABRICA');
+                        }
                         setTaskFormTitle(preset.defaultTitle);
                         setTaskFormType(preset.type);
                         if (preset.defaultAmount) setTaskFormAmount(String(preset.defaultAmount));
@@ -5466,6 +5506,17 @@ export default function FabricaChaoDeFabricaPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL DE GERENCIAMENTO DE ATALHOS RÁPIDOS DA CERVEJARIA */}
+      <TaskShortcutManagerModal
+        isOpen={isShortcutManagerOpen}
+        onClose={() => setIsShortcutManagerOpen(false)}
+        currentShortcuts={taskShortcuts}
+        onSaveSuccess={(updated) => {
+          setTaskShortcuts(updated);
+          showBanner('Atalhos da cervejaria atualizados com sucesso!', 'success');
+        }}
+      />
     </div>
   );
 }
