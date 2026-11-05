@@ -35,6 +35,7 @@ import {
   CheckSquare,
   Square,
   Percent,
+  FileCode,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateShort, getLocalDateString } from '@/lib/utils';
 import {
@@ -46,6 +47,7 @@ import {
   calculateAbv,
 } from '@/lib/brewing/calculations';
 import MapaSelectorInput from '@/components/brew/MapaSelectorInput';
+import AttachBeerXmlModal from '@/components/brew/AttachBeerXmlModal';
 
 export interface TankTaskItem {
   id: string;
@@ -139,6 +141,8 @@ export default function LiveBatchManagerModal({
   const [activeTab, setActiveTab] = useState<BatchTab>('OVERVIEW');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [isAttachXmlOpen, setIsAttachXmlOpen] = useState<boolean>(false);
+  const [currentBatchState, setCurrentBatchState] = useState<any>(batch);
 
   // Parâmetros do Lote
   const [batchNumber, setBatchNumber] = useState<string>(batch.batchNumber || '');
@@ -1014,6 +1018,15 @@ export default function LiveBatchManagerModal({
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAttachXmlOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold transition shadow-xs"
+                title="Anexar ou atualizar arquivo BeerXML deste lote"
+              >
+                <FileCode className="w-3.5 h-3.5 text-amber-600" />
+                <span>{currentBatchState.recipe?.xmlContent ? 'Atualizar BeerXML' : 'Anexar BeerXML'}</span>
+              </button>
               <button
                 type="button"
                 onClick={handlePrintSheet}
@@ -2823,6 +2836,23 @@ export default function LiveBatchManagerModal({
           </button>
         </div>
       </div>
+
+      {/* MODAL PARA ANEXAR BEERXML DIRETAMENTE A ESTE LOTE */}
+      <AttachBeerXmlModal
+        isOpen={isAttachXmlOpen}
+        onClose={() => setIsAttachXmlOpen(false)}
+        batch={currentBatchState}
+        tankName={tanks.find((t) => t.id === tankId)?.name || 'Tanque'}
+        onSuccess={(updated) => {
+          setCurrentBatchState(updated);
+          if (updated.measuredOg) setMeasuredOg(String(updated.measuredOg));
+          if (updated.measuredFg) setMeasuredFg(String(updated.measuredFg));
+          if (updated.measuredIbu) setMeasuredIbu(String(updated.measuredIbu));
+          if (updated.measuredEbc) setMeasuredEbc(String(updated.measuredEbc));
+          if (updated.yeastStrain) setYeastStrain(updated.yeastStrain);
+          if (onSaved) onSaved(updated);
+        }}
+      />
     </div>
   );
 }

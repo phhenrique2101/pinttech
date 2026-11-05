@@ -54,6 +54,7 @@ import {
 } from 'lucide-react';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import TaskShortcutManagerModal from '@/components/brew/TaskShortcutManagerModal';
+import AttachBeerXmlModal from '@/components/brew/AttachBeerXmlModal';
 import { TaskShortcut, DEFAULT_TASK_PRESETS } from '@/types/shortcuts';
 import { playFeedback } from '@/lib/sound';
 import {
@@ -79,6 +80,8 @@ export default function FabricaChaoDeFabricaPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [taskShortcuts, setTaskShortcuts] = useState<TaskShortcut[]>(DEFAULT_TASK_PRESETS);
   const [isShortcutManagerOpen, setIsShortcutManagerOpen] = useState(false);
+  const [attachXmlBatch, setAttachXmlBatch] = useState<any | null>(null);
+  const [attachXmlTankName, setAttachXmlTankName] = useState<string>('');
 
   // Status feedback banner
   const [banner, setBanner] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -2921,19 +2924,45 @@ export default function FabricaChaoDeFabricaPage() {
 
                     return (
                       <div className="space-y-3 pt-2 border-t-2 border-slate-700">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
                           <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
                             <Target className="w-4 h-4" /> Parâmetros & Metas do Lote
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => openEditTargetsModal(batch)}
-                            className="flex items-center gap-1.5 text-xs font-black text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 rounded-xl border border-amber-400 active:scale-95 transition-all shadow-sm"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                            Editar OG / Meta FG
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttachXmlBatch(batch);
+                                setAttachXmlTankName(selectedTankForDetails.name);
+                              }}
+                              className="flex items-center gap-1.5 text-xs font-black text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 rounded-xl border border-amber-400 active:scale-95 transition-all shadow-sm"
+                              title="Anexar arquivo .xml do BeerSmith ou Brewfather a este lote"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-amber-400" />
+                              {batch.recipe?.xmlContent ? 'Atualizar BeerXML' : 'Anexar BeerXML'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEditTargetsModal(batch)}
+                              className="flex items-center gap-1.5 text-xs font-black text-slate-200 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-600 active:scale-95 transition-all shadow-sm"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-amber-400" />
+                              Editar Metas
+                            </button>
+                          </div>
                         </div>
+
+                        {batch.recipe?.xmlFileName && (
+                          <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/80 border border-emerald-500/40 text-xs">
+                            <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                              <CheckCircle2 className="w-4 h-4" />
+                              BeerXML: <strong className="text-white">{batch.recipe.xmlFileName}</strong>
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {batch.recipe.style}
+                            </span>
+                          </div>
+                        )}
 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                           <div className="bg-slate-700/90 p-3.5 rounded-2xl border-2 border-slate-500 shadow-md">
@@ -3793,6 +3822,18 @@ export default function FabricaChaoDeFabricaPage() {
                                 MAPA: {selectedBrewBatch.mapaRegistration || selectedBrewBatch.recipe?.mapaRegistration || selectedBrewBatch.recipe?.mapaProduct?.mapaRegistration}
                               </span>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttachXmlBatch(selectedBrewBatch);
+                                setAttachXmlTankName('Brassagem Ativa');
+                              }}
+                              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-lg text-xs font-black flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+                              title="Anexar BeerXML a este lote de brassagem"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              {selectedBrewBatch.recipe?.xmlContent ? 'Atualizar BeerXML' : 'Anexar BeerXML'}
+                            </button>
                           </div>
                         </div>
 
@@ -5515,6 +5556,27 @@ export default function FabricaChaoDeFabricaPage() {
         onSaveSuccess={(updated) => {
           setTaskShortcuts(updated);
           showBanner('Atalhos da cervejaria atualizados com sucesso!', 'success');
+        }}
+      />
+
+      {/* MODAL DE ANEXAR BEERXML AO LOTE / TANQUE */}
+      <AttachBeerXmlModal
+        isOpen={Boolean(attachXmlBatch)}
+        onClose={() => setAttachXmlBatch(null)}
+        batch={attachXmlBatch}
+        tankName={attachXmlTankName}
+        onSuccess={async (updatedBatch) => {
+          await loadInitialData();
+          if (selectedTankForDetails && selectedTankForDetails.activeBatch?.id === updatedBatch.id) {
+            setSelectedTankForDetails((prev: any) => ({
+              ...prev,
+              activeBatch: updatedBatch,
+            }));
+          }
+          if (selectedBrewBatch && selectedBrewBatch.id === updatedBatch.id) {
+            setSelectedBrewBatch(updatedBatch);
+          }
+          showBanner(`BeerXML anexado com sucesso ao lote #${updatedBatch.batchNumber}!`, 'success');
         }}
       />
     </div>
